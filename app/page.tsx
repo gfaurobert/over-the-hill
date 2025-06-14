@@ -177,13 +177,13 @@ export default function HillChartGenerator() {
                   <line x1="200" y1="50" x2="200" y2="150" stroke="#666" strokeWidth="1" strokeDasharray="5,5" />
 
                   {/* Labels */}
-                  <text x="20" y="165" textAnchor="middle" className="text-[10px] fill-gray-600 font-normal leading-4">
+                  <text x="20" y="165" textAnchor="middle" className="text-[8px] fill-gray-600 font-normal leading-4">
                     Discovery
                   </text>
                   <text x="200" y="195" textAnchor="middle" className="font-semibold text-sm">
                     {currentCollection?.name}
                   </text>
-                  <text x="380" y="165" textAnchor="middle" className="text-[10px] fill-gray-600">
+                  <text x="380" y="165" textAnchor="middle" className="text-[8px] fill-gray-600">
                     Delivery
                   </text>
 
