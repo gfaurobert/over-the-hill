@@ -687,7 +687,12 @@ export default function HillChartGenerator() {
         (blob) => {
           if (blob) {
             const now = new Date()
-            const timestamp = now.toISOString().replace(/:/g, "-").replace(/\..+/, "").replace("T", "_")
+            const timestamp = now
+              .toISOString()
+              .replace(/:/g, "-")
+              .replace(/\..+/, "")
+              .replace(/\..+/, "")
+              .replace("T", "_")
             const link = document.createElement("a")
             link.download = `${currentCollection?.name || "hill-chart"}_${timestamp}.png`
             link.href = URL.createObjectURL(blob)
@@ -832,10 +837,16 @@ export default function HillChartGenerator() {
   }
 
   const handleInputFocus = () => {
+    setFilteredCollections(collections) // Show all collections when focused
     setShowDropdown(true)
   }
 
   const toggleDropdown = () => {
+    if (!showDropdown) {
+      // When opening dropdown, clear input and show all collections
+      setCollectionInput("")
+      setFilteredCollections(collections)
+    }
     setShowDropdown(!showDropdown)
     setIsTyping(false) // Reset typing state when dropdown is toggled via button
   }
@@ -846,6 +857,7 @@ export default function HillChartGenerator() {
     setShowDropdown(false)
     setIsTyping(false)
     setSelectedSnapshot(null) // Clear snapshot selection when switching collections
+    setFilteredCollections(collections) // Reset filtered collections
   }
 
   const updateDotLabel = (dotId: string, newLabel: string) => {
