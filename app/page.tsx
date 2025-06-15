@@ -211,7 +211,7 @@ export default function HillChartGenerator() {
     const borderColor = isDarkMode ? "#27272a" : "#e4e4e7"
 
     const svgElement = svgRef.current.cloneNode(true) as SVGSVGElement
-    svgElement.setAttribute("width", "900")
+    svgElement.setAttribute("width", "800")
     svgElement.setAttribute("height", "360")
     svgElement.style.backgroundColor = backgroundColor
     // Ensure the viewBox is set for the exported SVG to maintain padding
@@ -256,23 +256,23 @@ export default function HillChartGenerator() {
     })
 
     // Add background rect for SVG export if it's not for PNG conversion
-    const backgroundRect = document.createElementNS("http://www.w3.org/2000/svg", "rect")
-    backgroundRect.setAttribute("width", "100%") // Use relative width for viewBox
-    backgroundRect.setAttribute("height", "100%") // Use relative height for viewBox
-    backgroundRect.setAttribute("fill", backgroundColor)
-    // Adjust x,y if viewBox starts from negative values
-    const viewBox = svgElement.getAttribute("viewBox")?.split(" ").map(Number)
-    if (viewBox && viewBox.length === 4) {
-      backgroundRect.setAttribute("x", viewBox[0].toString())
-      backgroundRect.setAttribute("y", viewBox[1].toString())
-      backgroundRect.setAttribute("width", viewBox[2].toString())
-      backgroundRect.setAttribute("height", viewBox[3].toString())
-    } else {
-      // fallback if viewBox is not as expected
-      backgroundRect.setAttribute("width", "900")
-      backgroundRect.setAttribute("height", "360")
-    }
-    svgElement.insertBefore(backgroundRect, svgElement.firstChild)
+    // const backgroundRect = document.createElementNS("http://www.w3.org/2000/svg", "rect")
+    // backgroundRect.setAttribute("width", "100%") // Use relative width for viewBox
+    // backgroundRect.setAttribute("height", "100%") // Use relative height for viewBox
+    // backgroundRect.setAttribute("fill", backgroundColor)
+    // // Adjust x,y if viewBox starts from negative values
+    // const viewBox = svgElement.getAttribute("viewBox")?.split(" ").map(Number)
+    // if (viewBox && viewBox.length === 4) {
+    //   backgroundRect.setAttribute("x", viewBox[0].toString())
+    //   backgroundRect.setAttribute("y", viewBox[1].toString())
+    //   backgroundRect.setAttribute("width", viewBox[2].toString())
+    //   backgroundRect.setAttribute("height", viewBox[3].toString())
+    // } else {
+    //   // fallback if viewBox is not as expected
+    //   backgroundRect.setAttribute("width", "900")
+    //   backgroundRect.setAttribute("height", "360")
+    // }
+    // svgElement.insertBefore(backgroundRect, svgElement.firstChild)
 
     return new XMLSerializer().serializeToString(svgElement)
   }
@@ -298,7 +298,7 @@ export default function HillChartGenerator() {
     }
 
     const scale = 3
-    canvas.width = 900 * scale
+    canvas.width = 800 * scale
     canvas.height = 360 * scale
 
     ctx.imageSmoothingEnabled = true
@@ -316,7 +316,7 @@ export default function HillChartGenerator() {
 
     ctx.scale(scale, scale)
     ctx.fillStyle = backgroundColor
-    ctx.fillRect(0, 0, 900, 360)
+    ctx.fillRect(0, 0, 800, 360)
 
     const img = new Image()
     img.crossOrigin = "anonymous"
@@ -324,7 +324,7 @@ export default function HillChartGenerator() {
     const url = URL.createObjectURL(svgBlob)
 
     img.onload = async () => {
-      ctx.drawImage(img, 0, 0, 900, 360)
+      ctx.drawImage(img, 0, 0, 800, 360)
       URL.revokeObjectURL(url)
       canvas.toBlob(
         async (blob) => {
@@ -389,7 +389,7 @@ export default function HillChartGenerator() {
     if (!ctx) return
 
     const scale = 3
-    canvas.width = 900 * scale
+    canvas.width = 800 * scale
     canvas.height = 360 * scale
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = "high"
@@ -404,7 +404,7 @@ export default function HillChartGenerator() {
     }
     ctx.scale(scale, scale)
     ctx.fillStyle = backgroundColor
-    ctx.fillRect(0, 0, 900, 360)
+    ctx.fillRect(0, 0, 800, 360)
 
     const img = new Image()
     img.crossOrigin = "anonymous"
@@ -412,7 +412,7 @@ export default function HillChartGenerator() {
     const url = URL.createObjectURL(svgBlob)
 
     img.onload = () => {
-      ctx.drawImage(img, 0, 0, 900, 360)
+      ctx.drawImage(img, 0, 0, 800, 360)
       URL.revokeObjectURL(url)
       canvas.toBlob(
         (blob) => {
@@ -607,7 +607,7 @@ export default function HillChartGenerator() {
 
   return (
     <div className="min-h-screen p-4 bg-transparent" style={{ userSelect: isDragging ? "none" : "auto" }}>
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[2fr_1.2fr] gap-6">
+      <div className="max-w-screen-2xl mx-auto grid grid-cols-1 lg:grid-cols-[2.4fr_1.2fr] gap-6">
         {/* Main Chart Area */}
         <div className="lg:col-span-1">
           <Card className="h-full">
@@ -690,7 +690,6 @@ export default function HillChartGenerator() {
                   </text>
                   <text x="300" y="175" textAnchor="middle" className="font-semibold text-sm fill-foreground">
                     {" "}
-                    {/* Adjusted y for less bottom margin */}
                     {currentCollection?.name}
                   </text>
                   <text x="570" y="160" textAnchor="middle" className="text-[8px] fill-muted-foreground">
@@ -731,10 +730,10 @@ export default function HillChartGenerator() {
                         />
                         <text
                           x={dotX}
-                          y={dot.y - 25}
+                          y={dot.y - 35 + textHeight / 2}
                           textAnchor="middle"
                           className="fill-foreground pointer-events-none select-none"
-                          dominantBaseline="middle"
+                          dominantBaseline="central"
                           fontSize={fontSize}
                           style={{ userSelect: "none" }}
                         >
