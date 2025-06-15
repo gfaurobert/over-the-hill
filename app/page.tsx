@@ -1,11 +1,29 @@
 "use client"
 
-import { useState } from "react"
+import type React from "react"
+
+import { useState, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Download, Plus, Settings, Trash2 } from "lucide-react"
+import {
+  CopyIcon,
+  Download,
+  ArrowUpDown,
+  Trash2,
+  ChevronDown,
+  Sun,
+  Moon,
+  Monitor,
+  MoreHorizontal,
+  UploadIcon,
+  DownloadIcon,
+  Check,
+  FileImage,
+  FileCode2,
+} from "lucide-react"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useTheme } from "next-themes"
 
 interface Dot {
   id: string
@@ -13,6 +31,7 @@ interface Dot {
   x: number
   y: number
   color: string
+  size: number // Add size property (1-5)
 }
 
 interface Collection {
@@ -21,13 +40,13 @@ interface Collection {
   dots: Dot[]
 }
 
-const defaultColors = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6", "#ec4899"]
+const defaultColors = ["#3b82f6", "#22c55e", "#ef4444", "#f97316", "#8b5cf6"] // blue, green, red, orange, purple
 
-const generateBellCurvePath = (width = 300, height = 100, centerX = 200) => {
+const generateBellCurvePath = (width = 300, height = 150, centerX = 200) => {
   const points: string[] = []
   const startX = centerX - width / 2
   const endX = centerX + width / 2
-  const baseY = 150
+  const baseY = 145
 
   // Generate points for bell curve using normal distribution-like formula
   for (let x = startX; x <= endX; x += 5) {
@@ -40,15 +59,30 @@ const generateBellCurvePath = (width = 300, height = 100, centerX = 200) => {
 }
 
 export default function HillChartGenerator() {
+  const getHillY = (x: number) => {
+    const centerX = 300 // SVG center point (changed from 200 to 300)
+    const width = 600 // Full SVG width (changed from 400 to 600)
+    const height = 150 // Bell curve height - increased from 100 to 150
+    const baseY = 145 // Base line Y position
+
+    // Convert percentage x to SVG coordinates
+    const svgX = (x / 100) * 600 // Changed from 400 to 600
+
+    // Calculate Y using the same formula as generateBellCurvePath
+    const normalizedX = (svgX - centerX) / (width / 6)
+    const y = baseY - height * Math.exp(-0.5 * normalizedX * normalizedX)
+
+    return y
+  }
   const [collections, setCollections] = useState<Collection[]>([
     {
       id: "project-a",
       name: "Project A",
       dots: [
-        { id: "1", label: "Adding Collections", x: 75, y: 45, color: "#22c55e" },
-        { id: "2", label: "Adding Dots to Collections", x: 65, y: 35, color: "#eab308" },
-        { id: "3", label: "Tweaking Dots color and size", x: 25, y: 25, color: "#f97316" },
-        { id: "4", label: "Saving to PNG, SVG and CPB", x: 15, y: 15, color: "#3b82f6" },
+        { id: "1", label: "Adding Collections", x: 75, y: getHillY(75), color: "#22c55e", size: 3 },
+        { id: "2", label: "Adding Dots to Collections", x: 65, y: getHillY(65), color: "#eab308", size: 3 },
+        { id: "3", label: "Tweaking Dots color and size", x: 25, y: getHillY(25), color: "#f97316", size: 3 },
+        { id: "4", label: "Saving to PNG, SVG and CPB", x: 15, y: getHillY(15), color: "#3b82f6", size: 3 },
       ],
     },
   ])
@@ -56,19 +90,56 @@ export default function HillChartGenerator() {
   const [selectedCollection, setSelectedCollection] = useState("project-a")
   const [newDotLabel, setNewDotLabel] = useState("")
   const [isDragging, setIsDragging] = useState<string | null>(null)
+  const [collectionInput, setCollectionInput] = useState("Project A")
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [filteredCollections, setFilteredCollections] = useState<Collection[]>(collections)
+  const [isTyping, setIsTyping] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<{ dotId: string; dotLabel: string } | null>(null)
+  const [showEllipsisMenu, setShowEllipsisMenu] = useState(false)
+  const { theme, setTheme } = useTheme()
+  const ellipsisMenuRef = useRef<HTMLDivElement>(null)
+  const svgRef = useRef<SVGSVGElement>(null)
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copying" | "success" | "error">("idle")
+  const [copyFormat, setCopyFormat] = useState<"PNG" | "SVG">("PNG")
 
   const currentCollection = collections.find((c) => c.id === selectedCollection)
 
-  const getHillY = (x: number) => {
-    // Bell curve equation using normal distribution
-    const centerX = 50
-    const width = 100
-    const height = 80
-    const normalizedX = Math.max(0, Math.min(100, x))
-    const relativeX = (normalizedX - centerX) / (width / 6) // Normalize to standard deviation
-    const y = height * Math.exp(-0.5 * relativeX * relativeX)
-    return 50 - y * 0.6 // Scale and invert for SVG coordinates
-  }
+  useEffect(() => {
+    // Only filter when user is actively typing, not when dropdown is opened via button
+    if (showDropdown && isTyping) {
+      const filtered = collections.filter((collection) =>
+        collection.name.toLowerCase().includes(collectionInput.toLowerCase()),
+      )
+      setFilteredCollections(filtered)
+    }
+  }, [collectionInput, collections, isTyping]) // Remove showDropdown from dependencies
+
+  useEffect(() => {
+    // Close dropdown when clicking outside
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowDropdown(false)
+        setIsTyping(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  useEffect(() => {
+    // Close ellipsis menu when clicking outside
+    const handleClickOutside = (event: MouseEvent) => {
+      if (ellipsisMenuRef.current && !ellipsisMenuRef.current.contains(event.target as Node)) {
+        setShowEllipsisMenu(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
   const handleDotDrag = (dotId: string, clientX: number, clientY: number, rect: DOMRect) => {
     const x = ((clientX - rect.left) / rect.width) * 100
@@ -96,7 +167,8 @@ export default function HillChartGenerator() {
       label: newDotLabel,
       x: 50,
       y: getHillY(50),
-      color: defaultColors[Math.floor(Math.random() * defaultColors.length)],
+      color: defaultColors[0], // Default to first color (blue)
+      size: 3, // Default size
     }
 
     setCollections((prev) =>
@@ -108,50 +180,473 @@ export default function HillChartGenerator() {
     setNewDotLabel("")
   }
 
-  const removeDot = (dotId: string) => {
+  const showDeleteConfirm = (dotId: string, dotLabel: string) => {
+    setDeleteConfirm({ dotId, dotLabel })
+  }
+
+  const confirmDelete = () => {
+    if (deleteConfirm) {
+      setCollections((prev) =>
+        prev.map((collection) =>
+          collection.id === selectedCollection
+            ? { ...collection, dots: collection.dots.filter((dot) => dot.id !== deleteConfirm.dotId) }
+            : collection,
+        ),
+      )
+      setDeleteConfirm(null)
+    }
+  }
+
+  const cancelDelete = () => {
+    setDeleteConfirm(null)
+  }
+
+  const prepareSvgForExport = (): string | null => {
+    if (!svgRef.current) return null
+
+    const isDarkMode = document.documentElement.classList.contains("dark")
+    const backgroundColor = isDarkMode ? "#0f0f0f" : "#ffffff"
+    const textColor = isDarkMode ? "#fafafa" : "#0a0a0a"
+    const mutedColor = isDarkMode ? "#a1a1aa" : "#71717a"
+    const borderColor = isDarkMode ? "#27272a" : "#e4e4e7"
+
+    const svgElement = svgRef.current.cloneNode(true) as SVGSVGElement
+    svgElement.setAttribute("width", "900")
+    svgElement.setAttribute("height", "360")
+    svgElement.style.backgroundColor = backgroundColor
+    // Ensure the viewBox is set for the exported SVG to maintain padding
+    svgElement.setAttribute("viewBox", "-50 0 700 180")
+
+    const paths = svgElement.querySelectorAll("path")
+    paths.forEach((path) => {
+      if (path.getAttribute("stroke") === "currentColor") path.setAttribute("stroke", textColor)
+    })
+
+    const lines = svgElement.querySelectorAll("line")
+    lines.forEach((line) => {
+      if (line.getAttribute("stroke") === "currentColor") line.setAttribute("stroke", textColor)
+      if (line.getAttribute("stroke") === "hsl(var(--muted-foreground))") line.setAttribute("stroke", mutedColor)
+    })
+
+    const texts = svgElement.querySelectorAll("text")
+    texts.forEach((text) => {
+      text.setAttribute("font-family", "Arial, Helvetica, sans-serif")
+      if (text.classList.contains("fill-foreground")) text.setAttribute("fill", textColor)
+      if (text.classList.contains("fill-muted-foreground")) text.setAttribute("fill", mutedColor)
+
+      const currentFontSize = text.getAttribute("fontSize") || text.style.fontSize
+      if (currentFontSize) {
+        text.setAttribute("font-size", currentFontSize)
+      } else {
+        if (text.classList.contains("text-[8px]")) text.setAttribute("font-size", "8px")
+        else if (text.classList.contains("text-sm")) text.setAttribute("font-size", "14px")
+        else {
+          const fontSizeAttr = text.getAttribute("fontSize")
+          if (fontSizeAttr) text.setAttribute("font-size", fontSizeAttr + "px")
+        }
+      }
+      if (text.classList.contains("font-semibold")) text.setAttribute("font-weight", "600")
+      else if (text.classList.contains("font-normal")) text.setAttribute("font-weight", "400")
+    })
+
+    const rects = svgElement.querySelectorAll("rect")
+    rects.forEach((rect) => {
+      if (rect.getAttribute("fill") === "hsl(var(--background))") rect.setAttribute("fill", backgroundColor)
+      if (rect.getAttribute("stroke") === "hsl(var(--border))") rect.setAttribute("stroke", borderColor)
+    })
+
+    // Add background rect for SVG export if it's not for PNG conversion
+    const backgroundRect = document.createElementNS("http://www.w3.org/2000/svg", "rect")
+    backgroundRect.setAttribute("width", "100%") // Use relative width for viewBox
+    backgroundRect.setAttribute("height", "100%") // Use relative height for viewBox
+    backgroundRect.setAttribute("fill", backgroundColor)
+    // Adjust x,y if viewBox starts from negative values
+    const viewBox = svgElement.getAttribute("viewBox")?.split(" ").map(Number)
+    if (viewBox && viewBox.length === 4) {
+      backgroundRect.setAttribute("x", viewBox[0].toString())
+      backgroundRect.setAttribute("y", viewBox[1].toString())
+      backgroundRect.setAttribute("width", viewBox[2].toString())
+      backgroundRect.setAttribute("height", viewBox[3].toString())
+    } else {
+      // fallback if viewBox is not as expected
+      backgroundRect.setAttribute("width", "900")
+      backgroundRect.setAttribute("height", "360")
+    }
+    svgElement.insertBefore(backgroundRect, svgElement.firstChild)
+
+    return new XMLSerializer().serializeToString(svgElement)
+  }
+
+  const copyChartAsPNG = async () => {
+    setCopyStatus("copying")
+    const svgString = prepareSvgForExport()
+    if (!svgString) {
+      setCopyStatus("error")
+      setTimeout(() => setCopyStatus("idle"), 3000)
+      return
+    }
+
+    const isDarkMode = document.documentElement.classList.contains("dark")
+    const backgroundColor = isDarkMode ? "#0f0f0f" : "#ffffff"
+
+    const canvas = document.createElement("canvas")
+    const ctx = canvas.getContext("2d")
+    if (!ctx) {
+      setCopyStatus("error")
+      setTimeout(() => setCopyStatus("idle"), 3000)
+      return
+    }
+
+    const scale = 3
+    canvas.width = 900 * scale
+    canvas.height = 360 * scale
+
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = "high"
+    ctx.textRenderingOptimization = "optimizeQuality" // Deprecated, but some browsers might still use it
+    if (typeof ctx.letterSpacing !== "undefined") {
+      // @ts-ignore
+      ctx.letterSpacing = "0px" // @ts-ignore
+      ctx.wordSpacing = "0px"
+    }
+    if (typeof ctx.fontKerning !== "undefined") {
+      // @ts-ignore
+      ctx.fontKerning = "normal"
+    }
+
+    ctx.scale(scale, scale)
+    ctx.fillStyle = backgroundColor
+    ctx.fillRect(0, 0, 900, 360)
+
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
+    const url = URL.createObjectURL(svgBlob)
+
+    img.onload = async () => {
+      ctx.drawImage(img, 0, 0, 900, 360)
+      URL.revokeObjectURL(url)
+      canvas.toBlob(
+        async (blob) => {
+          if (blob) {
+            try {
+              await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
+              setCopyStatus("success")
+              setTimeout(() => setCopyStatus("idle"), 2000)
+            } catch (err) {
+              console.error("Failed to copy PNG to clipboard:", err)
+              setCopyStatus("error")
+              setTimeout(() => setCopyStatus("idle"), 3000)
+            }
+          } else {
+            setCopyStatus("error")
+            setTimeout(() => setCopyStatus("idle"), 3000)
+          }
+        },
+        "image/png",
+        1.0,
+      )
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      setCopyStatus("error")
+      setTimeout(() => setCopyStatus("idle"), 3000)
+    }
+    img.src = url
+  }
+
+  const copyChartAsSVG = async () => {
+    setCopyStatus("copying")
+    const svgString = prepareSvgForExport()
+    if (!svgString) {
+      setCopyStatus("error")
+      setTimeout(() => setCopyStatus("idle"), 3000)
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(svgString)
+      setCopyStatus("success")
+      setTimeout(() => setCopyStatus("idle"), 2000)
+    } catch (err) {
+      console.error("Failed to copy SVG to clipboard:", err)
+      setCopyStatus("error")
+      setTimeout(() => setCopyStatus("idle"), 3000)
+    }
+  }
+
+  const downloadChartAsPNG = async () => {
+    // This function can now also use prepareSvgForExport and the canvas logic from copyChartAsPNG
+    // For brevity, assuming it's similar to copyChartAsPNG but triggers download
+    const svgString = prepareSvgForExport()
+    if (!svgString) return
+
+    const isDarkMode = document.documentElement.classList.contains("dark")
+    const backgroundColor = isDarkMode ? "#0f0f0f" : "#ffffff"
+
+    const canvas = document.createElement("canvas")
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+
+    const scale = 3
+    canvas.width = 900 * scale
+    canvas.height = 360 * scale
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = "high"
+    if (typeof ctx.letterSpacing !== "undefined") {
+      // @ts-ignore
+      ctx.letterSpacing = "0px" // @ts-ignore
+      ctx.wordSpacing = "0px"
+    }
+    if (typeof ctx.fontKerning !== "undefined") {
+      // @ts-ignore
+      ctx.fontKerning = "normal"
+    }
+    ctx.scale(scale, scale)
+    ctx.fillStyle = backgroundColor
+    ctx.fillRect(0, 0, 900, 360)
+
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
+    const url = URL.createObjectURL(svgBlob)
+
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, 900, 360)
+      URL.revokeObjectURL(url)
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            const now = new Date()
+            const timestamp = now.toISOString().replace(/:/g, "-").replace(/\..+/, "").replace("T", "_")
+            const link = document.createElement("a")
+            link.download = `${currentCollection?.name || "hill-chart"}_${timestamp}.png`
+            link.href = URL.createObjectURL(blob)
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(link.href)
+          }
+        },
+        "image/png",
+        1.0,
+      )
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      console.error("Failed to load SVG for PNG download")
+    }
+    img.src = url
+  }
+
+  const downloadChartAsSVG = () => {
+    const svgString = prepareSvgForExport()
+    if (!svgString) return
+
+    const now = new Date()
+    const timestamp = now.toISOString().replace(/:/g, "-").replace(/\..+/, "").replace("T", "_")
+    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
+    const url = URL.createObjectURL(svgBlob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `${currentCollection?.name || "hill-chart"}_${timestamp}.svg`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
+  const handleCopyToClipboard = () => {
+    if (copyFormat === "PNG") {
+      copyChartAsPNG()
+    } else if (copyFormat === "SVG") {
+      copyChartAsSVG()
+    }
+  }
+
+  const exportCollections = () => {
+    const dataStr = JSON.stringify(collections, null, 2)
+    const dataBlob = new Blob([dataStr], { type: "application/json" })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = "hill-chart-collections.json"
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    setShowEllipsisMenu(false)
+  }
+
+  const importCollections = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const importedCollections = JSON.parse(e.target?.result as string)
+        if (Array.isArray(importedCollections)) {
+          setCollections(importedCollections)
+          if (importedCollections.length > 0) {
+            setSelectedCollection(importedCollections[0].id)
+            setCollectionInput(importedCollections[0].name)
+          }
+        }
+      } catch (error) {
+        alert("Invalid JSON file")
+      }
+    }
+    reader.readAsText(file)
+    setShowEllipsisMenu(false)
+    // Reset the input value so the same file can be selected again
+    event.target.value = ""
+  }
+
+  const getCopyButtonContent = () => {
+    switch (copyStatus) {
+      case "copying":
+        return (
+          <>
+            <div className="w-4 h-4 mr-1 animate-spin rounded-full border-2 border-current border-t-transparent" />
+            Copying...
+          </>
+        )
+      case "success":
+        return (
+          <>
+            <Check className="w-4 h-4 mr-1" />
+            Copied as {copyFormat}!
+          </>
+        )
+      case "error":
+        return (
+          <>
+            <CopyIcon className="w-4 h-4 mr-1" />
+            Try Again
+          </>
+        )
+      default:
+        return (
+          <>
+            <CopyIcon className="w-4 h-4 mr-1" />
+            Copy as {copyFormat}
+          </>
+        )
+    }
+  }
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCollectionInput(e.target.value)
+    setIsTyping(true)
+    setShowDropdown(true) // Open dropdown immediately when typing
+  }
+
+  const handleCollectionInputKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      e.preventDefault() // Prevent form submission
+      if (collectionInput.trim()) {
+        // Check if the collection already exists
+        if (!collections.some((c) => c.name.toLowerCase() === collectionInput.toLowerCase())) {
+          const newCollection: Collection = {
+            id: Date.now().toString(),
+            name: collectionInput,
+            dots: [],
+          }
+          setCollections([...collections, newCollection])
+          setSelectedCollection(newCollection.id)
+        }
+        setShowDropdown(false)
+        setIsTyping(false)
+      }
+    }
+  }
+
+  const handleInputFocus = () => {
+    setShowDropdown(true)
+  }
+
+  const toggleDropdown = () => {
+    setShowDropdown(!showDropdown)
+    setIsTyping(false) // Reset typing state when dropdown is toggled via button
+  }
+
+  const handleCollectionSelect = (collection: Collection) => {
+    setSelectedCollection(collection.id)
+    setCollectionInput(collection.name)
+    setShowDropdown(false)
+    setIsTyping(false)
+  }
+
+  const updateDotLabel = (dotId: string, newLabel: string) => {
     setCollections((prev) =>
-      prev.map((collection) =>
-        collection.id === selectedCollection
-          ? { ...collection, dots: collection.dots.filter((dot) => dot.id !== dotId) }
-          : collection,
-      ),
+      prev.map((collection) => ({
+        ...collection,
+        dots: collection.dots.map((dot) => (dot.id === dotId ? { ...dot, label: newLabel } : dot)),
+      })),
     )
   }
 
-  const exportChart = (format: string) => {
-    // This would implement actual export functionality
-    console.log(`Exporting as ${format}`)
+  const updateDotColor = (dotId: string, newColor: string) => {
+    setCollections((prev) =>
+      prev.map((collection) => ({
+        ...collection,
+        dots: collection.dots.map((dot) => (dot.id === dotId ? { ...dot, color: newColor } : dot)),
+      })),
+    )
+  }
+
+  const updateDotSize = (dotId: string, newSize: number) => {
+    setCollections((prev) =>
+      prev.map((collection) => ({
+        ...collection,
+        dots: collection.dots.map((dot) => (dot.id === dotId ? { ...dot, size: newSize } : dot)),
+      })),
+    )
   }
 
   return (
-    <div className="min-h-screen p-4 bg-transparent">
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-6">
+    <div className="min-h-screen p-4 bg-transparent" style={{ userSelect: isDragging ? "none" : "auto" }}>
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-[2fr_1.2fr] gap-6">
         {/* Main Chart Area */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-1">
           <Card className="h-full">
             <CardHeader className="flex flex-row items-center justify-between">
               <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => exportChart("PNG")}>
+                <Button variant="outline" size="sm" onClick={downloadChartAsPNG}>
                   <Download className="w-4 h-4 mr-1" />
                   PNG
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => exportChart("SVG")}>
+                <Button variant="outline" size="sm" onClick={downloadChartAsSVG}>
                   <Download className="w-4 h-4 mr-1" />
                   SVG
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => exportChart("CPB")}>
-                  <Download className="w-4 h-4 mr-1" />
-                  CPB
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyToClipboard}
+                  disabled={copyStatus === "copying"}
+                  className={`transition-colors ${
+                    copyStatus === "success"
+                      ? "border-green-500 bg-green-500/10 text-green-600 hover:bg-green-500/20 dark:border-green-400 dark:bg-green-400/10 dark:text-green-400 dark:hover:bg-green-400/20"
+                      : copyStatus === "error"
+                        ? "border-red-500 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:border-red-400 dark:bg-red-400/10 dark:text-red-400 dark:hover:bg-red-400/20"
+                        : ""
+                  }`}
+                >
+                  {getCopyButtonContent()}
                 </Button>
               </div>
             </CardHeader>
             <CardContent className="p-2">
-              <div className="relative w-full h-96 bg-white -m-2">
+              <div className="relative w-full h-96 bg-background -m-2 flex items-center justify-center">
                 <svg
+                  ref={svgRef}
                   width="100%"
                   height="100%"
-                  viewBox="0 0 400 200"
-                  className="overflow-visible w-full h-full"
+                  viewBox="-50 0 700 180" // Adjusted viewBox for padding
+                  className="overflow-visible max-w-full"
+                  style={{ userSelect: "none" }}
                   onMouseMove={(e) => {
                     if (isDragging) {
                       const rect = e.currentTarget.getBoundingClientRect()
@@ -164,52 +659,90 @@ export default function HillChartGenerator() {
                   {/* Bell curve */}
                   <path
                     className="bg-transparent shadow-none leading-9"
-                    d={generateBellCurvePath(400, 100, 200)}
-                    stroke="#000"
+                    d={generateBellCurvePath(600, 150, 300)}
+                    stroke="currentColor"
                     strokeWidth="1"
                     fill="none"
                   />
 
                   {/* Base line */}
-                  <line className="leading-3" x1="0" y1="150" x2="400" y2="150" stroke="#000" strokeWidth="1" />
+                  <line className="leading-3" x1="0" y1="150" x2="600" y2="150" stroke="currentColor" strokeWidth="1" />
 
                   {/* Center divider */}
-                  <line x1="200" y1="50" x2="200" y2="150" stroke="#666" strokeWidth="1" strokeDasharray="5,5" />
+                  <line
+                    x1="300"
+                    y1="-5"
+                    x2="300"
+                    y2="150"
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeWidth="1"
+                    strokeDasharray="5,5"
+                  />
 
                   {/* Labels */}
-                  <text x="20" y="165" textAnchor="middle" className="text-[8px] fill-gray-600 font-normal leading-4">
+                  <text
+                    x="30"
+                    y="160"
+                    textAnchor="middle"
+                    className="text-[8px] fill-muted-foreground font-normal leading-4"
+                  >
                     Discovery
                   </text>
-                  <text x="200" y="195" textAnchor="middle" className="font-semibold text-sm">
+                  <text x="300" y="175" textAnchor="middle" className="font-semibold text-sm fill-foreground">
+                    {" "}
+                    {/* Adjusted y for less bottom margin */}
                     {currentCollection?.name}
                   </text>
-                  <text x="380" y="165" textAnchor="middle" className="text-[8px] fill-gray-600">
+                  <text x="570" y="160" textAnchor="middle" className="text-[8px] fill-muted-foreground">
                     Delivery
                   </text>
 
                   {/* Dots */}
-                  {currentCollection?.dots.map((dot) => (
-                    <g key={dot.id}>
-                      <circle
-                        cx={(dot.x / 100) * 400}
-                        cy={50 + (dot.y / 100) * 100}
-                        r="8"
-                        fill={dot.color}
-                        stroke="#fff"
-                        strokeWidth="2"
-                        className="cursor-pointer hover:r-10 transition-all"
-                        onMouseDown={() => setIsDragging(dot.id)}
-                      />
-                      <text
-                        x={(dot.x / 100) * 400}
-                        y={35 + (dot.y / 100) * 100}
-                        textAnchor="middle"
-                        className="text-xs fill-gray-700 pointer-events-none"
-                      >
-                        {dot.label}
-                      </text>
-                    </g>
-                  ))}
+                  {currentCollection?.dots.map((dot) => {
+                    const dotX = (dot.x / 100) * 600
+                    const dotRadius = 4 + dot.size * 2 // Size 1 = 6px radius, Size 5 = 14px radius
+                    const fontSize = 8 + dot.size * 1 // Size 1 = 9px, Size 5 = 13px
+                    const textWidth = dot.label.length * (fontSize * 0.6) + 16
+                    const textHeight = fontSize + 12
+
+                    return (
+                      <g key={dot.id}>
+                        <circle
+                          cx={dotX}
+                          cy={dot.y}
+                          r={dotRadius}
+                          fill={dot.color}
+                          stroke="#fff"
+                          strokeWidth="2"
+                          className="cursor-pointer hover:opacity-80 transition-all"
+                          onMouseDown={() => setIsDragging(dot.id)}
+                        />
+                        <rect
+                          x={dotX - textWidth / 2}
+                          y={dot.y - 35}
+                          width={textWidth}
+                          height={textHeight}
+                          rx="8"
+                          ry="8"
+                          fill="hsl(var(--background))"
+                          stroke="hsl(var(--border))"
+                          strokeWidth="1"
+                          className="pointer-events-none"
+                        />
+                        <text
+                          x={dotX}
+                          y={dot.y - 25}
+                          textAnchor="middle"
+                          className="fill-foreground pointer-events-none select-none"
+                          dominantBaseline="middle"
+                          fontSize={fontSize}
+                          style={{ userSelect: "none" }}
+                        >
+                          {dot.label}
+                        </text>
+                      </g>
+                    )
+                  })}
                 </svg>
               </div>
             </CardContent>
@@ -219,24 +752,147 @@ export default function HillChartGenerator() {
         {/* Sidebar */}
         <div className="space-y-6">
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg">Hill Chart Generator</CardTitle>
+              <div className="relative" ref={ellipsisMenuRef}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowEllipsisMenu(!showEllipsisMenu)}
+                  className="h-8 w-8 p-0"
+                >
+                  <MoreHorizontal className="w-4 h-4" />
+                </Button>
+
+                {showEllipsisMenu && (
+                  <div className="absolute right-0 top-8 w-56 bg-background border border-border rounded-md shadow-lg z-50">
+                    <div className="py-1">
+                      {/* Theme Section */}
+                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+                        Theme
+                      </div>
+                      <button
+                        onClick={() => {
+                          setTheme("light")
+                          setShowEllipsisMenu(false)
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <Sun className="w-4 h-4" /> Light {theme === "light" && <Check className="w-4 h-4 ml-auto" />}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setTheme("dark")
+                          setShowEllipsisMenu(false)
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <Moon className="w-4 h-4" /> Dark {theme === "dark" && <Check className="w-4 h-4 ml-auto" />}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setTheme("system")
+                          setShowEllipsisMenu(false)
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <Monitor className="w-4 h-4" /> Follow Browser{" "}
+                        {theme === "system" && <Check className="w-4 h-4 ml-auto" />}
+                      </button>
+
+                      {/* Export Section */}
+                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                        Export Clipboard Format
+                      </div>
+                      <button
+                        onClick={() => {
+                          setCopyFormat("PNG")
+                          setShowEllipsisMenu(false)
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <FileImage className="w-4 h-4" /> Copy as PNG{" "}
+                        {copyFormat === "PNG" && <Check className="w-4 h-4 ml-auto" />}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setCopyFormat("SVG")
+                          setShowEllipsisMenu(false)
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <FileCode2 className="w-4 h-4" /> Copy as SVG{" "}
+                        {copyFormat === "SVG" && <Check className="w-4 h-4 ml-auto" />}
+                      </button>
+
+                      {/* Collections Section */}
+                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                        Collections
+                      </div>
+                      <button
+                        onClick={exportCollections}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <DownloadIcon className="w-4 h-4" /> Export Collections
+                      </button>
+                      <label className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 cursor-pointer">
+                        <UploadIcon className="w-4 h-4" /> Import Collections
+                        <input type="file" accept=".json" onChange={importCollections} className="hidden" />
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
+              <div className="relative" ref={dropdownRef}>
                 <label className="text-sm font-medium mb-2 block">Collections</label>
-                <Select value={selectedCollection} onValueChange={setSelectedCollection}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {collections.map((collection) => (
-                      <SelectItem key={collection.id} value={collection.id}>
-                        {collection.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="relative">
+                  <Input
+                    ref={inputRef}
+                    value={collectionInput}
+                    onChange={handleInputChange}
+                    onKeyPress={handleCollectionInputKeyPress}
+                    onFocus={handleInputFocus}
+                    placeholder="Type to search or create collection..."
+                    className="pr-8"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-2"
+                    onClick={toggleDropdown}
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </div>
+
+                {showDropdown && (
+                  <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md shadow-lg max-h-60 overflow-auto">
+                    {filteredCollections.length > 0 ? (
+                      filteredCollections.map((collection) => (
+                        <div
+                          key={collection.id}
+                          className="px-3 py-2 hover:bg-accent cursor-pointer text-sm"
+                          onClick={() => handleCollectionSelect(collection)}
+                        >
+                          {collection.name}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-sm text-muted-foreground">No collections found</div>
+                    )}
+
+                    {collectionInput.trim() &&
+                      !collections.some((c) => c.name.toLowerCase() === collectionInput.toLowerCase()) && (
+                        <div className="border-t border-border">
+                          <div className="px-3 py-2 text-sm text-primary bg-primary/10">
+                            Press Enter to create "{collectionInput}"
+                          </div>
+                        </div>
+                      )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -244,32 +900,100 @@ export default function HillChartGenerator() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg">Dots</CardTitle>
-              <Settings className="w-4 h-4 text-gray-500" />
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setCollections((prev) =>
+                    prev.map((collection) =>
+                      collection.id === selectedCollection
+                        ? {
+                            ...collection,
+                            dots: [...collection.dots].sort((a, b) => b.x - a.x), // Sort by completion percentage (x position) descending
+                          }
+                        : collection,
+                    ),
+                  )
+                }}
+                className="h-8 w-8 p-0"
+              >
+                <ArrowUpDown className="w-4 h-4 text-gray-500" />
+              </Button>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Add new dot..."
-                  value={newDotLabel}
-                  onChange={(e) => setNewDotLabel(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && addDot()}
-                />
-                <Button size="sm" onClick={addDot}>
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </div>
+              <Input
+                placeholder="Enter dot name and press Enter to add..."
+                value={newDotLabel}
+                onChange={(e) => setNewDotLabel(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && addDot()}
+              />
 
-              <div className="space-y-2 max-h-64 overflow-y-auto">
+              <div className="space-y-2 max-h-96 overflow-y-auto">
                 {currentCollection?.dots.map((dot) => (
-                  <div key={dot.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded">
-                    <div
-                      className="w-4 h-4 rounded-full border-2 border-white shadow-sm"
-                      style={{ backgroundColor: dot.color }}
-                    />
-                    <span className="text-sm flex-1 truncate">{dot.label}</span>
-                    <Button size="sm" variant="ghost" onClick={() => removeDot(dot.id)} className="h-6 w-6 p-0">
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
+                  <div key={dot.id} className="p-3 bg-muted/50 rounded-lg space-y-3">
+                    {/* Dot Name and Controls Row */}
+                    <div className="flex items-center gap-2">
+                      {/* Dot Name Input - takes remaining space */}
+                      <Input
+                        value={dot.label}
+                        onChange={(e) => updateDotLabel(dot.id, e.target.value)}
+                        className="text-sm flex-1"
+                        placeholder="Dot name"
+                      />
+
+                      {/* Color Dropdown */}
+                      <Select value={dot.color} onValueChange={(value) => updateDotColor(dot.id, value)}>
+                        <SelectTrigger className="w-12 h-8 p-0 border-0 bg-transparent">
+                          <div
+                            className="w-6 h-6 rounded-full border-2 border-gray-300"
+                            style={{ backgroundColor: dot.color }}
+                          />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {defaultColors.map((color, index) => (
+                            <SelectItem key={color} value={color}>
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="w-4 h-4 rounded-full border border-gray-300"
+                                  style={{ backgroundColor: color }}
+                                />
+                                <span className="text-sm">{["Blue", "Green", "Red", "Orange", "Purple"][index]}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {/* Size Dropdown */}
+                      <Select
+                        value={dot.size.toString()}
+                        onValueChange={(value) => updateDotSize(dot.id, Number.parseInt(value))}
+                      >
+                        <SelectTrigger className="w-12 h-8">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {[1, 2, 3, 4, 5].map((size) => (
+                            <SelectItem key={size} value={size.toString()}>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">{size}</span>
+                                <span className="text-xs text-gray-500">{["XS", "S", "M", "L", "XL"][size - 1]}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      {/* Delete Button */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => showDeleteConfirm(dot.id, dot.label)}
+                        className="h-8 w-8 p-0 border-red-200 hover:border-red-300 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -277,6 +1001,25 @@ export default function HillChartGenerator() {
           </Card>
         </div>
       </div>
+      {/* Delete Confirmation Dialog */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Delete Dot</h3>
+            <p className="text-gray-600 mb-4">
+              Are you sure you want to delete "{deleteConfirm.dotLabel}"? This action cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={cancelDelete}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={confirmDelete}>
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
