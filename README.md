@@ -14,6 +14,8 @@ Any changes you make to your deployed app will be automatically pushed to this r
 
 The Hill Chart Generator is a web application designed to visualize project progress using a "Hill Chart." A Hill Chart is a simple yet powerful tool for tracking the status of tasks or features, categorizing them into two main phases: "Up the Hill" (discovery/problem-solving) and "Down the Hill" (execution/implementation).
 
+![](image_readme.png)
+
 This app allows you to:
 
 *   **Create and manage "dots"**: Each dot represents a task, feature, or item you want to track.
