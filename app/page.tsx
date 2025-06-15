@@ -279,8 +279,8 @@ export default function HillChartGenerator() {
     const dayNames = ["S", "M", "T", "W", "T", "F", "S"]
 
     // Add day headers
-    const dayHeaders = dayNames.map((day) => (
-      <div key={day} className="text-center text-xs font-medium text-muted-foreground p-0.5">
+    const dayHeaders = dayNames.map((day, index) => (
+      <div key={`day-header-${index}`} className="text-center text-xs font-medium text-muted-foreground p-0.5">
         {day}
       </div>
     ))
