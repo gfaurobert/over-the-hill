@@ -21,6 +21,9 @@ import {
   Check,
   FileImage,
   FileCode2,
+  ChevronLeft,
+  ChevronRight,
+  Camera,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTheme } from "next-themes"
@@ -38,6 +41,14 @@ interface Collection {
   id: string
   name: string
   dots: Dot[]
+}
+
+interface Snapshot {
+  date: string // YYYY-MM-DD format
+  collectionId: string
+  collectionName: string
+  dots: Dot[]
+  timestamp: number
 }
 
 const defaultColors = ["#3b82f6", "#22c55e", "#ef4444", "#f97316", "#8b5cf6"] // blue, green, red, orange, purple
@@ -103,8 +114,247 @@ export default function HillChartGenerator() {
   const svgRef = useRef<SVGSVGElement>(null)
   const [copyStatus, setCopyStatus] = useState<"idle" | "copying" | "success" | "error">("idle")
   const [copyFormat, setCopyFormat] = useState<"PNG" | "SVG">("PNG")
+  const [hideCollectionName, setHideCollectionName] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+
+  // Snapshot-related state
+  const [snapshots, setSnapshots] = useState<Snapshot[]>([])
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [selectedSnapshot, setSelectedSnapshot] = useState<string | null>(null)
+
+  // Load data from localStorage
+  const loadFromStorage = () => {
+    if (typeof window !== "undefined") {
+      try {
+        const savedCollections = localStorage.getItem("hill-chart-collections")
+        const savedSnapshots = localStorage.getItem("hill-chart-snapshots")
+        const savedSelectedCollection = localStorage.getItem("hill-chart-selected-collection")
+        const savedCollectionInput = localStorage.getItem("hill-chart-collection-input")
+        const savedHideCollectionName = localStorage.getItem("hill-chart-hide-collection-name")
+        const savedCopyFormat = localStorage.getItem("hill-chart-copy-format")
+
+        if (savedCollections) {
+          const collections = JSON.parse(savedCollections)
+          setCollections(collections)
+        }
+        if (savedSnapshots) {
+          const snapshots = JSON.parse(savedSnapshots)
+          setSnapshots(snapshots)
+        }
+        if (savedSelectedCollection) {
+          setSelectedCollection(savedSelectedCollection)
+        }
+        if (savedCollectionInput) {
+          setCollectionInput(savedCollectionInput)
+        }
+        if (savedHideCollectionName) {
+          setHideCollectionName(JSON.parse(savedHideCollectionName))
+        }
+        if (savedCopyFormat) {
+          setCopyFormat(savedCopyFormat as "PNG" | "SVG")
+        }
+      } catch (error) {
+        console.error("Error loading data from localStorage:", error)
+      }
+    }
+  }
+
+  // Save data to localStorage
+  const saveToStorage = () => {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("hill-chart-collections", JSON.stringify(collections))
+        localStorage.setItem("hill-chart-snapshots", JSON.stringify(snapshots))
+        localStorage.setItem("hill-chart-selected-collection", selectedCollection)
+        localStorage.setItem("hill-chart-collection-input", collectionInput)
+        localStorage.setItem("hill-chart-hide-collection-name", JSON.stringify(hideCollectionName))
+        localStorage.setItem("hill-chart-copy-format", copyFormat)
+      } catch (error) {
+        console.error("Error saving data to localStorage:", error)
+      }
+    }
+  }
 
   const currentCollection = collections.find((c) => c.id === selectedCollection)
+
+  // Calendar helper functions
+  const formatDateKey = (date: Date) => {
+    return date.toISOString().split("T")[0] // YYYY-MM-DD format
+  }
+
+  const getDaysInMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+  }
+
+  const getFirstDayOfMonth = (date: Date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay()
+  }
+
+  const getSnapshotsForMonth = (date: Date) => {
+    const year = date.getFullYear()
+    const month = date.getMonth()
+    return snapshots.filter((snapshot) => {
+      const snapshotDate = new Date(snapshot.date)
+      return snapshotDate.getFullYear() === year && snapshotDate.getMonth() === month
+    })
+  }
+
+  const hasSnapshotForDate = (date: Date) => {
+    const dateKey = formatDateKey(date)
+    return snapshots.some((snapshot) => snapshot.date === dateKey)
+  }
+
+  const createSnapshot = () => {
+    if (!currentCollection) return
+
+    const today = new Date()
+    const dateKey = formatDateKey(today)
+
+    const newSnapshot: Snapshot = {
+      date: dateKey,
+      collectionId: currentCollection.id,
+      collectionName: currentCollection.name,
+      dots: [...currentCollection.dots],
+      timestamp: Date.now(),
+    }
+
+    setSnapshots((prev) => {
+      // Remove existing snapshot for the same date and collection
+      const filtered = prev.filter((s) => !(s.date === dateKey && s.collectionId === currentCollection.id))
+      return [...filtered, newSnapshot]
+    })
+  }
+
+  const loadSnapshot = (date: Date) => {
+    const dateKey = formatDateKey(date)
+    const snapshot = snapshots.find((s) => s.date === dateKey)
+
+    if (snapshot) {
+      // Check if collection exists, if not create it
+      let targetCollection = collections.find((c) => c.id === snapshot.collectionId)
+
+      if (!targetCollection) {
+        // Create the collection if it doesn't exist
+        const newCollection: Collection = {
+          id: snapshot.collectionId,
+          name: snapshot.collectionName,
+          dots: [],
+        }
+        setCollections((prev) => [...prev, newCollection])
+        targetCollection = newCollection
+      }
+
+      // Update the collection with snapshot data
+      setCollections((prev) =>
+        prev.map((collection) =>
+          collection.id === snapshot.collectionId ? { ...collection, dots: [...snapshot.dots] } : collection,
+        ),
+      )
+
+      // Switch to the snapshot's collection
+      setSelectedCollection(snapshot.collectionId)
+      setCollectionInput(snapshot.collectionName)
+      setSelectedSnapshot(dateKey)
+    }
+  }
+
+  const navigateMonth = (direction: "prev" | "next") => {
+    setCurrentDate((prev) => {
+      const newDate = new Date(prev)
+      if (direction === "prev") {
+        newDate.setMonth(prev.getMonth() - 1)
+      } else {
+        newDate.setMonth(prev.getMonth() + 1)
+      }
+      return newDate
+    })
+  }
+
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(currentDate)
+    const firstDay = getFirstDayOfMonth(currentDate)
+    const monthSnapshots = getSnapshotsForMonth(currentDate)
+
+    const days = []
+    const dayNames = ["S", "M", "T", "W", "T", "F", "S"]
+
+    // Add day headers
+    const dayHeaders = dayNames.map((day) => (
+      <div key={day} className="text-center text-xs font-medium text-muted-foreground p-0.5">
+        {day}
+      </div>
+    ))
+
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<div key={`empty-${i}`} className="p-1"></div>)
+    }
+
+    // Add days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
+      const dateKey = formatDateKey(date)
+      const hasSnapshot = hasSnapshotForDate(date)
+      const isSelected = selectedSnapshot === dateKey
+      const isToday = formatDateKey(new Date()) === dateKey
+
+      days.push(
+        <div key={day} className="p-0.5">
+          <button
+            onClick={() => hasSnapshot && loadSnapshot(date)}
+            className={`w-5 h-5 text-xs rounded-full flex items-center justify-center transition-colors ${
+              hasSnapshot
+                ? `border-2 border-primary cursor-pointer hover:bg-primary hover:text-primary-foreground ${
+                    isSelected ? "bg-primary text-primary-foreground" : "bg-background text-foreground"
+                  }`
+                : isToday
+                  ? "bg-accent text-accent-foreground font-semibold"
+                  : "text-muted-foreground cursor-default"
+            }`}
+            disabled={!hasSnapshot}
+          >
+            {day.toString().padStart(2, "0")}
+          </button>
+        </div>,
+      )
+    }
+
+    return (
+      <div className="border rounded-lg p-2 bg-background">
+        {/* Calendar header */}
+        <div className="flex items-center justify-between mb-2">
+          <Button variant="ghost" size="sm" onClick={() => navigateMonth("prev")} className="h-5 w-5 p-0">
+            <ChevronLeft className="w-3 h-3" />
+          </Button>
+          <div className="flex items-center gap-1">
+            <span className="text-xs font-medium">
+              {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => setCurrentDate(new Date())} className="h-4 px-1 text-xs">
+              Today
+            </Button>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => navigateMonth("next")} className="h-5 w-5 p-0">
+            <ChevronRight className="w-3 h-3" />
+          </Button>
+        </div>
+
+        {/* Calendar grid */}
+        <div className="grid grid-cols-7 gap-0.5">
+          {dayHeaders}
+          {days}
+        </div>
+
+        {/* Snapshot button */}
+        <div className="mt-2 pt-2 border-t">
+          <Button variant="outline" size="sm" onClick={createSnapshot} className="w-full text-xs h-7">
+            <Camera className="w-3 h-3 mr-1" />
+            Save Today's Snapshot
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   useEffect(() => {
     // Only filter when user is actively typing, not when dropdown is opened via button
@@ -140,6 +390,25 @@ export default function HillChartGenerator() {
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
+
+  // Load data on component mount
+  useEffect(() => {
+    loadFromStorage()
+  }, [])
+
+  // Save data whenever state changes
+  useEffect(() => {
+    saveToStorage()
+  }, [collections, snapshots, selectedCollection, collectionInput, hideCollectionName, copyFormat])
+
+  // Auto-save every 30 seconds as backup
+  useEffect(() => {
+    const interval = setInterval(() => {
+      saveToStorage()
+    }, 30000) // 30 seconds
+
+    return () => clearInterval(interval)
+  }, [collections, snapshots, selectedCollection, collectionInput, hideCollectionName, copyFormat])
 
   const handleDotDrag = (dotId: string, clientX: number, clientY: number, rect: DOMRect) => {
     const x = ((clientX - rect.left) / rect.width) * 100
@@ -576,6 +845,7 @@ export default function HillChartGenerator() {
     setCollectionInput(collection.name)
     setShowDropdown(false)
     setIsTyping(false)
+    setSelectedSnapshot(null) // Clear snapshot selection when switching collections
   }
 
   const updateDotLabel = (dotId: string, newLabel: string) => {
@@ -688,10 +958,11 @@ export default function HillChartGenerator() {
                   >
                     Discovery
                   </text>
-                  <text x="300" y="175" textAnchor="middle" className="font-semibold text-sm fill-foreground">
-                    {" "}
-                    {currentCollection?.name}
-                  </text>
+                  {!hideCollectionName && (
+                    <text x="300" y="175" textAnchor="middle" className="font-semibold text-sm fill-foreground">
+                      {currentCollection?.name}
+                    </text>
+                  )}
                   <text x="570" y="160" textAnchor="middle" className="text-[8px] fill-muted-foreground">
                     Delivery
                   </text>
@@ -824,6 +1095,30 @@ export default function HillChartGenerator() {
                         {copyFormat === "SVG" && <Check className="w-4 h-4 ml-auto" />}
                       </button>
 
+                      {/* Chart Settings Section */}
+                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                        Chart Settings
+                      </div>
+                      <button
+                        onClick={() => {
+                          setHideCollectionName(!hideCollectionName)
+                          setShowEllipsisMenu(false)
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <Monitor className="w-4 h-4" /> Hide Collection Name{" "}
+                        {hideCollectionName && <Check className="w-4 h-4 ml-auto" />}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowResetConfirm(true)
+                          setShowEllipsisMenu(false)
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <Trash2 className="w-4 h-4" /> Reset Collections
+                      </button>
+
                       {/* Collections Section */}
                       <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
                         Collections
@@ -892,6 +1187,12 @@ export default function HillChartGenerator() {
                       )}
                   </div>
                 )}
+              </div>
+
+              {/* Snapshot Calendar */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium block">Snapshots</label>
+                {renderCalendar()}
               </div>
             </CardContent>
           </Card>
@@ -1014,6 +1315,43 @@ export default function HillChartGenerator() {
               </Button>
               <Button variant="destructive" onClick={confirmDelete}>
                 Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Reset Collections Confirmation Dialog */}
+      {showResetConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Reset All Collections</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              Are you sure you want to delete all collections and snapshots? This action cannot be undone and will
+              remove all your data.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowResetConfirm(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setCollections([])
+                  setSnapshots([])
+                  setSelectedCollection("")
+                  setCollectionInput("")
+                  setSelectedSnapshot(null)
+                  setShowResetConfirm(false)
+                  // Clear localStorage
+                  if (typeof window !== "undefined") {
+                    localStorage.removeItem("hill-chart-collections")
+                    localStorage.removeItem("hill-chart-snapshots")
+                    localStorage.removeItem("hill-chart-selected-collection")
+                    localStorage.removeItem("hill-chart-collection-input")
+                  }
+                }}
+              >
+                Reset All
               </Button>
             </div>
           </div>
