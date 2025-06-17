@@ -1,4 +1,10 @@
-# Hill chart app
+# Over The Hill
+Inspired by [37signals](https://37signals.com/) Hill Chart
+
+[37signals](https://37signals.com/) Hill Charts are a great way to visually communicate
+progress and incoming work.
+
+Read [Shape Up: Show Porgress (Chapt. 13)](https://basecamp.com/shapeup/3.4-chapter-13) to discover the technique.
 
 *Automatically synced with your [v0.dev](https://v0.dev) deployments*
 
@@ -10,9 +16,9 @@
 This repository will stay in sync with your deployed chats on [v0.dev](https://v0.dev).
 Any changes you make to your deployed app will be automatically pushed to this repository from [v0.dev](https://v0.dev).
 
-## What is the Hill Chart Generator?
+## What is  Over The Hill?
 
-The Hill Chart Generator is a web application designed to visualize project progress using a "Hill Chart." A Hill Chart is a simple yet powerful tool for tracking the status of tasks or features, categorizing them into two main phases: "Up the Hill" (discovery/problem-solving) and "Down the Hill" (execution/implementation).
+Over The Hill is a web application designed to visualize project progress using a "Hill Chart." A Hill Chart is a simple yet powerful tool for tracking the status of tasks or features, categorizing them into two main phases: "Up the Hill" (discovery/problem-solving) and "Down the Hill" (execution/implementation).
 
 ![](image_readme.png)
 
@@ -44,17 +50,4 @@ This app allows you to:
 
 Your project is live at:
 
-**[https://vercel.com/gregoirefaurobert-3371s-projects/v0-hill-chart-generator-website](https://vercel.com/gregoirefaurobert-3371s-projects/v0-hill-chart-generator-website)**
-
-## Build your app
-
-Continue building your app on:
-
-**[https://v0.dev/chat/projects/QlICJdqcWMK](https://v0.dev/chat/projects/QlICJdqcWMK)**
-
-## How It Works
-
-1. Create and modify your project using [v0.dev](https://v0.dev)
-2. Deploy your chats from the v0 interface
-3. Changes are automatically pushed to this repository
-4. Vercel deploys the latest version from this repository
+**[v0-hill-chart-generator-website](https://vercel.com/gregoirefaurobert-3371s-projects/v0-hill-chart-generator-website)**
