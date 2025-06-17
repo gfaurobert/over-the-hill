@@ -131,55 +131,88 @@ export default function HillChartGenerator() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedSnapshot, setSelectedSnapshot] = useState<string | null>(null)
 
-  // Load data from localStorage
-  const loadFromStorage = () => {
+  // Check if running in Electron
+  const isElectron = typeof window !== "undefined" && window.electronAPI
+
+  // Load data from localStorage or Electron store
+  const loadFromStorage = async () => {
     if (typeof window !== "undefined") {
       try {
-        const savedCollections = localStorage.getItem("hill-chart-collections")
-        const savedSnapshots = localStorage.getItem("hill-chart-snapshots")
-        const savedSelectedCollection = localStorage.getItem("hill-chart-selected-collection")
-        const savedCollectionInput = localStorage.getItem("hill-chart-collection-input")
-        const savedHideCollectionName = localStorage.getItem("hill-chart-hide-collection-name")
-        const savedCopyFormat = localStorage.getItem("hill-chart-copy-format")
+        let savedData = null
 
-        if (savedCollections) {
-          const collections = JSON.parse(savedCollections)
-          setCollections(collections)
+        if (isElectron) {
+          // Use Electron's secure storage
+          savedData = await window.electronAPI.loadData()
+        } else {
+          // Fallback to localStorage for web version
+          const savedCollections = localStorage.getItem("hill-chart-collections")
+          const savedSnapshots = localStorage.getItem("hill-chart-snapshots")
+          const savedSelectedCollection = localStorage.getItem("hill-chart-selected-collection")
+          const savedCollectionInput = localStorage.getItem("hill-chart-collection-input")
+          const savedHideCollectionName = localStorage.getItem("hill-chart-hide-collection-name")
+          const savedCopyFormat = localStorage.getItem("hill-chart-copy-format")
+
+          savedData = {
+            collections: savedCollections ? JSON.parse(savedCollections) : null,
+            snapshots: savedSnapshots ? JSON.parse(savedSnapshots) : null,
+            selectedCollection: savedSelectedCollection,
+            collectionInput: savedCollectionInput,
+            hideCollectionName: savedHideCollectionName ? JSON.parse(savedHideCollectionName) : null,
+            copyFormat: savedCopyFormat,
+          }
         }
-        if (savedSnapshots) {
-          const snapshots = JSON.parse(savedSnapshots)
-          setSnapshots(snapshots)
+
+        if (savedData.collections) {
+          setCollections(savedData.collections)
         }
-        if (savedSelectedCollection) {
-          setSelectedCollection(savedSelectedCollection)
+        if (savedData.snapshots) {
+          setSnapshots(savedData.snapshots)
         }
-        if (savedCollectionInput) {
-          setCollectionInput(savedCollectionInput)
+        if (savedData.selectedCollection) {
+          setSelectedCollection(savedData.selectedCollection)
         }
-        if (savedHideCollectionName) {
-          setHideCollectionName(JSON.parse(savedHideCollectionName))
+        if (savedData.collectionInput) {
+          setCollectionInput(savedData.collectionInput)
         }
-        if (savedCopyFormat) {
-          setCopyFormat(savedCopyFormat as "PNG" | "SVG")
+        if (savedData.hideCollectionName !== null) {
+          setHideCollectionName(savedData.hideCollectionName)
+        }
+        if (savedData.copyFormat) {
+          setCopyFormat(savedData.copyFormat as "PNG" | "SVG")
         }
       } catch (error) {
-        console.error("Error loading data from localStorage:", error)
+        console.error("Error loading data:", error)
       }
     }
   }
 
-  // Save data to localStorage
-  const saveToStorage = () => {
+  // Save data to localStorage or Electron store
+  const saveToStorage = async () => {
     if (typeof window !== "undefined") {
       try {
-        localStorage.setItem("hill-chart-collections", JSON.stringify(collections))
-        localStorage.setItem("hill-chart-snapshots", JSON.stringify(snapshots))
-        localStorage.setItem("hill-chart-selected-collection", selectedCollection)
-        localStorage.setItem("hill-chart-collection-input", collectionInput)
-        localStorage.setItem("hill-chart-hide-collection-name", JSON.stringify(hideCollectionName))
-        localStorage.setItem("hill-chart-copy-format", copyFormat)
+        const dataToSave = {
+          collections,
+          snapshots,
+          selectedCollection,
+          collectionInput,
+          hideCollectionName,
+          copyFormat,
+        }
+
+        if (isElectron) {
+          // Use Electron's secure storage
+          await window.electronAPI.saveData(dataToSave)
+        } else {
+          // Fallback to localStorage for web version
+          localStorage.setItem("hill-chart-collections", JSON.stringify(collections))
+          localStorage.setItem("hill-chart-snapshots", JSON.stringify(snapshots))
+          localStorage.setItem("hill-chart-selected-collection", selectedCollection)
+          localStorage.setItem("hill-chart-collection-input", collectionInput)
+          localStorage.setItem("hill-chart-hide-collection-name", JSON.stringify(hideCollectionName))
+          localStorage.setItem("hill-chart-copy-format", copyFormat)
+        }
       } catch (error) {
-        console.error("Error saving data to localStorage:", error)
+        console.error("Error saving data:", error)
       }
     }
   }
@@ -564,73 +597,76 @@ export default function HillChartGenerator() {
       return
     }
 
-    const isDarkMode = document.documentElement.classList.contains("dark")
-    const backgroundColor = isDarkMode ? "#0f0f0f" : "#ffffff"
+    try {
+      if (isElectron) {
+        // Use Electron's clipboard API
+        await window.electronAPI.copyImageToClipboard(svgString)
+        setCopyStatus("success")
+        setTimeout(() => setCopyStatus("idle"), 2000)
+      } else {
+        // Fallback to web clipboard API
+        const isDarkMode = document.documentElement.classList.contains("dark")
+        const backgroundColor = isDarkMode ? "#0f0f0f" : "#ffffff"
 
-    const canvas = document.createElement("canvas")
-    const ctx = canvas.getContext("2d")
-    if (!ctx) {
+        const canvas = document.createElement("canvas")
+        const ctx = canvas.getContext("2d")
+        if (!ctx) {
+          setCopyStatus("error")
+          setTimeout(() => setCopyStatus("idle"), 3000)
+          return
+        }
+
+        const scale = 3
+        canvas.width = 800 * scale
+        canvas.height = 360 * scale
+
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = "high"
+        ctx.scale(scale, scale)
+        ctx.fillStyle = backgroundColor
+        ctx.fillRect(0, 0, 800, 360)
+
+        const img = new Image()
+        img.crossOrigin = "anonymous"
+        const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
+        const url = URL.createObjectURL(svgBlob)
+
+        img.onload = async () => {
+          ctx.drawImage(img, 0, 0, 800, 360)
+          URL.revokeObjectURL(url)
+          canvas.toBlob(
+            async (blob) => {
+              if (blob) {
+                try {
+                  await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
+                  setCopyStatus("success")
+                  setTimeout(() => setCopyStatus("idle"), 2000)
+                } catch (err) {
+                  console.error("Failed to copy PNG to clipboard:", err)
+                  setCopyStatus("error")
+                  setTimeout(() => setCopyStatus("idle"), 3000)
+                }
+              } else {
+                setCopyStatus("error")
+                setTimeout(() => setCopyStatus("idle"), 3000)
+              }
+            },
+            "image/png",
+            1.0,
+          )
+        }
+        img.onerror = () => {
+          URL.revokeObjectURL(url)
+          setCopyStatus("error")
+          setTimeout(() => setCopyStatus("idle"), 3000)
+        }
+        img.src = url
+      }
+    } catch (error) {
+      console.error("Failed to copy to clipboard:", error)
       setCopyStatus("error")
       setTimeout(() => setCopyStatus("idle"), 3000)
-      return
     }
-
-    const scale = 3
-    canvas.width = 800 * scale
-    canvas.height = 360 * scale
-
-    ctx.imageSmoothingEnabled = true
-    ctx.imageSmoothingQuality = "high"
-    ctx.textRenderingOptimization = "optimizeQuality" // Deprecated, but some browsers might still use it
-    if (typeof ctx.letterSpacing !== "undefined") {
-      // @ts-ignore
-      ctx.letterSpacing = "0px" // @ts-ignore
-      ctx.wordSpacing = "0px"
-    }
-    if (typeof ctx.fontKerning !== "undefined") {
-      // @ts-ignore
-      ctx.fontKerning = "normal"
-    }
-
-    ctx.scale(scale, scale)
-    ctx.fillStyle = backgroundColor
-    ctx.fillRect(0, 0, 800, 360)
-
-    const img = new Image()
-    img.crossOrigin = "anonymous"
-    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
-    const url = URL.createObjectURL(svgBlob)
-
-    img.onload = async () => {
-      ctx.drawImage(img, 0, 0, 800, 360)
-      URL.revokeObjectURL(url)
-      canvas.toBlob(
-        async (blob) => {
-          if (blob) {
-            try {
-              await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
-              setCopyStatus("success")
-              setTimeout(() => setCopyStatus("idle"), 2000)
-            } catch (err) {
-              console.error("Failed to copy PNG to clipboard:", err)
-              setCopyStatus("error")
-              setTimeout(() => setCopyStatus("idle"), 3000)
-            }
-          } else {
-            setCopyStatus("error")
-            setTimeout(() => setCopyStatus("idle"), 3000)
-          }
-        },
-        "image/png",
-        1.0,
-      )
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
-      setCopyStatus("error")
-      setTimeout(() => setCopyStatus("idle"), 3000)
-    }
-    img.src = url
   }
 
   const copyChartAsSVG = async () => {
@@ -643,7 +679,11 @@ export default function HillChartGenerator() {
     }
 
     try {
-      await navigator.clipboard.writeText(svgString)
+      if (isElectron) {
+        await window.electronAPI.copyTextToClipboard(svgString)
+      } else {
+        await navigator.clipboard.writeText(svgString)
+      }
       setCopyStatus("success")
       setTimeout(() => setCopyStatus("idle"), 2000)
     } catch (err) {
@@ -659,84 +699,86 @@ export default function HillChartGenerator() {
     const svgString = prepareSvgForExport()
     if (!svgString) return
 
-    const isDarkMode = document.documentElement.classList.contains("dark")
-    const backgroundColor = isDarkMode ? "#0f0f0f" : "#ffffff"
+    const now = new Date()
+    const timestamp = now.toISOString().replace(/:/g, "-").replace(/\..+/, "").replace("T", "_")
+    const filename = `${currentCollection?.name || "hill-chart"}_${timestamp}.png`
 
-    const canvas = document.createElement("canvas")
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
+    if (isElectron) {
+      // Use Electron's save dialog
+      await window.electronAPI.saveImageFile(svgString, filename)
+    } else {
+      // Fallback to web download
+      const isDarkMode = document.documentElement.classList.contains("dark")
+      const backgroundColor = isDarkMode ? "#0f0f0f" : "#ffffff"
 
-    const scale = 3
-    canvas.width = 800 * scale
-    canvas.height = 360 * scale
-    ctx.imageSmoothingEnabled = true
-    ctx.imageSmoothingQuality = "high"
-    if (typeof ctx.letterSpacing !== "undefined") {
-      // @ts-ignore
-      ctx.letterSpacing = "0px" // @ts-ignore
-      ctx.wordSpacing = "0px"
-    }
-    if (typeof ctx.fontKerning !== "undefined") {
-      // @ts-ignore
-      ctx.fontKerning = "normal"
-    }
-    ctx.scale(scale, scale)
-    ctx.fillStyle = backgroundColor
-    ctx.fillRect(0, 0, 800, 360)
+      const canvas = document.createElement("canvas")
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return
 
-    const img = new Image()
-    img.crossOrigin = "anonymous"
-    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
-    const url = URL.createObjectURL(svgBlob)
+      const scale = 3
+      canvas.width = 800 * scale
+      canvas.height = 360 * scale
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = "high"
+      ctx.scale(scale, scale)
+      ctx.fillStyle = backgroundColor
+      ctx.fillRect(0, 0, 800, 360)
 
-    img.onload = () => {
-      ctx.drawImage(img, 0, 0, 800, 360)
-      URL.revokeObjectURL(url)
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            const now = new Date()
-            const timestamp = now
-              .toISOString()
-              .replace(/:/g, "-")
-              .replace(/\..+/, "")
-              .replace(/\..+/, "")
-              .replace("T", "_")
-            const link = document.createElement("a")
-            link.download = `${currentCollection?.name || "hill-chart"}_${timestamp}.png`
-            link.href = URL.createObjectURL(blob)
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-            URL.revokeObjectURL(link.href)
-          }
-        },
-        "image/png",
-        1.0,
-      )
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
+      const url = URL.createObjectURL(svgBlob)
+
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, 800, 360)
+        URL.revokeObjectURL(url)
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const link = document.createElement("a")
+              link.download = filename
+              link.href = URL.createObjectURL(blob)
+              document.body.appendChild(link)
+              link.click()
+              document.body.removeChild(link)
+              URL.revokeObjectURL(link.href)
+            }
+          },
+          "image/png",
+          1.0,
+        )
+      }
+      img.onerror = () => {
+        URL.revokeObjectURL(url)
+        console.error("Failed to load SVG for PNG download")
+      }
+      img.src = url
     }
-    img.onerror = () => {
-      URL.revokeObjectURL(url)
-      console.error("Failed to load SVG for PNG download")
-    }
-    img.src = url
   }
 
-  const downloadChartAsSVG = () => {
+  const downloadChartAsSVG = async () => {
     const svgString = prepareSvgForExport()
     if (!svgString) return
 
     const now = new Date()
     const timestamp = now.toISOString().replace(/:/g, "-").replace(/\..+/, "").replace("T", "_")
-    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
-    const url = URL.createObjectURL(svgBlob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `${currentCollection?.name || "hill-chart"}_${timestamp}.svg`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    const filename = `${currentCollection?.name || "hill-chart"}_${timestamp}.svg`
+
+    if (isElectron) {
+      // Use Electron's save dialog
+      await window.electronAPI.saveTextFile(svgString, filename)
+    } else {
+      // Fallback to web download
+      const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
+      const url = URL.createObjectURL(svgBlob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    }
   }
 
   const handleCopyToClipboard = () => {
@@ -747,7 +789,7 @@ export default function HillChartGenerator() {
     }
   }
 
-  const exportCollections = () => {
+  const exportCollections = async () => {
     const exportData: ExportData = {
       collections,
       snapshots,
@@ -756,73 +798,105 @@ export default function HillChartGenerator() {
     }
 
     const dataStr = JSON.stringify(exportData, null, 2)
-    const dataBlob = new Blob([dataStr], { type: "application/json" })
-    const url = URL.createObjectURL(dataBlob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = `hill-chart-data_${new Date().toISOString().split("T")[0]}.json`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    const filename = `hill-chart-data_${new Date().toISOString().split("T")[0]}.json`
+
+    if (isElectron) {
+      // Use Electron's save dialog
+      await window.electronAPI.saveTextFile(dataStr, filename)
+    } else {
+      // Fallback to web download
+      const dataBlob = new Blob([dataStr], { type: "application/json" })
+      const url = URL.createObjectURL(dataBlob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    }
     setShowEllipsisMenu(false)
   }
 
-  const importCollections = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+  const importCollections = async (event?: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      let importedData = null
 
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      try {
-        const importedData = JSON.parse(e.target?.result as string)
+      if (isElectron) {
+        // Use Electron's open dialog
+        importedData = await window.electronAPI.openFile()
+        if (!importedData) return // User cancelled
+      } else {
+        // Fallback to web file input
+        const file = event?.target?.files?.[0]
+        if (!file) return
 
-        // Check if it's the new format with collections and snapshots
-        if (importedData.collections && Array.isArray(importedData.collections)) {
-          // New format with snapshots
-          setCollections(importedData.collections)
-
-          // Import snapshots if they exist
-          if (importedData.snapshots && Array.isArray(importedData.snapshots)) {
-            setSnapshots(importedData.snapshots)
-          } else {
-            setSnapshots([]) // Clear existing snapshots if none in import
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          try {
+            const data = JSON.parse(e.target?.result as string)
+            processImportedData(data)
+          } catch (error) {
+            alert("Invalid JSON file")
           }
+        }
+        reader.readAsText(file)
+        // Reset the input value so the same file can be selected again
+        if (event?.target) event.target.value = ""
+        return
+      }
 
-          // Set the first collection as selected
-          if (importedData.collections.length > 0) {
-            setSelectedCollection(importedData.collections[0].id)
-            setCollectionInput(importedData.collections[0].name)
-          }
-        } else if (Array.isArray(importedData)) {
-          // Legacy format - just collections array
-          setCollections(importedData)
-          setSnapshots([]) // Clear snapshots for legacy imports
+      processImportedData(importedData)
+    } catch (error) {
+      console.error("Import error:", error)
+      alert("Failed to import file. Please check the file and try again.")
+    }
+    setShowEllipsisMenu(false)
+  }
 
-          if (importedData.length > 0) {
-            setSelectedCollection(importedData[0].id)
-            setCollectionInput(importedData[0].name)
-          }
+  const processImportedData = (importedData: any) => {
+    try {
+      // Check if it's the new format with collections and snapshots
+      if (importedData.collections && Array.isArray(importedData.collections)) {
+        // New format with snapshots
+        setCollections(importedData.collections)
+
+        // Import snapshots if they exist
+        if (importedData.snapshots && Array.isArray(importedData.snapshots)) {
+          setSnapshots(importedData.snapshots)
         } else {
-          alert("Invalid file format. Please select a valid Hill Chart data file.")
-          return
+          setSnapshots([]) // Clear existing snapshots if none in import
         }
 
-        // Clear selected snapshot since we're loading new data
-        setSelectedSnapshot(null)
+        // Set the first collection as selected
+        if (importedData.collections.length > 0) {
+          setSelectedCollection(importedData.collections[0].id)
+          setCollectionInput(importedData.collections[0].name)
+        }
+      } else if (Array.isArray(importedData)) {
+        // Legacy format - just collections array
+        setCollections(importedData)
+        setSnapshots([]) // Clear snapshots for legacy imports
 
-        alert(
-          `Successfully imported ${importedData.collections?.length || importedData.length || 0} collections${importedData.snapshots ? ` and ${importedData.snapshots.length} snapshots` : ""}.`,
-        )
-      } catch (error) {
-        console.error("Import error:", error)
-        alert("Invalid JSON file or corrupted data. Please check the file and try again.")
+        if (importedData.length > 0) {
+          setSelectedCollection(importedData[0].id)
+          setCollectionInput(importedData[0].name)
+        }
+      } else {
+        alert("Invalid file format. Please select a valid Hill Chart data file.")
+        return
       }
+
+      // Clear selected snapshot since we're loading new data
+      setSelectedSnapshot(null)
+
+      alert(
+        `Successfully imported ${importedData.collections?.length || importedData.length || 0} collections${importedData.snapshots ? ` and ${importedData.snapshots.length} snapshots` : ""}.`,
+      )
+    } catch (error) {
+      console.error("Import error:", error)
+      alert("Invalid file format or corrupted data. Please check the file and try again.")
     }
-    reader.readAsText(file)
-    setShowEllipsisMenu(false)
-    // Reset the input value so the same file can be selected again
-    event.target.value = ""
   }
 
   const getCopyButtonContent = () => {
@@ -1213,10 +1287,19 @@ export default function HillChartGenerator() {
                       >
                         <DownloadIcon className="w-4 h-4" /> Export Collections
                       </button>
-                      <label className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 cursor-pointer">
-                        <UploadIcon className="w-4 h-4" /> Import Collections
-                        <input type="file" accept=".json" onChange={importCollections} className="hidden" />
-                      </label>
+                      {isElectron ? (
+                        <button
+                          onClick={() => importCollections()}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <UploadIcon className="w-4 h-4" /> Import Collections
+                        </button>
+                      ) : (
+                        <label className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 cursor-pointer">
+                          <UploadIcon className="w-4 h-4" /> Import Collections
+                          <input type="file" accept=".json" onChange={importCollections} className="hidden" />
+                        </label>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1388,9 +1471,9 @@ export default function HillChartGenerator() {
       {/* Delete Confirmation Dialog */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Delete Dot</h3>
-            <p className="text-gray-600 mb-4">
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
               Are you sure you want to delete "{deleteConfirm.dotLabel}"? This action cannot be undone.
             </p>
             <div className="flex gap-2 justify-end">
@@ -1426,8 +1509,10 @@ export default function HillChartGenerator() {
                   setCollectionInput("")
                   setSelectedSnapshot(null)
                   setShowResetConfirm(false)
-                  // Clear localStorage
-                  if (typeof window !== "undefined") {
+                  // Clear storage
+                  if (isElectron) {
+                    window.electronAPI.clearData()
+                  } else {
                     localStorage.removeItem("hill-chart-collections")
                     localStorage.removeItem("hill-chart-snapshots")
                     localStorage.removeItem("hill-chart-selected-collection")

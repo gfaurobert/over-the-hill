@@ -4,8 +4,8 @@ import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 
 export const metadata: Metadata = {
-  title: "v0 App",
-  description: "Created with v0",
+  title: "Over The Hill - Desktop",
+  description: "Desktop Hill Chart Generator inspired by 37signals",
   generator: "v0.dev",
 }
 

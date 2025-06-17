@@ -1,12 +1,71 @@
 {
-  "name": "my-v0-project",
-  "version": "0.1.0",
+  "name": "over-the-hill-desktop",
+  "version": "1.0.0",
+  "description": "Desktop Hill Chart Generator inspired by 37signals",
+  "main": "electron/main.js",
+  "homepage": "./",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "electron": "electron .",
+    "electron-dev": "NODE_ENV=development electron .",
+    "build-electron": "npm run build && npm run export && electron-builder",
+    "export": "next export",
+    "dist": "npm run build && npm run export && electron-builder --publish=never",
+    "dist-all": "npm run build && npm run export && electron-builder --publish=never --win --mac --linux"
+  },
+  "build": {
+    "appId": "com.overthehillapp.desktop",
+    "productName": "Over The Hill",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron/**/*",
+      "out/**/*",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    }
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -38,15 +97,19 @@
     "@radix-ui/react-toggle-group": "1.1.1",
     "@radix-ui/react-tooltip": "1.1.6",
     "autoprefixer": "^10.4.20",
+    "canvas": "latest",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.0.4",
     "date-fns": "4.1.0",
+    "electron": "latest",
     "embla-carousel-react": "8.5.1",
+    "fs": "latest",
     "input-otp": "1.4.1",
     "lucide-react": "^0.454.0",
     "next": "15.2.4",
     "next-themes": "latest",
+    "path": "latest",
     "react": "^19",
     "react-day-picker": "8.10.1",
     "react-dom": "^19",
@@ -63,6 +126,8 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "electron-builder": "^24.9.1",
+    "electron-reload": "^2.0.0-alpha.1",
     "postcss": "^8.5",
     "tailwindcss": "^3.4.17",
     "typescript": "^5"
