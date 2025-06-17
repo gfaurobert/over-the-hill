@@ -46,8 +46,8 @@ This app allows you to:
     *   Click the "Download PNG" button to save the chart as a PNG file to your system.
 6.  **Theme Switching**: Use the ellipsis menu (`...`) to toggle between "Light," "Dark," or "Follow Browser" themes.
 
-## Deployment
+## Demo
 
-Your project is live at:
+Try it out live at:
 
-**[v0-hill-chart-generator-website](https://vercel.com/gregoirefaurobert-3371s-projects/v0-hill-chart-generator-website)**
+**[https://over-the-hill.vercel.app/](https://over-the-hill.vercel.app/)**
