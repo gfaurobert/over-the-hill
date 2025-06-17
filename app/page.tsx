@@ -24,6 +24,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Camera,
+  Info,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTheme } from "next-themes"
@@ -49,6 +50,13 @@ interface Snapshot {
   collectionName: string
   dots: Dot[]
   timestamp: number
+}
+
+interface ExportData {
+  collections: Collection[]
+  snapshots: Snapshot[]
+  exportDate: string
+  version: string
 }
 
 const defaultColors = ["#3b82f6", "#22c55e", "#ef4444", "#f97316", "#8b5cf6"] // blue, green, red, orange, purple
@@ -116,6 +124,7 @@ export default function HillChartGenerator() {
   const [copyFormat, setCopyFormat] = useState<"PNG" | "SVG">("PNG")
   const [hideCollectionName, setHideCollectionName] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [showInfoModal, setShowInfoModal] = useState(false)
 
   // Snapshot-related state
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
@@ -739,12 +748,19 @@ export default function HillChartGenerator() {
   }
 
   const exportCollections = () => {
-    const dataStr = JSON.stringify(collections, null, 2)
+    const exportData: ExportData = {
+      collections,
+      snapshots,
+      exportDate: new Date().toISOString(),
+      version: "1.0.0",
+    }
+
+    const dataStr = JSON.stringify(exportData, null, 2)
     const dataBlob = new Blob([dataStr], { type: "application/json" })
     const url = URL.createObjectURL(dataBlob)
     const link = document.createElement("a")
     link.href = url
-    link.download = "hill-chart-collections.json"
+    link.download = `hill-chart-data_${new Date().toISOString().split("T")[0]}.json`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -759,16 +775,48 @@ export default function HillChartGenerator() {
     const reader = new FileReader()
     reader.onload = (e) => {
       try {
-        const importedCollections = JSON.parse(e.target?.result as string)
-        if (Array.isArray(importedCollections)) {
-          setCollections(importedCollections)
-          if (importedCollections.length > 0) {
-            setSelectedCollection(importedCollections[0].id)
-            setCollectionInput(importedCollections[0].name)
+        const importedData = JSON.parse(e.target?.result as string)
+
+        // Check if it's the new format with collections and snapshots
+        if (importedData.collections && Array.isArray(importedData.collections)) {
+          // New format with snapshots
+          setCollections(importedData.collections)
+
+          // Import snapshots if they exist
+          if (importedData.snapshots && Array.isArray(importedData.snapshots)) {
+            setSnapshots(importedData.snapshots)
+          } else {
+            setSnapshots([]) // Clear existing snapshots if none in import
           }
+
+          // Set the first collection as selected
+          if (importedData.collections.length > 0) {
+            setSelectedCollection(importedData.collections[0].id)
+            setCollectionInput(importedData.collections[0].name)
+          }
+        } else if (Array.isArray(importedData)) {
+          // Legacy format - just collections array
+          setCollections(importedData)
+          setSnapshots([]) // Clear snapshots for legacy imports
+
+          if (importedData.length > 0) {
+            setSelectedCollection(importedData[0].id)
+            setCollectionInput(importedData[0].name)
+          }
+        } else {
+          alert("Invalid file format. Please select a valid Hill Chart data file.")
+          return
         }
+
+        // Clear selected snapshot since we're loading new data
+        setSelectedSnapshot(null)
+
+        alert(
+          `Successfully imported ${importedData.collections?.length || importedData.length || 0} collections${importedData.snapshots ? ` and ${importedData.snapshots.length} snapshots` : ""}.`,
+        )
       } catch (error) {
-        alert("Invalid JSON file")
+        console.error("Import error:", error)
+        alert("Invalid JSON file or corrupted data. Please check the file and try again.")
       }
     }
     reader.readAsText(file)
@@ -1035,7 +1083,31 @@ export default function HillChartGenerator() {
         <div className="space-y-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Hill Chart Generator</CardTitle>
+              <div className="flex flex-col">
+                <CardTitle className="text-lg">Over The Hill</CardTitle>
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="text-sm text-muted-foreground">
+                    Inspired by{" "}
+                    <a
+                      href="https://37signals.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      37signals
+                    </a>{" "}
+                    Hill Chart
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowInfoModal(true)}
+                    className="h-4 w-4 p-0 hover:bg-accent rounded-full"
+                  >
+                    <Info className="w-3 h-3 text-muted-foreground" />
+                  </Button>
+                </div>
+              </div>
               <div className="relative" ref={ellipsisMenuRef}>
                 <Button
                   variant="ghost"
@@ -1364,6 +1436,44 @@ export default function HillChartGenerator() {
                 }}
               >
                 Reset All
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Info Modal */}
+      {showInfoModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">About Hill Charts</h3>
+            <div className="text-gray-600 dark:text-gray-300 space-y-3">
+              <p>
+                <a
+                  href="https://37signals.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  37signals
+                </a>{" "}
+                Hill Charts are a great way to visually communicate progress and incoming work.
+              </p>
+              <p>
+                Read{" "}
+                <a
+                  href="https://basecamp.com/shapeup/3.4-chapter-13"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Shape Up: Show Progress (Chapt. 13)
+                </a>{" "}
+                to discover the technique.
+              </p>
+            </div>
+            <div className="flex justify-end mt-6">
+              <Button variant="outline" onClick={() => setShowInfoModal(false)}>
+                Close
               </Button>
             </div>
           </div>
