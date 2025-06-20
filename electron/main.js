@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage } = require("electron")
 const path = require("path")
 const fs = require("fs").promises
+const os = require("os")
 
 // Add command line switches for better Linux compatibility
 app.commandLine.appendSwitch('no-sandbox')
@@ -75,14 +76,160 @@ app.on("activate", () => {
   }
 })
 
+// Get default storage location based on platform
+const getDefaultStorageLocation = () => {
+  const platform = process.platform
+  const homeDir = os.homedir()
+  
+  switch (platform) {
+    case 'linux':
+      return path.join(homeDir, '.config', 'over-the-hill')
+    case 'darwin':
+      return path.join(homeDir, '.over-the-hill')
+    case 'win32':
+      return path.join(homeDir, 'Documents', 'Over-The-Hill')
+    default:
+      return path.join(app.getPath("userData"), "over-the-hill")
+  }
+}
+
+// Get storage location from settings or use default
+const getStorageLocation = () => {
+  try {
+    const settingsPath = path.join(app.getPath("userData"), "settings.json")
+    const settings = require('fs').readFileSync(settingsPath, 'utf8')
+    const parsed = JSON.parse(settings)
+    return parsed.storageLocation || getDefaultStorageLocation()
+  } catch (error) {
+    return getDefaultStorageLocation()
+  }
+}
+
+// Save storage location to settings
+const saveStorageLocation = (location) => {
+  try {
+    const settingsPath = path.join(app.getPath("userData"), "settings.json")
+    let settings = {}
+    try {
+      settings = JSON.parse(require('fs').readFileSync(settingsPath, 'utf8'))
+    } catch (error) {
+      // Settings file doesn't exist, start with empty object
+    }
+    settings.storageLocation = location
+    require('fs').writeFileSync(settingsPath, JSON.stringify(settings, null, 2))
+  } catch (error) {
+    console.error("Failed to save storage location:", error)
+    throw error
+  }
+}
+
+// Ensure storage directory exists
+const ensureStorageDirectory = async () => {
+  const storageDir = getStorageLocation()
+  try {
+    await fs.mkdir(storageDir, { recursive: true })
+  } catch (error) {
+    console.error("Failed to create storage directory:", error)
+    throw error
+  }
+  return storageDir
+}
+
 // Get user data directory
 const getUserDataPath = () => {
-  return path.join(app.getPath("userData"), "hill-chart-data.json")
+  const storageDir = getStorageLocation()
+  return path.join(storageDir, "hill-chart-data.json")
 }
 
 // IPC Handlers
+ipcMain.handle("get-storage-location", async () => {
+  return getStorageLocation()
+})
+
+ipcMain.handle("set-storage-location", async (event, newLocation) => {
+  try {
+    // Validate the new location
+    if (!newLocation || typeof newLocation !== 'string') {
+      throw new Error('Invalid storage location')
+    }
+    
+    // Test if we can write to the new location
+    await fs.mkdir(newLocation, { recursive: true })
+    const testFile = path.join(newLocation, '.test')
+    await fs.writeFile(testFile, 'test')
+    await fs.unlink(testFile)
+    
+    // Save the new location
+    saveStorageLocation(newLocation)
+    
+    // Move existing data if it exists
+    const oldDataPath = path.join(app.getPath("userData"), "hill-chart-data.json")
+    const newDataPath = path.join(newLocation, "hill-chart-data.json")
+    
+    try {
+      const oldData = await fs.readFile(oldDataPath, "utf8")
+      await fs.writeFile(newDataPath, oldData)
+      await fs.unlink(oldDataPath)
+    } catch (error) {
+      // Old data doesn't exist or can't be moved, which is fine
+    }
+    
+    return { success: true }
+  } catch (error) {
+    console.error("Failed to set storage location:", error)
+    throw error
+  }
+})
+
+ipcMain.handle("select-storage-location", async () => {
+  try {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: "Select Storage Location",
+      properties: ["openDirectory"],
+      defaultPath: getStorageLocation()
+    })
+    
+    if (!result.canceled && result.filePaths.length > 0) {
+      const newLocation = result.filePaths[0]
+      
+      // Validate the new location
+      if (!newLocation || typeof newLocation !== 'string') {
+        throw new Error('Invalid storage location')
+      }
+      
+      // Test if we can write to the new location
+      await fs.mkdir(newLocation, { recursive: true })
+      const testFile = path.join(newLocation, '.test')
+      await fs.writeFile(testFile, 'test')
+      await fs.unlink(testFile)
+      
+      // Save the new location
+      saveStorageLocation(newLocation)
+      
+      // Move existing data if it exists
+      const oldDataPath = path.join(app.getPath("userData"), "hill-chart-data.json")
+      const newDataPath = path.join(newLocation, "hill-chart-data.json")
+      
+      try {
+        const oldData = await fs.readFile(oldDataPath, "utf8")
+        await fs.writeFile(newDataPath, oldData)
+        await fs.unlink(oldDataPath)
+      } catch (error) {
+        // Old data doesn't exist or can't be moved, which is fine
+      }
+      
+      return newLocation
+    }
+    return null
+  } catch (error) {
+    console.error("Failed to select storage location:", error)
+    throw error
+  }
+})
+
 ipcMain.handle("load-data", async () => {
   try {
+    await ensureStorageDirectory()
     const dataPath = getUserDataPath()
     const data = await fs.readFile(dataPath, "utf8")
     return JSON.parse(data)
@@ -101,6 +248,7 @@ ipcMain.handle("load-data", async () => {
 
 ipcMain.handle("save-data", async (event, data) => {
   try {
+    await ensureStorageDirectory()
     const dataPath = getUserDataPath()
     await fs.writeFile(dataPath, JSON.stringify(data, null, 2))
   } catch (error) {
@@ -200,6 +348,95 @@ ipcMain.handle("open-file", async () => {
     return null
   } catch (error) {
     console.error("Failed to open file:", error)
+    throw error
+  }
+})
+
+ipcMain.handle("get-platform", async () => {
+  return process.platform
+})
+
+ipcMain.handle("install-app", async () => {
+  try {
+    const homeDir = os.homedir()
+    const localBinDir = path.join(homeDir, '.local', 'bin')
+    const appDir = path.join(localBinDir, 'over-the-hill')
+    const localAppsDir = path.join(homeDir, '.local', 'share', 'applications')
+    
+    // Ensure directories exist
+    await fs.mkdir(appDir, { recursive: true })
+    await fs.mkdir(localAppsDir, { recursive: true })
+    
+    // Find the actual AppImage file that's running
+    let currentAppImagePath = process.execPath
+    
+    // If we're running from an AppImage, process.execPath points to the extracted binary
+    // We need to find the original AppImage file
+    if (process.env.APPIMAGE) {
+      // APPIMAGE environment variable contains the path to the original AppImage
+      currentAppImagePath = process.env.APPIMAGE
+    } else {
+      // Fallback: try to find the AppImage by looking at the process path
+      // When running from AppImage, the binary is usually in a temp directory
+      const execDir = path.dirname(process.execPath)
+      if (execDir.includes('appimage') || execDir.includes('temp')) {
+        // We're likely running from an extracted AppImage
+        // Try to find the original AppImage in common locations
+        const possiblePaths = [
+          process.env.ARGV0, // Sometimes contains the original path
+          process.argv[0],   // Original command line argument
+        ]
+        
+        for (const possiblePath of possiblePaths) {
+          if (possiblePath && possiblePath.endsWith('.AppImage')) {
+            currentAppImagePath = possiblePath
+            break
+          }
+        }
+      }
+    }
+    
+    const targetAppImagePath = path.join(appDir, 'Over-The-Hill-1.0.0.AppImage')
+    
+    // Copy the AppImage
+    await fs.copyFile(currentAppImagePath, targetAppImagePath)
+    await fs.chmod(targetAppImagePath, 0o755)
+    
+    // Copy the SVG icon
+    const iconSourcePath = path.join(__dirname, '..', 'OverTheHill.svg')
+    const iconTargetPath = path.join(appDir, 'OverTheHill.svg')
+    
+    // Check if SVG icon exists, if not fallback to PNG
+    let iconSourcePathFinal = iconSourcePath
+    try {
+      await fs.access(iconSourcePath)
+    } catch (error) {
+      // SVG doesn't exist, use PNG
+      iconSourcePathFinal = path.join(__dirname, 'assets', 'icon.png')
+    }
+    
+    await fs.copyFile(iconSourcePathFinal, iconTargetPath)
+    
+    // Create .desktop file
+    const desktopContent = `[Desktop Entry]
+Name=Over The Hill
+Comment=Hill Chart Generator
+Exec=${targetAppImagePath} --no-sandbox
+Icon=${iconTargetPath}
+Terminal=false
+Type=Application
+Categories=Utility;Graphics;
+`
+    
+    const desktopPath = path.join(localAppsDir, 'over-the-hill.desktop')
+    await fs.writeFile(desktopPath, desktopContent)
+    
+    // Make .desktop file executable
+    await fs.chmod(desktopPath, 0o644)
+    
+    return { success: true, message: 'App installed successfully!' }
+  } catch (error) {
+    console.error("Failed to install app:", error)
     throw error
   }
 })

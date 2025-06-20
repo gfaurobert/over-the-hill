@@ -38,6 +38,7 @@
     "asarUnpack": [
       "out/**/*"
     ],
+    "icon": "electron/assets/icon.png",
     "mac": {
       "category": "public.app-category.productivity",
       "target": [

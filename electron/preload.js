@@ -9,4 +9,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
   saveImageFile: (svgString, filename) => ipcRenderer.invoke("save-image-file", svgString, filename),
   saveTextFile: (content, filename) => ipcRenderer.invoke("save-text-file", content, filename),
   openFile: () => ipcRenderer.invoke("open-file"),
+  getStorageLocation: () => ipcRenderer.invoke("get-storage-location"),
+  setStorageLocation: (location) => ipcRenderer.invoke("set-storage-location", location),
+  selectStorageLocation: () => ipcRenderer.invoke("select-storage-location"),
+  getPlatform: () => ipcRenderer.invoke("get-platform"),
+  installApp: () => ipcRenderer.invoke("install-app"),
 })

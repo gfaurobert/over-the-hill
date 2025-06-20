@@ -25,6 +25,7 @@ import {
   ChevronRight,
   Camera,
   Info,
+  FolderOpen,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTheme } from "next-themes"
@@ -131,6 +132,16 @@ export default function HillChartGenerator() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedSnapshot, setSelectedSnapshot] = useState<string | null>(null)
 
+  // Storage location state
+  const [storageLocation, setStorageLocation] = useState<string>("")
+  const [showStorageLocationModal, setShowStorageLocationModal] = useState(false)
+
+  // Platform and installation state
+  const [platform, setPlatform] = useState<string>("")
+  const [showInstallConfirm, setShowInstallConfirm] = useState(false)
+  const [installStatus, setInstallStatus] = useState<"idle" | "installing" | "success" | "error">("idle")
+  const [installMessage, setInstallMessage] = useState("")
+
   // Check if running in Electron
   const isElectron = typeof window !== "undefined" && window.electronAPI
 
@@ -213,6 +224,35 @@ export default function HillChartGenerator() {
         }
       } catch (error) {
         console.error("Error saving data:", error)
+      }
+    }
+  }
+
+  // Load storage location
+  const loadStorageLocation = async () => {
+    if (isElectron) {
+      try {
+        const location = await window.electronAPI.getStorageLocation()
+        setStorageLocation(location)
+      } catch (error) {
+        console.error("Error loading storage location:", error)
+      }
+    }
+  }
+
+  // Select storage location
+  const selectStorageLocation = async () => {
+    if (isElectron) {
+      try {
+        const newLocation = await window.electronAPI.selectStorageLocation()
+        if (newLocation) {
+          setStorageLocation(newLocation)
+          setShowStorageLocationModal(false)
+          setShowEllipsisMenu(false)
+        }
+      } catch (error) {
+        console.error("Error selecting storage location:", error)
+        alert("Failed to change storage location. Please try again.")
       }
     }
   }
@@ -437,6 +477,14 @@ export default function HillChartGenerator() {
   useEffect(() => {
     loadFromStorage()
   }, [])
+
+  // Load storage location on component mount (Electron only)
+  useEffect(() => {
+    if (isElectron) {
+      loadStorageLocation()
+      loadPlatform()
+    }
+  }, [isElectron])
 
   // Save data whenever state changes (debounced to prevent excessive saves)
   useEffect(() => {
@@ -1013,6 +1061,48 @@ export default function HillChartGenerator() {
     )
   }
 
+  // Load platform information
+  const loadPlatform = async () => {
+    if (isElectron) {
+      try {
+        const platformInfo = await window.electronAPI.getPlatform()
+        setPlatform(platformInfo)
+      } catch (error) {
+        console.error("Error loading platform:", error)
+      }
+    }
+  }
+
+  // Handle installation
+  const handleInstallApp = async () => {
+    if (!isElectron || platform !== 'linux') return
+    
+    setInstallStatus("installing")
+    setShowInstallConfirm(false)
+    
+    try {
+      const result = await window.electronAPI.installApp()
+      if (result.success) {
+        setInstallStatus("success")
+        setInstallMessage(result.message)
+        setTimeout(() => {
+          setInstallStatus("idle")
+          setInstallMessage("")
+        }, 3000)
+      } else {
+        throw new Error("Installation failed")
+      }
+    } catch (error) {
+      console.error("Installation error:", error)
+      setInstallStatus("error")
+      setInstallMessage("Failed to install app. Please try again.")
+      setTimeout(() => {
+        setInstallStatus("idle")
+        setInstallMessage("")
+      }, 3000)
+    }
+  }
+
   return (
     <div className="min-h-screen p-4 bg-transparent" style={{ userSelect: isDragging ? "none" : "auto" }}>
       <div className="max-w-screen-2xl mx-auto grid grid-cols-1 lg:grid-cols-[2.4fr_1.2fr] gap-6">
@@ -1304,6 +1394,45 @@ export default function HillChartGenerator() {
                           <input type="file" accept=".json" onChange={importCollections} className="hidden" />
                         </label>
                       )}
+
+                      {/* Storage Location Section (Electron only) */}
+                      {isElectron && (
+                        <>
+                          <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                            Storage Location
+                          </div>
+                          <button
+                            onClick={() => {
+                              setShowStorageLocationModal(true)
+                              setShowEllipsisMenu(false)
+                            }}
+                            className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                          >
+                            <FolderOpen className="w-4 h-4" /> Change Storage Location
+                          </button>
+                          <div className="px-3 py-1 text-xs text-muted-foreground truncate">
+                            {storageLocation}
+                          </div>
+                        </>
+                      )}
+
+                      {/* Installation Section (Linux only) */}
+                      {isElectron && platform === 'linux' && (
+                        <>
+                          <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                            System Integration
+                          </div>
+                          <button
+                            onClick={() => {
+                              setShowInstallConfirm(true)
+                              setShowEllipsisMenu(false)
+                            }}
+                            className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                          >
+                            <Download className="w-4 h-4" /> Install on my system
+                          </button>
+                        </>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1566,6 +1695,86 @@ export default function HillChartGenerator() {
               </Button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Storage Location Modal */}
+      {showStorageLocationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Change Storage Location</h3>
+            <div className="text-gray-600 dark:text-gray-300 space-y-3">
+              <p>
+                Choose where to store your hill chart data. The data will be moved to the new location.
+              </p>
+              <div className="bg-muted p-3 rounded text-sm">
+                <strong>Current location:</strong>
+                <div className="truncate mt-1">{storageLocation}</div>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end mt-6">
+              <Button variant="outline" onClick={() => setShowStorageLocationModal(false)}>
+                Cancel
+              </Button>
+              <Button onClick={selectStorageLocation}>
+                <FolderOpen className="w-4 h-4 mr-2" />
+                Select New Location
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Installation Confirmation Modal */}
+      {showInstallConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Install on System</h3>
+            <div className="text-gray-600 dark:text-gray-300 space-y-3">
+              <p>
+                This will install Over The Hill on your system by:
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>Copying the AppImage to <code className="bg-muted px-1 rounded">~/.local/bin/over-the-hill/Over-The-Hill-1.0.0.AppImage</code></li>
+                <li>Copying the icon to <code className="bg-muted px-1 rounded">~/.local/bin/over-the-hill/OverTheHill.svg</code></li>
+                <li>Creating a desktop entry in <code className="bg-muted px-1 rounded">~/.local/share/applications/</code></li>
+                <li>Making the app available in your system menu</li>
+              </ul>
+              <p className="text-sm text-muted-foreground">
+                The app will be launched with the <code className="bg-muted px-1 rounded">--no-sandbox</code> flag for better Linux compatibility.
+              </p>
+            </div>
+            <div className="flex gap-2 justify-end mt-6">
+              <Button variant="outline" onClick={() => setShowInstallConfirm(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleInstallApp} disabled={installStatus === "installing"}>
+                {installStatus === "installing" ? (
+                  <>
+                    <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Installing...
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 mr-2" />
+                    Install
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Installation Status Messages */}
+      {installStatus === "success" && (
+        <div className="fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
+          {installMessage}
+        </div>
+      )}
+      {installStatus === "error" && (
+        <div className="fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
+          {installMessage}
         </div>
       )}
     </div>

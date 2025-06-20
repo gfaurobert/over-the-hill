@@ -7,6 +7,11 @@ export interface ElectronAPI {
   saveImageFile: (svgString: string, filename: string) => Promise<void>
   saveTextFile: (content: string, filename: string) => Promise<void>
   openFile: () => Promise<any>
+  getStorageLocation: () => Promise<string>
+  setStorageLocation: (location: string) => Promise<{ success: boolean }>
+  selectStorageLocation: () => Promise<string | null>
+  getPlatform: () => Promise<string>
+  installApp: () => Promise<{ success: boolean; message: string }>
 }
 
 declare global {
