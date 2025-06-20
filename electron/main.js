@@ -1,7 +1,18 @@
 const { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage } = require("electron")
 const path = require("path")
 const fs = require("fs").promises
-const { createCanvas } = require("canvas")
+
+// Add command line switches for better Linux compatibility
+app.commandLine.appendSwitch('no-sandbox')
+app.commandLine.appendSwitch('disable-gpu')
+app.commandLine.appendSwitch('disable-dev-shm-usage')
+
+// Fix GTK errors on Linux while maintaining rendering capability
+if (process.platform === 'linux') {
+  // Essential fixes for Linux
+  app.commandLine.appendSwitch('disable-setuid-sandbox')
+  app.commandLine.appendSwitch('disable-seccomp-filter-sandbox')
+}
 
 // Enable live reload for development
 if (process.env.NODE_ENV === "development") {
@@ -33,7 +44,20 @@ function createWindow() {
     mainWindow.loadURL("http://localhost:3000")
     mainWindow.webContents.openDevTools()
   } else {
-    mainWindow.loadFile(path.join(__dirname, "../out/index.html"))
+    // Handle both ASAR and non-ASAR paths
+    let indexPath
+    if (process.resourcesPath) {
+      // In packaged app, try unpacked first
+      indexPath = path.join(process.resourcesPath, "app.asar.unpacked", "out", "index.html")
+      if (!require('fs').existsSync(indexPath)) {
+        // Fallback to regular path
+        indexPath = path.join(__dirname, "../out/index.html")
+      }
+    } else {
+      indexPath = path.join(__dirname, "../out/index.html")
+    }
+    
+    mainWindow.loadFile(indexPath)
   }
 }
 
@@ -97,27 +121,10 @@ ipcMain.handle("clear-data", async () => {
 
 ipcMain.handle("copy-image-to-clipboard", async (event, svgString) => {
   try {
-    // Convert SVG to PNG using canvas
-    const canvas = createCanvas(800 * 3, 360 * 3)
-    const ctx = canvas.getContext("2d")
-
-    // Set high DPI scaling
-    ctx.scale(3, 3)
-
-    // Create image from SVG
-    const img = new Image()
-    img.src = "data:image/svg+xml;base64," + Buffer.from(svgString).toString("base64")
-
-    return new Promise((resolve, reject) => {
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, 800, 360)
-        const buffer = canvas.toBuffer("image/png")
-        const image = nativeImage.createFromBuffer(buffer)
-        clipboard.writeImage(image)
-        resolve()
-      }
-      img.onerror = reject
-    })
+    // Create image from SVG data URL
+    const dataUrl = "data:image/svg+xml;base64," + Buffer.from(svgString).toString("base64")
+    const image = nativeImage.createFromDataURL(dataUrl)
+    clipboard.writeImage(image)
   } catch (error) {
     console.error("Failed to copy image to clipboard:", error)
     throw error
@@ -132,27 +139,23 @@ ipcMain.handle("save-image-file", async (event, svgString, filename) => {
   try {
     const { filePath } = await dialog.showSaveDialog(mainWindow, {
       defaultPath: filename,
-      filters: [{ name: "PNG Images", extensions: ["png"] }],
+      filters: [
+        { name: "PNG Images", extensions: ["png"] },
+        { name: "SVG Images", extensions: ["svg"] }
+      ],
     })
 
     if (filePath) {
-      // Convert SVG to PNG
-      const canvas = createCanvas(800 * 3, 360 * 3)
-      const ctx = canvas.getContext("2d")
-      ctx.scale(3, 3)
-
-      const img = new Image()
-      img.src = "data:image/svg+xml;base64," + Buffer.from(svgString).toString("base64")
-
-      return new Promise((resolve, reject) => {
-        img.onload = async () => {
-          ctx.drawImage(img, 0, 0, 800, 360)
-          const buffer = canvas.toBuffer("image/png")
-          await fs.writeFile(filePath, buffer)
-          resolve()
-        }
-        img.onerror = reject
-      })
+      if (filePath.endsWith('.svg')) {
+        // Save as SVG
+        await fs.writeFile(filePath, svgString)
+      } else {
+        // Convert SVG to PNG using nativeImage
+        const dataUrl = "data:image/svg+xml;base64," + Buffer.from(svgString).toString("base64")
+        const image = nativeImage.createFromDataURL(dataUrl)
+        const buffer = image.toPNG()
+        await fs.writeFile(filePath, buffer)
+      }
     }
   } catch (error) {
     console.error("Failed to save image file:", error)

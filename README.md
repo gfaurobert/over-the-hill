@@ -51,3 +51,105 @@ This app allows you to:
 Try it out live at:
 
 **[https://over-the-hill.vercel.app/](https://over-the-hill.vercel.app/)**
+
+## Desktop App
+
+This project also includes an Electron-based desktop application.
+
+### Building the Desktop App
+
+```bash
+# Install dependencies
+pnpm install
+
+# Build the web app and create desktop distributables
+pnpm run dist
+
+# Build for all platforms (Windows, macOS, Linux)
+pnpm run dist-all
+```
+
+### Running the Desktop App
+
+#### Linux (AppImage)
+```bash
+# Method 1: Use the helper script (recommended)
+./run-app.sh
+
+# Method 2: Run directly (may show GTK warnings)
+./dist/Over\ The\ Hill-1.0.0.AppImage
+
+# Method 3: Maximum isolation (if Method 1 fails)
+./run-app-safe.sh
+
+# Method 4: Extract and run (if AppImage has issues)
+./run-app-extracted.sh
+
+# Method 5: Maximum isolation (Flatpak-style)
+./run-app-flatpak-style.sh
+```
+
+#### Troubleshooting Linux GTK Errors
+
+**Note**: This app uses Electron 28.3.3 for better GTK compatibility on mixed GTK2/3/4 systems. The app uses software rendering to avoid GPU conflicts on Linux systems.
+
+If you see GTK-related errors or crashes like:
+```
+(process:XXXXX): Gtk-ERROR **: GTK 2/3 symbols detected. Using GTK 2/3 and GTK 4 in the same process is not supported
+Trace/breakpoint trap (core dumped)
+```
+
+Try these solutions in order:
+
+1. **Use the enhanced helper script**: `./run-app.sh`
+   - Includes comprehensive GTK isolation
+   - Disables hardware acceleration
+   - Sets proper environment variables
+
+2. **Use maximum isolation**: `./run-app-safe.sh`
+   - Completely isolates the environment
+   - Unsets conflicting GTK variables
+   - Uses minimal environment setup
+
+3. **Extract and run**: `./run-app-extracted.sh`
+   - Extracts the AppImage contents
+   - Runs the binary directly
+   - Avoids AppImage runtime conflicts
+
+4. **Maximum isolation**: `./run-app-flatpak-style.sh`
+   - Creates completely isolated XDG environment
+   - Unsets all conflicting environment variables
+   - Uses temporary directories for all data
+
+5. **Use the web version**: `./run-app-web.sh`
+   - Serves the app via HTTP on localhost
+   - Opens in your default browser
+   - Bypasses Electron completely (recommended if above methods fail)
+   - Provides identical functionality to the desktop app
+
+6. **Install missing libraries** (if needed):
+   ```bash
+   # Ubuntu/Debian
+   sudo apt install libgtk-3-dev libgconf-2-4 libnss3-dev libxss1
+   
+   # Arch/Manjaro
+   sudo pacman -S gtk3 nss libxss
+   
+   # Fedora
+   sudo dnf install gtk3-devel nss libXScrnSaver
+   ```
+
+7. **Manual environment setup**:
+   ```bash
+   export NO_AT_BRIDGE=1
+   export GTK_A11Y=none
+   export ELECTRON_DISABLE_GPU=1
+   export LIBGL_ALWAYS_SOFTWARE=1
+   ./dist/Over\ The\ Hill-1.0.0.AppImage
+   ```
+
+The desktop app includes the same features as the web version with additional benefits:
+- **Secure local storage**: Data is stored securely using Electron's built-in storage
+- **Native file operations**: Direct file save/load without browser limitations
+- **Offline functionality**: Works completely offline
+- **Native clipboard integration**: Better clipboard support for copying charts

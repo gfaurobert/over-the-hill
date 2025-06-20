@@ -438,9 +438,13 @@ export default function HillChartGenerator() {
     loadFromStorage()
   }, [])
 
-  // Save data whenever state changes
+  // Save data whenever state changes (debounced to prevent excessive saves)
   useEffect(() => {
-    saveToStorage()
+    const timeoutId = setTimeout(() => {
+      saveToStorage()
+    }, 500) // Debounce by 500ms
+
+    return () => clearTimeout(timeoutId)
   }, [collections, snapshots, selectedCollection, collectionInput, hideCollectionName, copyFormat])
 
   // Auto-save every 30 seconds as backup
