@@ -1,0 +1,367 @@
+{{ define "main" }}
+<article class="post">
+    <header class="post-header">
+        <div class="post-meta">
+            {{ if .Date }}
+            <time class="post-date">{{ .Date.Format "January 2, 2006" }}</time>
+            {{ end }}
+            {{ if .Params.author }}
+            <span class="post-author">by {{ .Params.author }}</span>
+            {{ end }}
+        </div>
+        <h1 class="post-title">{{ .Title }}</h1>
+        {{ if .Params.description }}
+        <p class="post-description">{{ .Params.description }}</p>
+        {{ end }}
+    </header>
+
+    <div class="post-content">
+        {{ .Content }}
+    </div>
+
+    {{ if .Params.tags }}
+    <footer class="post-footer">
+        <div class="post-tags">
+            <span class="tags-label">Tags:</span>
+            {{ range .Params.tags }}
+            <a href="{{ "tags/" | relLangURL }}{{ . | urlize }}" class="tag">{{ . }}</a>
+            {{ end }}
+        </div>
+    </footer>
+    {{ end }}
+
+    <div class="post-navigation">
+        {{ with .PrevInSection }}
+        <a href="{{ .RelPermalink }}" class="nav-link nav-prev">
+            <span class="nav-arrow">←</span>
+            <div class="nav-content">
+                <span class="nav-label">Previous</span>
+                <span class="nav-title">{{ .Title }}</span>
+            </div>
+        </a>
+        {{ end }}
+        {{ with .NextInSection }}
+        <a href="{{ .RelPermalink }}" class="nav-link nav-next">
+            <div class="nav-content">
+                <span class="nav-label">Next</span>
+                <span class="nav-title">{{ .Title }}</span>
+            </div>
+            <span class="nav-arrow">→</span>
+        </a>
+        {{ end }}
+    </div>
+</article>
+
+<style>
+    /* Post header */
+    .post-header {
+        margin-bottom: 3rem;
+        padding-bottom: 2rem;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .post-meta {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        font-size: 0.875rem;
+        color: var(--text-muted);
+    }
+
+    .post-date {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .post-date::before {
+        content: "📅";
+    }
+
+    .post-author {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .post-author::before {
+        content: "👤";
+    }
+
+    .post-title {
+        font-size: 2.5rem;
+        font-weight: 700;
+        line-height: 1.2;
+        margin-bottom: 1rem;
+        color: var(--text-primary);
+    }
+
+    .post-description {
+        font-size: 1.125rem;
+        color: var(--text-secondary);
+        line-height: 1.6;
+    }
+
+    /* Post content */
+    .post-content {
+        font-size: 1.125rem;
+        line-height: 1.7;
+        color: var(--text-secondary);
+    }
+
+    .post-content h1,
+    .post-content h2,
+    .post-content h3,
+    .post-content h4,
+    .post-content h5,
+    .post-content h6 {
+        color: var(--text-primary);
+        margin-top: 2.5rem;
+        margin-bottom: 1rem;
+        scroll-margin-top: 2rem;
+    }
+
+    .post-content h1 {
+        font-size: 2rem;
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: 0.5rem;
+    }
+
+    .post-content h2 {
+        font-size: 1.75rem;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 0.25rem;
+    }
+
+    .post-content h3 {
+        font-size: 1.5rem;
+    }
+
+    .post-content h4 {
+        font-size: 1.25rem;
+    }
+
+    .post-content p {
+        margin-bottom: 1.5rem;
+    }
+
+    .post-content ul,
+    .post-content ol {
+        margin: 1.5rem 0;
+        padding-left: 2rem;
+    }
+
+    .post-content li {
+        margin-bottom: 0.5rem;
+    }
+
+    .post-content blockquote {
+        border-left: 4px solid var(--primary-color);
+        padding: 1rem 1.5rem;
+        margin: 2rem 0;
+        background-color: var(--bg-secondary);
+        border-radius: 0 var(--radius) var(--radius) 0;
+        font-style: italic;
+    }
+
+    .post-content blockquote p {
+        margin-bottom: 0;
+    }
+
+    .post-content pre {
+        background-color: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        padding: 1.5rem;
+        overflow-x: auto;
+        margin: 2rem 0;
+        font-size: 0.875rem;
+    }
+
+    .post-content code {
+        background-color: var(--bg-tertiary);
+        padding: 0.125rem 0.25rem;
+        border-radius: 4px;
+        font-size: 0.875em;
+        color: var(--text-primary);
+    }
+
+    .post-content pre code {
+        background-color: transparent;
+        padding: 0;
+        color: inherit;
+    }
+
+    .post-content table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 2rem 0;
+        font-size: 0.875rem;
+    }
+
+    .post-content th,
+    .post-content td {
+        padding: 0.75rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .post-content th {
+        background-color: var(--bg-secondary);
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .post-content tr:hover {
+        background-color: var(--bg-secondary);
+    }
+
+    .post-content img {
+        max-width: 100%;
+        height: auto;
+        border-radius: var(--radius);
+        margin: 2rem 0;
+    }
+
+    .post-content a {
+        color: var(--primary-color);
+        text-decoration: none;
+        border-bottom: 1px solid transparent;
+        transition: border-color 0.2s ease;
+    }
+
+    .post-content a:hover {
+        border-bottom-color: var(--primary-color);
+    }
+
+    /* Post footer */
+    .post-footer {
+        margin-top: 3rem;
+        padding-top: 2rem;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .post-tags {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .tags-label {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+
+    .tag {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        background-color: var(--bg-secondary);
+        color: var(--text-secondary);
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
+
+    .tag:hover {
+        background-color: var(--primary-color);
+        color: white;
+        text-decoration: none;
+    }
+
+    /* Post navigation */
+    .post-navigation {
+        margin-top: 3rem;
+        padding-top: 2rem;
+        border-top: 1px solid var(--border-color);
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+    }
+
+    .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.5rem;
+        background-color: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        text-decoration: none;
+        transition: all 0.2s ease;
+    }
+
+    .nav-link:hover {
+        background-color: var(--bg-tertiary);
+        border-color: var(--border-hover);
+        text-decoration: none;
+        transform: translateY(-1px);
+    }
+
+    .nav-prev {
+        text-align: left;
+    }
+
+    .nav-next {
+        text-align: right;
+        flex-direction: row-reverse;
+    }
+
+    .nav-arrow {
+        font-size: 1.25rem;
+        color: var(--text-muted);
+        font-weight: 600;
+    }
+
+    .nav-content {
+        flex: 1;
+    }
+
+    .nav-label {
+        display: block;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 0.25rem;
+    }
+
+    .nav-title {
+        display: block;
+        font-weight: 500;
+        color: var(--text-primary);
+        line-height: 1.4;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .post-title {
+            font-size: 2rem;
+        }
+
+        .post-content {
+            font-size: 1rem;
+        }
+
+        .post-content h1 {
+            font-size: 1.75rem;
+        }
+
+        .post-content h2 {
+            font-size: 1.5rem;
+        }
+
+        .post-navigation {
+            grid-template-columns: 1fr;
+        }
+
+        .nav-link {
+            padding: 1rem;
+        }
+    }
+</style>
+{{ end }} 
