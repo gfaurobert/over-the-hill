@@ -2,17 +2,17 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Getting-Started on Over The Hill -Documentation</title>
-    <link>http://localhost:1313/over-the-hill/tags/getting-started/</link>
+    <link>http://localhost:1313/tags/getting-started/</link>
     <description>Recent content in Getting-Started on Over The Hill -Documentation</description>
     <generator>Hugo</generator>
     <language>en-us</language>
     <lastBuildDate>Sat, 21 Jun 2025 00:00:00 +0000</lastBuildDate>
-    <atom:link href="http://localhost:1313/over-the-hill/tags/getting-started/index.xml" rel="self" type="application/rss+xml" />
+    <atom:link href="http://localhost:1313/tags/getting-started/index.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>Hello World</title>
-      <link>http://localhost:1313/over-the-hill/hello/</link>
+      <link>http://localhost:1313/hello/</link>
       <pubDate>Sat, 21 Jun 2025 00:00:00 +0000</pubDate>
-      <guid>http://localhost:1313/over-the-hill/hello/</guid>
+      <guid>http://localhost:1313/hello/</guid>
       <description>&lt;h1 id=&#34;hello-world&#34;&gt;Hello World&lt;/h1&gt;&#xA;&lt;p&gt;Welcome to your first page with the modern Hugo theme! This page demonstrates the beautiful typography and layout features of your new site.&lt;/p&gt;&#xA;&lt;h2 id=&#34;typography-examples&#34;&gt;Typography Examples&lt;/h2&gt;&#xA;&lt;p&gt;This theme uses the &lt;strong&gt;Inter font family&lt;/strong&gt; for excellent readability across all devices. The typography is carefully designed to provide a comfortable reading experience with proper line heights and spacing.&lt;/p&gt;&#xA;&lt;h3 id=&#34;headings&#34;&gt;Headings&lt;/h3&gt;&#xA;&lt;p&gt;The theme includes properly styled headings that create a clear hierarchy:&lt;/p&gt;&#xA;&lt;ul&gt;&#xA;&lt;li&gt;&lt;strong&gt;H1&lt;/strong&gt;: Main page titles (like the one above)&lt;/li&gt;&#xA;&lt;li&gt;&lt;strong&gt;H2&lt;/strong&gt;: Section headings (like this one)&lt;/li&gt;&#xA;&lt;li&gt;&lt;strong&gt;H3&lt;/strong&gt;: Subsection headings&lt;/li&gt;&#xA;&lt;li&gt;&lt;strong&gt;H4&lt;/strong&gt;: Minor headings&lt;/li&gt;&#xA;&lt;/ul&gt;&#xA;&lt;h3 id=&#34;text-styling&#34;&gt;Text Styling&lt;/h3&gt;&#xA;&lt;p&gt;You can use various text styling options:&lt;/p&gt;</description>
     </item>
   </channel>
