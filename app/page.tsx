@@ -188,7 +188,7 @@ export default function HillChartGenerator() {
 
   // Calendar helper functions
   const formatDateKey = (date: Date) => {
-    return date.toISOString().split("T")[0] // YYYY-MM-DD format
+    return date.toLocaleDateString('sv-SE') // YYYY-MM-DD format using local date
   }
 
   const getDaysInMonth = (date: Date) => {
