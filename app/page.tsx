@@ -261,7 +261,7 @@ export default function HillChartGenerator() {
 
   // Calendar helper functions
   const formatDateKey = (date: Date) => {
-    return date.toISOString().split("T")[0] // YYYY-MM-DD format
+    return date.toLocaleDateString('sv-SE') // YYYY-MM-DD format using local date
   }
 
   const getDaysInMonth = (date: Date) => {
@@ -850,23 +850,15 @@ export default function HillChartGenerator() {
     }
 
     const dataStr = JSON.stringify(exportData, null, 2)
-    const filename = `hill-chart-data_${new Date().toISOString().split("T")[0]}.json`
-
-    if (isElectron) {
-      // Use Electron's save dialog
-      await window.electronAPI.saveTextFile(dataStr, filename)
-    } else {
-      // Fallback to web download
-      const dataBlob = new Blob([dataStr], { type: "application/json" })
-      const url = URL.createObjectURL(dataBlob)
-      const link = document.createElement("a")
-      link.href = url
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
-    }
+    const dataBlob = new Blob([dataStr], { type: "application/json" })
+    const url = URL.createObjectURL(dataBlob)
+    const link = document.createElement("a")
+    link.href = url
+    link.download = `hill-chart-data_${new Date().toLocaleDateString('sv-SE')}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
     setShowEllipsisMenu(false)
   }
 
