@@ -1,0 +1,24 @@
+baseURL = 'https://example.org/'
+languageCode = 'en-us'
+title = 'Modern Docs'
+description = 'A vibrant, modern documentation site built with Hugo'
+theme = ''
+
+[params]
+  author = "Your Name"
+  github = "https://github.com/yourusername"
+  twitter = "https://twitter.com/yourusername"
+
+[menu]
+  [[menu.main]]
+    name = "Getting Started"
+    url = "/getting-started/"
+    weight = 1
+  [[menu.main]]
+    name = "Components"
+    url = "/components/"
+    weight = 2
+  [[menu.main]]
+    name = "API Reference"
+    url = "/api/"
+    weight = 3

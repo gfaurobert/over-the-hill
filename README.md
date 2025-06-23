@@ -8,17 +8,11 @@ Read [Shape Up: Show Porgress (Chapt. 13)](https://basecamp.com/shapeup/3.4-chap
 
 *Automatically synced with your [v0.dev](https://v0.dev) deployments*
 
-[![Deployed on Vercel](https://img.shields.io/badge/Deployed%20on-Vercel-black?style=for-the-badge&logo=vercel)](https://vercel.com/gregoirefaurobert-3371s-projects/v0-hill-chart-generator-website)
 [![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/QlICJdqcWMK)
-
-## Overview
-
-This repository will stay in sync with your deployed chats on [v0.dev](https://v0.dev).
-Any changes you make to your deployed app will be automatically pushed to this repository from [v0.dev](https://v0.dev).
 
 ## What is  Over The Hill?
 
-Over The Hill is a web application designed to visualize project progress using a "Hill Chart." A Hill Chart is a simple yet powerful tool for tracking the status of tasks or features, categorizing them into two main phases: "Up the Hill" (discovery/problem-solving) and "Down the Hill" (execution/implementation).
+Over The Hill is a web and desktop application designed to visualize project progress using a "Hill Chart." A Hill Chart is a simple yet powerful tool for tracking the status of tasks or features, categorizing them into two main phases: "Up the Hill" (discovery/problem-solving) and "Down the Hill" (execution/implementation).
 
 ![](image_readme.png)
 
@@ -50,4 +44,8 @@ This app allows you to:
 
 Try it out live at:
 
-**[https://over-the-hill.vercel.app/](https://over-the-hill.vercel.app/)**
+**[https://over-the-hill.faurobert.fr/](https://over-the-hill.faurobert.fr/)**
+
+## Documentation
+
+Check our documentation on [gfaurobert.github.io/over-the-hill/](https://gfaurobert.github.io/over-the-hill/)
