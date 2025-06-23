@@ -1,9 +1,11 @@
 ---
-title: "Self-Hosting Guide (Ubuntu)"
+title: Self-Hosting Guide (Ubuntu)
 date: 2025-06-23
 draft: false
-description: "This guide will help you deploy your Next.js app (`hill-chart-generator`) on your own Ubuntu server for production use."
-tags: ["getting-started", "example"]
+description: This guide will help you deploy your Next.js app (`hill-chart-generator`) on your own Ubuntu server for production use.
+tags:
+  - getting-started
+  - example
 ---
 
 ## 1. Prerequisites

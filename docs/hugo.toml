@@ -1,22 +1,9 @@
 baseURL = 'https://gfaurobert.github.io/over-the-hill/'
 languageCode = 'en-us'
-title = 'Over The Hill - Hill Chart Generator'
+title = 'Over The Hill - Documentation'
 description = 'A web and desktop application designed to visualize project progress using Hill Charts'
 
 [params]
   author = "gfaurobert"
   github = "https://github.com/gfaurobert/over-the-hill"
 
-[menu]
-  [[menu.main]]
-    name = "Getting Started"
-    url = "/getting-started/"
-    weight = 1
-  [[menu.main]]
-    name = "Components"
-    url = "/components/"
-    weight = 2
-  [[menu.main]]
-    name = "API Reference"
-    url = "/api/"
-    weight = 3

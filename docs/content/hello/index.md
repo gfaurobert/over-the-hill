@@ -1,15 +1,12 @@
 ---
-title: "Hello World"
+title: Hello World
 date: 2025-06-21
-draft: false
-description: "Welcome to your first page with the modern Hugo theme"
-tags: ["getting-started", "example"]
+draft: true
+description: Welcome to your first page with the modern Hugo theme
+tags:
+  - getting-started
+  - example
 ---
-
-# Hello World
-
-Welcome to your first page with the modern Hugo theme! This page demonstrates the beautiful typography and layout features of your new site.
-
 ## Typography Examples
 
 This theme uses the **Inter font family** for excellent readability across all devices. The typography is carefully designed to provide a comfortable reading experience with proper line heights and spacing.
@@ -99,7 +96,7 @@ The theme includes responsive table styling:
 
 Notice the sidebar navigation on the left? It automatically shows all your pages and provides easy navigation between content. On mobile devices, you can access the navigation using the menu button.
 
-## Next Steps
+## Next Steps - Test
 
 Now that you've seen how the theme works, you can:
 
@@ -109,3 +106,7 @@ Now that you've seen how the theme works, you can:
 4. **Create different content types** by organizing files in subdirectories
 
 The theme is designed to be both beautiful and functional, making it perfect for documentation sites, blogs, or any content-focused website.
+
+### Images
+
+![test](images/i_feel_so_powerful_07.png)

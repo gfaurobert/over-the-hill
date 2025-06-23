@@ -3,9 +3,9 @@
     {{ if .IsHome }}
         <div class="hero">
             <h1>Welcome to {{ .Site.Title }}</h1>
-            <p class="hero-subtitle">A modern documentation site built with Hugo</p>
+            <p class="hero-subtitle">A web and desktop application designed to visualize project progress using Hill Charts</p>
             <div class="hero-actions">
-                <a href="/hello" class="btn">Get Started</a>
+                <a href="/over-the-hill/hello/" class="btn">Download</a>
                 <a href="#features" class="btn btn-secondary">Learn More</a>
             </div>
         </div>
@@ -193,6 +193,14 @@
     /* Content sections */
     .content-section {
         margin: 1rem 1rem;
+    }
+    .content-section img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+        margin-left: auto;
+        margin-right: auto;
+        border-radius: 0.5rem;
     }
 
     /* Posts */
