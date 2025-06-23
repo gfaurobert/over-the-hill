@@ -1,13 +1,13 @@
-baseURL = 'https://example.org/'
+baseURL = 'https://gfaurobert.github.io/over-the-hill/'
 languageCode = 'en-us'
-title = 'Modern Docs'
-description = 'A vibrant, modern documentation site built with Hugo'
+title = 'Over The Hill - Hill Chart Generator'
+description = 'A web and desktop application designed to visualize project progress using Hill Charts'
 theme = ''
 
 [params]
-  author = "Your Name"
-  github = "https://github.com/yourusername"
-  twitter = "https://twitter.com/yourusername"
+  author = "gfaurobert"
+  github = "https://github.com/gfaurobert/over-the-hill"
+  twitter = ""
 
 [menu]
   [[menu.main]]

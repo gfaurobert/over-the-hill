@@ -1,23 +1,23 @@
 ---
-title: "Home"
+title: "Over The Hill - Hill Chart Generator"
 ---
 
 <div class="hero">
-  <h1>Modern Documentation</h1>
-  <p>A vibrant, fast, and beautiful documentation site built with Hugo. Inspired by the clean design of Vercel and shadcn/ui, featuring modern typography, smooth animations, and excellent developer experience.</p>
+  <h1>Over The Hill</h1>
+  <p>A web and desktop application designed to visualize project progress using Hill Charts. Inspired by 37signals Hill Charts, this tool helps you track tasks through discovery and execution phases.</p>
   <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
-    <a href="/getting-started/" class="btn">
+    <a href="https://over-the-hill.faurobert.fr/" class="btn" target="_blank">
       <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
         <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zM4.5 7.5a.5.5 0 0 0 0 1h5.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3a.5.5 0 0 0 0-.708l-3-3a.5.5 0 1 0-.708.708L10.293 7.5H4.5z"/>
       </svg>
-      Get Started
+      Try Live Demo
     </a>
-    <a href="/components/" class="btn btn-secondary">
+    <a href="/hello/" class="btn btn-secondary">
       <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
         <path d="M14.5 3a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-13a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5h13zm-13-1A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2h-13z"/>
         <path d="M7 5.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm-1.496-.854a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 1 1 .708-.708l.146.147 1.146-1.147a.5.5 0 0 1 .708 0zM7 9.5a.5.5 0 0 1 .5-.5h5a.5.5 0 0 1 0 1h-5a.5.5 0 0 1-.5-.5zm-1.496-.854a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708 0l-.5-.5a.5.5 0 0 1 .708-.708l.146.147 1.146-1.147a.5.5 0 0 1 .708 0z"/>
       </svg>
-      View Components
+      View Documentation
     </a>
   </div>
 </div>
@@ -26,142 +26,98 @@ title: "Home"
 
 <div class="feature-grid">
   <div class="card">
-    <h3>🚀 Lightning Fast</h3>
-    <p>Built with Hugo for optimal performance and blazing-fast build times. Your documentation loads instantly, providing the best developer experience.</p>
+    <h3>📊 Hill Chart Visualization</h3>
+    <p>Create and manage "dots" representing tasks, features, or items you want to track. Position them on the hill to show progress through discovery and execution phases.</p>
     <div style="margin-top: 1rem;">
-      <span class="badge badge-success">Performance</span>
+      <span class="badge badge-success">Core Feature</span>
     </div>
   </div>
 
   <div class="card">
-    <h3>📱 Mobile First</h3>
-    <p>Responsive design that works beautifully on all devices. From desktop to mobile, your documentation looks great everywhere.</p>
+    <h3>🎨 Customizable Dots</h3>
+    <p>Assign names, colors (blue, green, red, orange, purple), and sizes (1-5) to each dot for better categorization and visual distinction.</p>
     <div style="margin-top: 1rem;">
-      <span class="badge badge-primary">Responsive</span>
+      <span class="badge badge-primary">Customization</span>
     </div>
   </div>
 
   <div class="card">
-    <h3>🎨 Modern Design</h3>
-    <p>Inspired by Vercel and shadcn/ui, featuring vibrant colors, smooth animations, and a clean, professional aesthetic.</p>
+    <h3>📁 Collections</h3>
+    <p>Group related dots into collections to manage multiple projects or different aspects of a single project.</p>
     <div style="margin-top: 1rem;">
-      <span class="badge badge-primary">Design</span>
+      <span class="badge badge-primary">Organization</span>
     </div>
   </div>
 
   <div class="card">
-    <h3>🌙 Dark Mode</h3>
-    <p>Built-in dark mode support with automatic system preference detection. Switch between light and dark themes seamlessly.</p>
+    <h3>📤 Export & Share</h3>
+    <p>Copy the generated hill chart as a PNG image or SVG file to your clipboard, or download it as a PNG file for easy sharing and documentation.</p>
+    <div style="margin-top: 1rem;">
+      <span class="badge badge-success">Sharing</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>🌙 Theme Support</h3>
+    <p>Switch between light, dark, or system-preferred themes for a comfortable viewing experience.</p>
     <div style="margin-top: 1rem;">
       <span class="badge badge-success">Accessibility</span>
     </div>
   </div>
 
   <div class="card">
-    <h3>🔍 SEO Optimized</h3>
-    <p>Built-in search engine optimization with proper meta tags, structured data, and fast loading times for better discoverability.</p>
+    <h3>💻 Web & Desktop</h3>
+    <p>Available as both a web application and desktop application, giving you flexibility in how you use the tool.</p>
     <div style="margin-top: 1rem;">
-      <span class="badge badge-primary">SEO</span>
-    </div>
-  </div>
-
-  <div class="card">
-    <h3>⚡ Easy Customization</h3>
-    <p>Simple CSS custom properties for theming. Customize colors, fonts, and spacing with ease using modern CSS variables.</p>
-    <div style="margin-top: 1rem;">
-      <span class="badge badge-success">Customizable</span>
+      <span class="badge badge-primary">Cross-Platform</span>
     </div>
   </div>
 </div>
 
-## 🛠️ Getting Started
+## 🛠️ How to Use
 
-This site is ready to use! Here are some ways to customize it for your project:
+### 1. Add Dots
+Click the "Add Dot" button to create a new task or item.
 
-### Adding Content
+### 2. Name and Customize
+In the dot editing panel, give your dot a name, and select its color and size using the dropdowns.
 
-Create new pages by adding `.md` files to the `content` directory:
+### 3. Position on the Hill
+Drag the dot on the hill chart to reflect its current status:
+- **Up the Hill (Left Side)**: For tasks where you're still exploring, researching, or solving problems
+- **Down the Hill (Right Side)**: For tasks where the path is clear, and you're actively implementing
 
-```markdown
----
-title: "My New Page"
-date: 2025-01-21
-draft: false
----
+### 4. Manage Collections
+Use the "Collections" dropdown to create new collections, switch between them, or manage existing ones.
 
-# My New Page
+### 5. Export/Share
+- Click the ellipsis menu (`...`) in the top right corner
+- Under "Export Clipboard Format," choose "Copy as PNG" or "Copy as SVG" to set the clipboard format
+- Click the "Copy" button in the chart header to copy the chart to your clipboard
+- Click the "Download PNG" button to save the chart as a PNG file
 
-Your content here...
-```
+## 🎯 What is a Hill Chart?
 
-### Customizing the Theme
+Hill Charts are a simple yet powerful tool for tracking the status of tasks or features, categorizing them into two main phases:
 
-The theme uses modern CSS custom properties for easy customization. You can modify colors, fonts, and spacing by editing the variables in `layouts/_default/baseof.html`.
+- **"Up the Hill" (Discovery/Problem-solving)**: When you're still figuring things out, exploring options, or solving problems
+- **"Down the Hill" (Execution/Implementation)**: When the path is clear and you're actively implementing the solution
 
-### Navigation
+This visualization technique was popularized by 37signals and is described in their book "Shape Up: Show Progress (Chapter 13)".
 
-The sidebar automatically shows all your pages. You can organize them by creating subdirectories in the `content` folder.
+## 🚀 Live Demo
 
-## 🎯 Modern Components
+Try the application live at: **[https://over-the-hill.faurobert.fr/](https://over-the-hill.faurobert.fr/)**
 
-This documentation site includes several modern components inspired by shadcn/ui:
+## 📚 Documentation
 
-### Buttons
-
-<div style="display: flex; gap: 1rem; margin: 1.5rem 0; flex-wrap: wrap;">
-  <button class="btn">Primary Button</button>
-  <button class="btn btn-secondary">Secondary Button</button>
-</div>
-
-### Cards
-
-<div class="card">
-  <h4>Example Card</h4>
-  <p>This is an example card component with hover effects and modern styling. Cards are perfect for showcasing features, examples, or important information.</p>
-  <div style="margin-top: 1rem;">
-    <span class="badge badge-primary">Example</span>
-    <span class="badge">Component</span>
-  </div>
-</div>
-
-### Code Blocks
-
-The site includes beautiful syntax highlighting for code blocks:
-
-```javascript
-// Example JavaScript code
-function greet(name) {
-  return `Hello, ${name}! Welcome to our modern docs.`;
-}
-
-console.log(greet('Developer'));
-```
-
-## 🚀 Built with Hugo
-
-This site is powered by [Hugo](https://gohugo.io), the world's fastest framework for building websites. Hugo is perfect for documentation sites, blogs, and static websites.
-
-> **Pro Tip**: Hugo's speed and flexibility make it ideal for documentation sites that need to scale with your project.
-
-## 🎨 Design System
-
-The design system is built around modern principles:
-
-- **Typography**: Inter font family for excellent readability
-- **Colors**: Vibrant accent colors with proper contrast ratios
-- **Spacing**: Consistent spacing scale using CSS custom properties
-- **Animations**: Subtle, purposeful animations that enhance UX
-- **Accessibility**: WCAG compliant with proper focus states and contrast
-
-## 📚 Ready to Explore?
-
-Check out the [Hello page](/hello) to see an example of how individual pages look, or start adding your own content to build your perfect documentation site!
+Explore the documentation to learn more about features and usage:
 
 <div style="text-align: center; margin: 3rem 0;">
   <a href="/hello/" class="btn">
     <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
       <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0zM4.5 7.5a.5.5 0 0 0 0 1h5.793l-2.147 2.146a.5.5 0 0 0 .708.708l3-3a.5.5 0 0 0 0-.708l-3-3a.5.5 0 1 0-.708.708L10.293 7.5H4.5z"/>
     </svg>
-    Explore Examples
+    View Documentation
   </a>
 </div> 
