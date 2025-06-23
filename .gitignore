@@ -29,3 +29,6 @@ next-env.d.ts
 
 # Hugo builds
 /docs/public
+
+# obsidian
+/docs/content/.obsidian
