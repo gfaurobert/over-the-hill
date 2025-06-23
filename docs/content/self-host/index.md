@@ -152,17 +152,17 @@ sudo ufw enable
 
 ## 8. Updating the App
 ```bash
-cd hill-chart-generator
+cd over-the-hill
 git pull
 pnpm install
 pnpm build
-pm2 restart hill-chart-generator
+pm2 restart over-the-hill
 ```
 
 ---
 
 ## 9. Troubleshooting
-- Check pm2 logs: `pm2 logs hill-chart-generator`
+- Check pm2 logs: `pm2 logs over-the-hill`
 - Check Nginx: `sudo journalctl -u nginx`
 
 ---

@@ -8,7 +8,10 @@ export const metadata: Metadata = {
   description: "A web and desktop application designed to visualize project progress using Hill Charts",
   generator: "v0.dev",
   icons: {
-    icon: "/favicon.ico",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+    ],
   },
 }
 
