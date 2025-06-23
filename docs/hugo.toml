@@ -2,12 +2,10 @@ baseURL = 'https://gfaurobert.github.io/over-the-hill/'
 languageCode = 'en-us'
 title = 'Over The Hill - Hill Chart Generator'
 description = 'A web and desktop application designed to visualize project progress using Hill Charts'
-theme = ''
 
 [params]
   author = "gfaurobert"
   github = "https://github.com/gfaurobert/over-the-hill"
-  twitter = ""
 
 [menu]
   [[menu.main]]
