@@ -1,6 +1,6 @@
 {
   "name": "over-the-hill",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Hill Chart Generator inspired by 37signals",
   "author": {
     "name": "Gregoire Faurobert (with v0 by Vercel and Cursor)",
