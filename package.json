@@ -1,6 +1,6 @@
 {
-  "name": "my-v0-project",
-  "version": "0.1.0",
+  "name": "over-the-hill",
+  "version": "0.0.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
