@@ -131,6 +131,9 @@ export default function HillChartGenerator() {
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedSnapshot, setSelectedSnapshot] = useState<string | null>(null)
 
+  // Add this state for immediate visual feedback
+  const [draggingDot, setDraggingDot] = useState<{ id: string; x: number; y: number } | null>(null);
+
   // Load data from localStorage
   const loadFromStorage = () => {
     if (typeof window !== "undefined") {
@@ -419,23 +422,44 @@ export default function HillChartGenerator() {
     return () => clearInterval(interval)
   }, [collections, snapshots, selectedCollection, collectionInput, hideCollectionName, copyFormat])
 
-  const handleDotDrag = (dotId: string, clientX: number, clientY: number, rect: DOMRect) => {
-    const x = ((clientX - rect.left) / rect.width) * 100
-    const y = getHillY(x)
+  const handleDotDrag = (dotId: string, clientX: number, clientY: number) => {
+    if (!svgRef.current) return;
 
-    setCollections((prev) =>
-      prev.map((collection) =>
-        collection.id === selectedCollection
-          ? {
-              ...collection,
-              dots: collection.dots.map((dot) =>
-                dot.id === dotId ? { ...dot, x: Math.max(0, Math.min(100, x)), y } : dot,
-              ),
-            }
-          : collection,
-      ),
-    )
-  }
+    // Convert mouse coordinates to SVG coordinates
+    const svg = svgRef.current;
+    const pt = svg.createSVGPoint();
+    pt.x = clientX;
+    pt.y = clientY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return;
+    const svgP = pt.matrixTransform(ctm.inverse());
+
+    // SVG viewBox: -50 0 700 180, so x runs from -50 to 650
+    // Clamp to the visible hill area (0 to 600)
+    let svgX = Math.max(0, Math.min(600, svgP.x));
+    // Convert to percentage (0-100)
+    const xPercent = (svgX / 600) * 100;
+    const y = getHillY(xPercent);
+
+    // Immediate visual feedback
+    setDraggingDot({ id: dotId, x: xPercent, y });
+
+    // Debounced state update to avoid excessive re-renders
+    requestAnimationFrame(() => {
+      setCollections((prev) =>
+        prev.map((collection) =>
+          collection.id === selectedCollection
+            ? {
+                ...collection,
+                dots: collection.dots.map((dot) =>
+                  dot.id === dotId ? { ...dot, x: xPercent, y } : dot,
+                ),
+              }
+            : collection,
+        ),
+      );
+    });
+  };
 
   const addDot = () => {
     if (!newDotLabel.trim()) return
@@ -581,10 +605,11 @@ export default function HillChartGenerator() {
 
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = "high"
-    ctx.textRenderingOptimization = "optimizeQuality" // Deprecated, but some browsers might still use it
+    // Remove deprecated textRenderingOptimization property
     if (typeof ctx.letterSpacing !== "undefined") {
       // @ts-ignore
-      ctx.letterSpacing = "0px" // @ts-ignore
+      ctx.letterSpacing = "0px"
+      // @ts-ignore
       ctx.wordSpacing = "0px"
     }
     if (typeof ctx.fontKerning !== "undefined") {
@@ -976,15 +1001,16 @@ export default function HillChartGenerator() {
                   height="100%"
                   viewBox="-50 0 700 180" // Adjusted viewBox for padding
                   className="overflow-visible max-w-full"
-                  style={{ userSelect: "none" }}
+                  style={{ userSelect: isDragging ? "none" : "auto" }}
                   onMouseMove={(e) => {
                     if (isDragging) {
-                      const rect = e.currentTarget.getBoundingClientRect()
-                      const x = ((e.clientX - rect.left) / rect.width) * 100
-                      handleDotDrag(isDragging, e.clientX, e.clientY, rect)
+                      handleDotDrag(isDragging, e.clientX, e.clientY);
                     }
                   }}
-                  onMouseUp={() => setIsDragging(null)}
+                  onMouseUp={() => {
+                    setIsDragging(null);
+                    setDraggingDot(null); // Clear immediate feedback
+                  }}
                 >
                   {/* Bell curve */}
                   <path
@@ -1029,27 +1055,35 @@ export default function HillChartGenerator() {
 
                   {/* Dots */}
                   {currentCollection?.dots.map((dot) => {
-                    const dotX = (dot.x / 100) * 600
-                    const dotRadius = 4 + dot.size * 2 // Size 1 = 6px radius, Size 5 = 14px radius
-                    const fontSize = 8 + dot.size * 1 // Size 1 = 9px, Size 5 = 13px
-                    const textWidth = dot.label.length * (fontSize * 0.6) + 16
-                    const textHeight = fontSize + 12
+                    const dotX = (dot.x / 100) * 600;
+                    const dotRadius = 4 + dot.size * 2;
+                    const fontSize = 8 + dot.size * 1;
+                    const textWidth = dot.label.length * (fontSize * 0.6) + 16;
+                    const textHeight = fontSize + 12;
+
+                    // Use draggingDot for immediate feedback if this dot is being dragged
+                    const isBeingDragged = draggingDot?.id === dot.id;
+                    const displayX = isBeingDragged ? (draggingDot.x / 100) * 600 : dotX;
+                    const displayY = isBeingDragged ? draggingDot.y : dot.y;
 
                     return (
                       <g key={dot.id}>
                         <circle
-                          cx={dotX}
-                          cy={dot.y}
+                          cx={displayX}
+                          cy={displayY}
                           r={dotRadius}
                           fill={dot.color}
                           stroke="#fff"
                           strokeWidth="2"
                           className="cursor-pointer hover:opacity-80 transition-all"
-                          onMouseDown={() => setIsDragging(dot.id)}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setIsDragging(dot.id);
+                          }}
                         />
                         <rect
-                          x={dotX - textWidth / 2}
-                          y={dot.y - 35}
+                          x={displayX - textWidth / 2}
+                          y={displayY - 35}
                           width={textWidth}
                           height={textHeight}
                           rx="8"
@@ -1060,8 +1094,8 @@ export default function HillChartGenerator() {
                           className="pointer-events-none"
                         />
                         <text
-                          x={dotX}
-                          y={dot.y - 35 + textHeight / 2}
+                          x={displayX}
+                          y={displayY - 35 + textHeight / 2}
                           textAnchor="middle"
                           className="fill-foreground pointer-events-none select-none"
                           dominantBaseline="central"

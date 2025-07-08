@@ -33,3 +33,6 @@ next-env.d.ts
 # obsidian
 /docs/content/.obsidian
 /docs/content/.obsidian/*
+
+# YoYo AI version control directory
+.yoyo/

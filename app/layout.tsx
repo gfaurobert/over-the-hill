@@ -2,6 +2,8 @@ import type React from "react"
 import type { Metadata } from "next"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { StagewiseToolbar } from "@stagewise/toolbar-next"
+import ReactPlugin from "@stagewise-plugins/react"
 
 export const metadata: Metadata = {
   title: "Over The Hill",
@@ -24,6 +26,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <StagewiseToolbar config={{ plugins: [ReactPlugin] }} />
           {children}
         </ThemeProvider>
       </body>
