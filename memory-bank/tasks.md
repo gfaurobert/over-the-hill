@@ -16,31 +16,27 @@ Transform Over The Hill from a single-user, LocalStorage-based app into a multi-
 ### Plan & Subtasks
 
 #### A. Authentication & Access Control
-- [ ] Integrate Supabase Auth (email/password or magic link, no public signup)
-- [ ] Implement "Request Access" UI (user submits email, admin approves/invites)
-- [ ] Add sign-in page and auth gating to main UI
+- [x] Integrate Supabase Auth (email/password or magic link, no public signup)
+- [x] Implement "Request Access" UI (user submits email, admin approves/invites)
+- [X] Add sign-in page and auth gating to main UI
 
 #### B. Data Model & Backend
-- [ ] Design Supabase schema for collections, dots, snapshots, etc.
+- [x] Design Supabase schema for collections, dots, snapshots, etc.
 - [ ] Implement row-level security (RLS) for user data isolation
-- [ ] Set up Supabase client in Next.js app
+- [x] Set up Supabase client in Next.js app
 
 #### C. Frontend Refactor
 - [ ] Replace LocalStorage logic with Supabase client calls
-- [ ] Add authentication state management (signed in/out, loading, etc.)
+- [x] Add authentication state management (signed in/out, loading, etc.)
 - [ ] Update all data flows to be user-specific
 
-#### D. Migration & Compatibility
-- [ ] Provide one-time import from LocalStorage to Supabase for existing users
-- [ ] Ensure export/import features still work
-
 #### E. Admin/Access Request Flow
-- [ ] "Request Access" form triggers email to admin or stores request in Supabase
-- [ ] (MVP) Admin dashboard: manual invite via Supabase dashboard
+- [x] "Request Access" form triggers email to admin or stores request in Supabase
+
 
 #### F. Security & Testing
 - [ ] Enforce row-level security in Supabase
-- [ ] Test all flows: sign-in, data CRUD, access request, migration, export
+- [ ] Test all flows: sign-in, data CRUD, access request, export
 
 ### CREATIVE Phase: UI/UX Design Plan
 
@@ -48,7 +44,7 @@ Transform Over The Hill from a single-user, LocalStorage-based app into a multi-
 - Sign-in (no signup, only request access)
 - Request Access (form, feedback, admin flow)
 - Authenticated App Experience (user-specific data, sign-out)
-- Migration/Import (for existing users)
+- Import Data from JSON and store in DB (for existing users)
 - Error/edge cases (access denied, pending approval, etc.)
 
 #### UI Components Needed

@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useRef, useEffect } from "react"
+import React, { useState, useRef, useEffect, useCallback } from "react"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
@@ -28,97 +28,79 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { useTheme } from "next-themes"
 import SignOutButton from "./SignOutButton"
 import { useAuth } from "./AuthProvider"
+import {
+  fetchCollections,
+  addCollection,
+  addDot as addDotService,
+  updateDot as updateDotService,
+  deleteDot as deleteDotService,
+  importData,
+} from "@/lib/services/supabaseService"
 
-interface HillChartAppProps {
-  onResetPassword: () => void;
-}
-
-interface Dot {
+export interface Dot {
   id: string
   label: string
   x: number
   y: number
   color: string
-  size: number // Add size property (1-5)
+  size: number
 }
 
-interface Collection {
+export interface Collection {
   id: string
   name: string
   dots: Dot[]
 }
 
-interface Snapshot {
-  date: string // YYYY-MM-DD format
+export interface Snapshot {
+  date: string
   collectionId: string
   collectionName: string
   dots: Dot[]
   timestamp: number
 }
 
-interface ExportData {
+export interface ExportData {
   collections: Collection[]
   snapshots: Snapshot[]
   exportDate: string
   version: string
 }
 
-const defaultColors = ["#3b82f6", "#22c55e", "#ef4444", "#f97316", "#8b5cf6"] // blue, green, red, orange, purple
+const defaultColors = ["#3b82f6", "#22c55e", "#ef4444", "#f97316", "#8b5cf6"]
 
-const generateBellCurvePath = (width = 300, height = 150, centerX = 200) => {
+const generateBellCurvePath = (width = 600, height = 150, centerX = 300) => {
   const points: string[] = []
   const startX = centerX - width / 2
   const endX = centerX + width / 2
   const baseY = 145
-
-  // Generate points for bell curve using normal distribution-like formula
   for (let x = startX; x <= endX; x += 5) {
-    const normalizedX = (x - centerX) / (width / 6) // Normalize to standard deviation
+    const normalizedX = (x - centerX) / (width / 6)
     const y = baseY - height * Math.exp(-0.5 * normalizedX * normalizedX)
     points.push(`${x === startX ? "M" : "L"} ${x} ${y}`)
   }
-
   return points.join(" ")
 }
 
-const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
+const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPassword }) => {
   const getHillY = (x: number) => {
-    const centerX = 300 // SVG center point (changed from 200 to 300)
-    const width = 600 // Full SVG width (changed from 400 to 600)
-    const height = 150 // Bell curve height - increased from 100 to 150
-    const baseY = 145 // Base line Y position
-
-    // Convert percentage x to SVG coordinates
-    const svgX = (x / 100) * 600 // Changed from 400 to 600
-
-    // Calculate Y using the same formula as generateBellCurvePath
+    const centerX = 300,
+      width = 600,
+      height = 150,
+      baseY = 145
+    const svgX = (x / 100) * width
     const normalizedX = (svgX - centerX) / (width / 6)
-    const y = baseY - height * Math.exp(-0.5 * normalizedX * normalizedX)
-
-    return y
+    return baseY - height * Math.exp(-0.5 * normalizedX * normalizedX)
   }
-  const [collections, setCollections] = useState<Collection[]>([
-    {
-      id: "project-a",
-      name: "Project A",
-      dots: [
-        { id: "1", label: "Adding Collections", x: 75, y: getHillY(75), color: "#22c55e", size: 3 },
-        { id: "2", label: "Adding Dots to Collections", x: 65, y: getHillY(65), color: "#eab308", size: 3 },
-        { id: "3", label: "Tweaking Dots color and size", x: 25, y: getHillY(25), color: "#f97316", size: 3 },
-        { id: "4", label: "Saving to PNG, SVG and CPB", x: 15, y: getHillY(15), color: "#3b82f6", size: 3 },
-      ],
-    },
-  ])
 
-  const [selectedCollection, setSelectedCollection] = useState("project-a")
+  const [collections, setCollections] = useState<Collection[]>([])
+  const [selectedCollection, setSelectedCollection] = useState<string | null>(null)
   const [newDotLabel, setNewDotLabel] = useState("")
   const [isDragging, setIsDragging] = useState<string | null>(null)
-  const [collectionInput, setCollectionInput] = useState("Project A")
+  const [collectionInput, setCollectionInput] = useState("")
   const [showDropdown, setShowDropdown] = useState(false)
-  const [filteredCollections, setFilteredCollections] = useState<Collection[]>(collections)
   const [isTyping, setIsTyping] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<{ dotId: string; dotLabel: string } | null>(null)
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false)
   const { theme, setTheme } = useTheme()
@@ -129,441 +111,149 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
   const [hideCollectionName, setHideCollectionName] = useState(false)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [showInfoModal, setShowInfoModal] = useState(false)
-
-  const { supabase } = useAuth()
-
-  // Snapshot-related state
+  const { user } = useAuth()
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedSnapshot, setSelectedSnapshot] = useState<string | null>(null)
+  const [draggingDot, setDraggingDot] = useState<{ id: string; x: number; y: number } | null>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
-  // Add this state for immediate visual feedback
-  const [draggingDot, setDraggingDot] = useState<{ id: string; x: number; y: number } | null>(null);
-
-  // Load data from localStorage
-  const loadFromStorage = () => {
-    if (typeof window !== "undefined") {
-      try {
-        const savedCollections = localStorage.getItem("hill-chart-collections")
-        const savedSnapshots = localStorage.getItem("hill-chart-snapshots")
-        const savedSelectedCollection = localStorage.getItem("hill-chart-selected-collection")
-        const savedCollectionInput = localStorage.getItem("hill-chart-collection-input")
-        const savedHideCollectionName = localStorage.getItem("hill-chart-hide-collection-name")
-        const savedCopyFormat = localStorage.getItem("hill-chart-copy-format")
-
-        if (savedCollections) {
-          const collections = JSON.parse(savedCollections)
-          setCollections(collections)
+  useEffect(() => {
+    if (user) {
+      fetchCollections(user.id).then((fetched) => {
+        setCollections(fetched)
+        if (fetched.length > 0 && !selectedCollection) {
+          setSelectedCollection(fetched[0].id)
+          setCollectionInput(fetched[0].name)
         }
-        if (savedSnapshots) {
-          const snapshots = JSON.parse(savedSnapshots)
-          setSnapshots(snapshots)
-        }
-        if (savedSelectedCollection) {
-          setSelectedCollection(savedSelectedCollection)
-        }
-        if (savedCollectionInput) {
-          setCollectionInput(savedCollectionInput)
-        }
-        if (savedHideCollectionName) {
-          setHideCollectionName(JSON.parse(savedHideCollectionName))
-        }
-        if (savedCopyFormat) {
-          setCopyFormat(savedCopyFormat as "PNG" | "SVG")
-        }
-      } catch (error) {
-        console.error("Error loading data from localStorage:", error)
-      }
+      })
     }
-  }
+  }, [user, selectedCollection])
 
-  // Save data to localStorage
-  const saveToStorage = () => {
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("hill-chart-collections", JSON.stringify(collections))
-        localStorage.setItem("hill-chart-snapshots", JSON.stringify(snapshots))
-        localStorage.setItem("hill-chart-selected-collection", selectedCollection)
-        localStorage.setItem("hill-chart-collection-input", collectionInput)
-        localStorage.setItem("hill-chart-hide-collection-name", JSON.stringify(hideCollectionName))
-        localStorage.setItem("hill-chart-copy-format", copyFormat)
-      } catch (error) {
-        console.error("Error saving data to localStorage:", error)
-      }
-    }
-  }
-
+  const filteredCollections = collections.filter((c) => c.name.toLowerCase().includes(collectionInput.toLowerCase()))
   const currentCollection = collections.find((c) => c.id === selectedCollection)
 
-  // Calendar helper functions
-  const formatDateKey = (date: Date) => {
-    return date.toLocaleDateString('sv-SE') // YYYY-MM-DD format using local date
-  }
-
-  const getDaysInMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
-  }
-
-  const getFirstDayOfMonth = (date: Date) => {
-    return new Date(date.getFullYear(), date.getMonth(), 1).getDay()
-  }
-
-  const getSnapshotsForMonth = (date: Date) => {
-    const year = date.getFullYear()
-    const month = date.getMonth()
-    return snapshots.filter((snapshot) => {
-      const snapshotDate = new Date(snapshot.date)
-      return snapshotDate.getFullYear() === year && snapshotDate.getMonth() === month
-    })
-  }
-
-  const hasSnapshotForDate = (date: Date) => {
-    const dateKey = formatDateKey(date)
-    return snapshots.some((snapshot) => snapshot.date === dateKey)
-  }
-
-  const createSnapshot = () => {
-    if (!currentCollection) return
-
-    const today = new Date()
-    const dateKey = formatDateKey(today)
-
-    const newSnapshot: Snapshot = {
-      date: dateKey,
-      collectionId: currentCollection.id,
-      collectionName: currentCollection.name,
-      dots: [...currentCollection.dots],
-      timestamp: Date.now(),
-    }
-
-    setSnapshots((prev) => {
-      // Remove existing snapshot for the same date and collection
-      const filtered = prev.filter((s) => !(s.date === dateKey && s.collectionId === currentCollection.id))
-      return [...filtered, newSnapshot]
-    })
-  }
-
-  const loadSnapshot = (date: Date) => {
-    const dateKey = formatDateKey(date)
-    const snapshot = snapshots.find((s) => s.date === dateKey)
-
-    if (snapshot) {
-      // Check if collection exists, if not create it
-      let targetCollection = collections.find((c) => c.id === snapshot.collectionId)
-
-      if (!targetCollection) {
-        // Create the collection if it doesn't exist
-        const newCollection: Collection = {
-          id: snapshot.collectionId,
-          name: snapshot.collectionName,
-          dots: [],
-        }
-        setCollections((prev) => [...prev, newCollection])
-        targetCollection = newCollection
-      }
-
-      // Update the collection with snapshot data
+  const updateDot = useCallback(
+    async (dotId: string, updates: Partial<Dot>) => {
+      if (!user) return
+      const collection = collections.find((c) => c.dots.some((d) => d.id === dotId))
+      if (!collection) return
+      const originalDot = collection.dots.find((d) => d.id === dotId)
+      if (!originalDot) return
+      const updatedDot = { ...originalDot, ...updates }
       setCollections((prev) =>
-        prev.map((collection) =>
-          collection.id === snapshot.collectionId ? { ...collection, dots: [...snapshot.dots] } : collection,
+        prev.map((c) =>
+          c.id === collection.id ? { ...c, dots: c.dots.map((d) => (d.id === dotId ? updatedDot : d)) } : c,
         ),
       )
-
-      // Switch to the snapshot's collection
-      setSelectedCollection(snapshot.collectionId)
-      setCollectionInput(snapshot.collectionName)
-      setSelectedSnapshot(dateKey)
-    }
-  }
-
-  const navigateMonth = (direction: "prev" | "next") => {
-    setCurrentDate((prev) => {
-      const newDate = new Date(prev)
-      if (direction === "prev") {
-        newDate.setMonth(prev.getMonth() - 1)
-      } else {
-        newDate.setMonth(prev.getMonth() + 1)
+      const result = await updateDotService(updatedDot, user.id)
+      if (!result) {
+        setCollections((prev) =>
+          prev.map((c) =>
+            c.id === collection.id ? { ...c, dots: c.dots.map((d) => (d.id === dotId ? originalDot : d)) } : c,
+          ),
+        )
       }
-      return newDate
-    })
-  }
-
-  const renderCalendar = () => {
-    const daysInMonth = getDaysInMonth(currentDate)
-    const firstDay = getFirstDayOfMonth(currentDate)
-    const monthSnapshots = getSnapshotsForMonth(currentDate)
-
-    const days = []
-    const dayNames = ["S", "M", "T", "W", "T", "F", "S"]
-
-    // Add day headers
-    const dayHeaders = dayNames.map((day, index) => (
-      <div key={`day-header-${index}`} className="text-center text-xs font-medium text-muted-foreground p-0.5">
-        {day}
-      </div>
-    ))
-
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < firstDay; i++) {
-      days.push(<div key={`empty-${i}`} className="p-1"></div>)
-    }
-
-    // Add days of the month
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
-      const dateKey = formatDateKey(date)
-      const hasSnapshot = hasSnapshotForDate(date)
-      const isSelected = selectedSnapshot === dateKey
-      const isToday = formatDateKey(new Date()) === dateKey
-
-      days.push(
-        <div key={day} className="p-0.5">
-          <button
-            onClick={() => hasSnapshot && loadSnapshot(date)}
-            className={`w-5 h-5 text-xs rounded-full flex items-center justify-center transition-colors ${
-              hasSnapshot
-                ? `border-2 border-primary cursor-pointer hover:bg-primary hover:text-primary-foreground ${
-                    isSelected ? "bg-primary text-primary-foreground" : "bg-background text-foreground"
-                  }`
-                : isToday
-                  ? "bg-accent text-accent-foreground font-semibold"
-                  : "text-muted-foreground cursor-default"
-            }`}
-            disabled={!hasSnapshot}
-          >
-            {day.toString().padStart(2, "0")}
-          </button>
-        </div>,
-      )
-    }
-
-    return (
-      <div className="border rounded-lg p-2 bg-background">
-        {/* Calendar header */}
-        <div className="flex items-center justify-between mb-2">
-          <Button variant="ghost" size="sm" onClick={() => navigateMonth("prev")} className="h-5 w-5 p-0">
-            <ChevronLeft className="w-3 h-3" />
-          </Button>
-          <div className="flex items-center gap-1">
-            <span className="text-xs font-medium">
-              {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-            </span>
-            <Button variant="ghost" size="sm" onClick={() => setCurrentDate(new Date())} className="h-4 px-1 text-xs">
-              Today
-            </Button>
-          </div>
-          <Button variant="ghost" size="sm" onClick={() => navigateMonth("next")} className="h-5 w-5 p-0">
-            <ChevronRight className="w-3 h-3" />
-          </Button>
-        </div>
-
-        {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-0.5">
-          {dayHeaders}
-          {days}
-        </div>
-
-        {/* Snapshot button */}
-        <div className="mt-2 pt-2 border-t">
-          <Button variant="outline" size="sm" onClick={createSnapshot} className="w-full text-xs h-7">
-            <Camera className="w-3 h-3 mr-1" />
-            Save Today's Snapshot
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
-  useEffect(() => {
-    // Only filter when user is actively typing, not when dropdown is opened via button
-    if (showDropdown && isTyping) {
-      const filtered = collections.filter((collection) =>
-        collection.name.toLowerCase().includes(collectionInput.toLowerCase()),
-      )
-      setFilteredCollections(filtered)
-    }
-  }, [collectionInput, collections, isTyping]) // Remove showDropdown from dependencies
-
-  useEffect(() => {
-    // Close dropdown when clicking outside
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false)
-        setIsTyping(false)
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
-
-  useEffect(() => {
-    // Close ellipsis menu when clicking outside
-    const handleClickOutside = (event: MouseEvent) => {
-      if (ellipsisMenuRef.current && !ellipsisMenuRef.current.contains(event.target as Node)) {
-        setShowEllipsisMenu(false)
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
-
-  // Load data on component mount
-  useEffect(() => {
-    loadFromStorage()
-  }, [])
-
-  // Save data whenever state changes
-  useEffect(() => {
-    saveToStorage()
-  }, [collections, snapshots, selectedCollection, collectionInput, hideCollectionName, copyFormat])
-
-  // Auto-save every 30 seconds as backup
-  useEffect(() => {
-    const interval = setInterval(() => {
-      saveToStorage()
-    }, 30000) // 30 seconds
-
-    return () => clearInterval(interval)
-  }, [collections, snapshots, selectedCollection, collectionInput, hideCollectionName, copyFormat])
+    },
+    [user, collections],
+  )
 
   const handleDotDrag = (dotId: string, clientX: number, clientY: number) => {
-    if (!svgRef.current) return;
+    if (!svgRef.current) return
+    const svg = svgRef.current,
+      pt = svg.createSVGPoint()
+    pt.x = clientX
+    pt.y = clientY
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return
+    const svgP = pt.matrixTransform(ctm.inverse())
+    let svgX = Math.max(0, Math.min(600, svgP.x))
+    const xPercent = (svgX / 600) * 100
+    const y = getHillY(xPercent)
+    setDraggingDot({ id: dotId, x: xPercent, y })
+    updateDot(dotId, { x: xPercent, y })
+  }
 
-    // Convert mouse coordinates to SVG coordinates
-    const svg = svgRef.current;
-    const pt = svg.createSVGPoint();
-    pt.x = clientX;
-    pt.y = clientY;
-    const ctm = svg.getScreenCTM();
-    if (!ctm) return;
-    const svgP = pt.matrixTransform(ctm.inverse());
-
-    // SVG viewBox: -50 0 700 180, so x runs from -50 to 650
-    // Clamp to the visible hill area (0 to 600)
-    let svgX = Math.max(0, Math.min(600, svgP.x));
-    // Convert to percentage (0-100)
-    const xPercent = (svgX / 600) * 100;
-    const y = getHillY(xPercent);
-
-    // Immediate visual feedback
-    setDraggingDot({ id: dotId, x: xPercent, y });
-
-    // Debounced state update to avoid excessive re-renders
-    requestAnimationFrame(() => {
-      setCollections((prev) =>
-        prev.map((collection) =>
-          collection.id === selectedCollection
-            ? {
-                ...collection,
-                dots: collection.dots.map((dot) =>
-                  dot.id === dotId ? { ...dot, x: xPercent, y } : dot,
-                ),
-              }
-            : collection,
-        ),
-      );
-    });
-  };
-
-  const addDot = () => {
-    if (!newDotLabel.trim()) return
-
-    const newDot: Dot = {
+  const addDot = async () => {
+    if (!newDotLabel.trim() || !selectedCollection || !user) return
+    const newDot = {
       id: Date.now().toString(),
       label: newDotLabel,
       x: 50,
       y: getHillY(50),
-      color: defaultColors[0], // Default to first color (blue)
-      size: 3, // Default size
+      color: defaultColors[0],
+      size: 3,
     }
-
-    setCollections((prev) =>
-      prev.map((collection) =>
-        collection.id === selectedCollection ? { ...collection, dots: [...collection.dots, newDot] } : collection,
-      ),
-    )
-
-    setNewDotLabel("")
-  }
-
-  const showDeleteConfirm = (dotId: string, dotLabel: string) => {
-    setDeleteConfirm({ dotId, dotLabel })
-  }
-
-  const confirmDelete = () => {
-    if (deleteConfirm) {
+    const addedDot = await addDotService(newDot, selectedCollection, user.id)
+    if (addedDot) {
       setCollections((prev) =>
-        prev.map((collection) =>
-          collection.id === selectedCollection
-            ? { ...collection, dots: collection.dots.filter((dot) => dot.id !== deleteConfirm.dotId) }
-            : collection,
-        ),
+        prev.map((c) => (c.id === selectedCollection ? { ...c, dots: [...c.dots, addedDot] } : c)),
       )
+      setNewDotLabel("")
+    }
+  }
+
+  const confirmDelete = async () => {
+    if (deleteConfirm && selectedCollection && user) {
+      const { success } = await deleteDotService(deleteConfirm.dotId, user.id)
+      if (success) {
+        setCollections((prev) =>
+          prev.map((c) =>
+            c.id === selectedCollection ? { ...c, dots: c.dots.filter((d) => d.id !== deleteConfirm.dotId) } : c,
+          ),
+        )
+      }
       setDeleteConfirm(null)
     }
   }
 
-  const cancelDelete = () => {
-    setDeleteConfirm(null)
+  const handleCollectionInputKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && collectionInput.trim() && user) {
+      e.preventDefault()
+      if (!collections.some((c) => c.name.toLowerCase() === collectionInput.trim().toLowerCase())) {
+        const newCollection = { id: Date.now().toString(), name: collectionInput.trim(), dots: [] }
+        const added = await addCollection(newCollection, user.id)
+        if (added) {
+          setCollections((prev) => [...prev, added])
+          setSelectedCollection(added.id)
+        }
+      }
+      setShowDropdown(false)
+      setIsTyping(false)
+    }
   }
 
   const prepareSvgForExport = (): string | null => {
     if (!svgRef.current) return null
+    const svgNode = svgRef.current.cloneNode(true) as SVGSVGElement
+    const style = getComputedStyle(document.documentElement)
 
     const isDarkMode = document.documentElement.classList.contains("dark")
     const backgroundColor = isDarkMode ? "#0f0f0f" : "#ffffff"
-    const textColor = isDarkMode ? "#fafafa" : "#0a0a0a"
-    const mutedColor = isDarkMode ? "#a1a1aa" : "#71717a"
-    const borderColor = isDarkMode ? "#27272a" : "#e4e4e7"
 
-    const svgElement = svgRef.current.cloneNode(true) as SVGSVGElement
-    svgElement.setAttribute("width", "800")
-    svgElement.setAttribute("height", "360")
-    svgElement.style.backgroundColor = backgroundColor
-    // Ensure the viewBox is set for the exported SVG to maintain padding
-    svgElement.setAttribute("viewBox", "-50 0 700 180")
+    svgNode.style.backgroundColor = backgroundColor
+    svgNode.setAttribute("width", "800")
+    svgNode.setAttribute("height", "360")
+    svgNode.setAttribute("viewBox", "-50 0 700 180")
 
-    const paths = svgElement.querySelectorAll("path")
-    paths.forEach((path) => {
-      if (path.getAttribute("stroke") === "currentColor") path.setAttribute("stroke", textColor)
-    })
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs")
+    const styleElement = document.createElementNS("http://www.w3.org/2000/svg", "style")
+    styleElement.textContent = `
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+      svg { font-family: 'Inter', sans-serif; }
+      .fill-foreground { fill: ${isDarkMode ? "hsl(var(--foreground))" : "hsl(var(--foreground))"}; }
+      .fill-muted-foreground { fill: ${
+        isDarkMode ? "hsl(var(--muted-foreground))" : "hsl(var(--muted-foreground))"
+      }; }
+      .stroke-currentColor { stroke: ${isDarkMode ? "hsl(var(--foreground))" : "hsl(var(--foreground))"}; }
+      .stroke-muted-foreground { stroke: ${
+        isDarkMode ? "hsl(var(--muted-foreground))" : "hsl(var(--muted-foreground))"
+      }; }
+    `
+    defs.appendChild(styleElement)
+    svgNode.insertBefore(defs, svgNode.firstChild)
 
-    const lines = svgElement.querySelectorAll("line")
-    lines.forEach((line) => {
-      if (line.getAttribute("stroke") === "currentColor") line.setAttribute("stroke", textColor)
-      if (line.getAttribute("stroke") === "hsl(var(--muted-foreground))") line.setAttribute("stroke", mutedColor)
-    })
-
-    const texts = svgElement.querySelectorAll("text")
-    texts.forEach((text) => {
-      text.setAttribute("font-family", "Arial, Helvetica, sans-serif")
-      if (text.classList.contains("fill-foreground")) text.setAttribute("fill", textColor)
-      if (text.classList.contains("fill-muted-foreground")) text.setAttribute("fill", mutedColor)
-
-      const currentFontSize = text.getAttribute("fontSize") || text.style.fontSize
-      if (currentFontSize) {
-        text.setAttribute("font-size", currentFontSize)
-      } else {
-        if (text.classList.contains("text-[8px]")) text.setAttribute("font-size", "8px")
-        else if (text.classList.contains("text-sm")) text.setAttribute("font-size", "14px")
-        else {
-          const fontSizeAttr = text.getAttribute("fontSize")
-          if (fontSizeAttr) text.setAttribute("font-size", fontSizeAttr + "px")
-        }
-      }
-      if (text.classList.contains("font-semibold")) text.setAttribute("font-weight", "600")
-      else if (text.classList.contains("font-normal")) text.setAttribute("font-weight", "400")
-    })
-
-    const rects = svgElement.querySelectorAll("rect")
-    rects.forEach((rect) => {
-      if (rect.getAttribute("fill") === "hsl(var(--background))") rect.setAttribute("fill", backgroundColor)
-      if (rect.getAttribute("stroke") === "hsl(var(--border))") rect.setAttribute("stroke", borderColor)
-    })
-
-    return new XMLSerializer().serializeToString(svgElement)
+    return new XMLSerializer().serializeToString(svgNode)
   }
 
   const copyChartAsPNG = async () => {
@@ -592,17 +282,12 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
 
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = "high"
-    // Remove deprecated textRenderingOptimization property
-    if (typeof ctx.letterSpacing !== "undefined") {
-      // @ts-ignore
-      ctx.letterSpacing = "0px"
-      // @ts-ignore
-      ctx.wordSpacing = "0px"
-    }
-    if (typeof ctx.fontKerning !== "undefined") {
-      // @ts-ignore
-      ctx.fontKerning = "normal"
-    }
+    // @ts-ignore
+    ctx.letterSpacing = "0px"
+    // @ts-ignore
+    ctx.wordSpacing = "0px"
+    // @ts-ignore
+    ctx.fontKerning = "normal"
 
     ctx.scale(scale, scale)
     ctx.fillStyle = backgroundColor
@@ -666,8 +351,6 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
   }
 
   const downloadChartAsPNG = async () => {
-    // This function can now also use prepareSvgForExport and the canvas logic from copyChartAsPNG
-    // For brevity, assuming it's similar to copyChartAsPNG but triggers download
     const svgString = prepareSvgForExport()
     if (!svgString) return
 
@@ -683,15 +366,12 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
     canvas.height = 360 * scale
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = "high"
-    if (typeof ctx.letterSpacing !== "undefined") {
-      // @ts-ignore
-      ctx.letterSpacing = "0px" // @ts-ignore
-      ctx.wordSpacing = "0px"
-    }
-    if (typeof ctx.fontKerning !== "undefined") {
-      // @ts-ignore
-      ctx.fontKerning = "normal"
-    }
+    // @ts-ignore
+    ctx.letterSpacing = "0px"
+    // @ts-ignore
+    ctx.wordSpacing = "0px"
+    // @ts-ignore
+    ctx.fontKerning = "normal"
     ctx.scale(scale, scale)
     ctx.fillStyle = backgroundColor
     ctx.fillRect(0, 0, 800, 360)
@@ -711,7 +391,6 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
             const timestamp = now
               .toISOString()
               .replace(/:/g, "-")
-              .replace(/\..+/, "")
               .replace(/\..+/, "")
               .replace("T", "_")
             const link = document.createElement("a")
@@ -739,7 +418,11 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
     if (!svgString) return
 
     const now = new Date()
-    const timestamp = now.toISOString().replace(/:/g, "-").replace(/\..+/, "").replace("T", "_")
+    const timestamp = now
+      .toISOString()
+      .replace(/:/g, "-")
+      .replace(/\..+/, "")
+      .replace("T", "_")
     const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
     const url = URL.createObjectURL(svgBlob)
     const link = document.createElement("a")
@@ -780,60 +463,33 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
     setShowEllipsisMenu(false)
   }
 
-  const importCollections = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (!file) return
+    if (!file || !user) return
 
     const reader = new FileReader()
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
-        const importedData = JSON.parse(e.target?.result as string)
-
-        // Check if it's the new format with collections and snapshots
-        if (importedData.collections && Array.isArray(importedData.collections)) {
-          // New format with snapshots
-          setCollections(importedData.collections)
-
-          // Import snapshots if they exist
-          if (importedData.snapshots && Array.isArray(importedData.snapshots)) {
-            setSnapshots(importedData.snapshots)
-          } else {
-            setSnapshots([]) // Clear existing snapshots if none in import
+        const fileContent = e.target?.result as string
+        const success = await importData(fileContent, user.id)
+        if (success) {
+          const fetched = await fetchCollections(user.id)
+          setCollections(fetched)
+          if (fetched.length > 0) {
+            setSelectedCollection(fetched[0].id)
+            setCollectionInput(fetched[0].name)
           }
-
-          // Set the first collection as selected
-          if (importedData.collections.length > 0) {
-            setSelectedCollection(importedData.collections[0].id)
-            setCollectionInput(importedData.collections[0].name)
-          }
-        } else if (Array.isArray(importedData)) {
-          // Legacy format - just collections array
-          setCollections(importedData)
-          setSnapshots([]) // Clear snapshots for legacy imports
-
-          if (importedData.length > 0) {
-            setSelectedCollection(importedData[0].id)
-            setCollectionInput(importedData[0].name)
-          }
+          alert("Data imported successfully!")
         } else {
-          alert("Invalid file format. Please select a valid Hill Chart data file.")
-          return
+          alert("Failed to import data. Please check the file format.")
         }
-
-        // Clear selected snapshot since we're loading new data
-        setSelectedSnapshot(null)
-
-        alert(
-          `Successfully imported ${importedData.collections?.length || importedData.length || 0} collections${importedData.snapshots ? ` and ${importedData.snapshots.length} snapshots` : ""}.`,
-        )
       } catch (error) {
         console.error("Import error:", error)
-        alert("Invalid JSON file or corrupted data. Please check the file and try again.")
+        alert("An error occurred during import.")
       }
     }
     reader.readAsText(file)
     setShowEllipsisMenu(false)
-    // Reset the input value so the same file can be selected again
     event.target.value = ""
   }
 
@@ -873,42 +529,19 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCollectionInput(e.target.value)
     setIsTyping(true)
-    setShowDropdown(true) // Open dropdown immediately when typing
-  }
-
-  const handleCollectionInputKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      e.preventDefault() // Prevent form submission
-      if (collectionInput.trim()) {
-        // Check if the collection already exists
-        if (!collections.some((c) => c.name.toLowerCase() === collectionInput.toLowerCase())) {
-          const newCollection: Collection = {
-            id: Date.now().toString(),
-            name: collectionInput,
-            dots: [],
-          }
-          setCollections([...collections, newCollection])
-          setSelectedCollection(newCollection.id)
-        }
-        setShowDropdown(false)
-        setIsTyping(false)
-      }
-    }
+    setShowDropdown(true)
   }
 
   const handleInputFocus = () => {
-    setFilteredCollections(collections) // Show all collections when focused
     setShowDropdown(true)
   }
 
   const toggleDropdown = () => {
     if (!showDropdown) {
-      // When opening dropdown, clear input and show all collections
       setCollectionInput("")
-      setFilteredCollections(collections)
     }
     setShowDropdown(!showDropdown)
-    setIsTyping(false) // Reset typing state when dropdown is toggled via button
+    setIsTyping(false)
   }
 
   const handleCollectionSelect = (collection: Collection) => {
@@ -916,34 +549,95 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
     setCollectionInput(collection.name)
     setShowDropdown(false)
     setIsTyping(false)
-    setSelectedSnapshot(null) // Clear snapshot selection when switching collections
-    setFilteredCollections(collections) // Reset filtered collections
+    setSelectedSnapshot(null)
   }
 
-  const updateDotLabel = (dotId: string, newLabel: string) => {
-    setCollections((prev) =>
-      prev.map((collection) => ({
-        ...collection,
-        dots: collection.dots.map((dot) => (dot.id === dotId ? { ...dot, label: newLabel } : dot)),
-      })),
-    )
-  }
+  const renderCalendar = () => {
+    const today = new Date()
+    const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+    const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+    const startDay = startOfMonth.getDay()
+    const daysInMonth = endOfMonth.getDate()
+    const days = []
 
-  const updateDotColor = (dotId: string, newColor: string) => {
-    setCollections((prev) =>
-      prev.map((collection) => ({
-        ...collection,
-        dots: collection.dots.map((dot) => (dot.id === dotId ? { ...dot, color: newColor } : dot)),
-      })),
-    )
-  }
+    for (let i = 0; i < startDay; i++) {
+      days.push(<div key={`empty-start-${i}`} className="w-8 h-8"></div>)
+    }
 
-  const updateDotSize = (dotId: string, newSize: number) => {
-    setCollections((prev) =>
-      prev.map((collection) => ({
-        ...collection,
-        dots: collection.dots.map((dot) => (dot.id === dotId ? { ...dot, size: newSize } : dot)),
-      })),
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
+      const dateString = date.toISOString().split("T")[0]
+      const hasSnapshot = snapshots.some((s) => s.date === dateString)
+      const isSelected = selectedSnapshot === dateString
+      const isToday =
+        date.getDate() === today.getDate() &&
+        date.getMonth() === today.getMonth() &&
+        date.getFullYear() === today.getFullYear()
+
+      days.push(
+        <div key={day} className="flex items-center justify-center">
+          <button
+            onClick={() => (hasSnapshot ? setSelectedSnapshot(dateString) : null)}
+            className={`w-8 h-8 rounded-full text-sm flex items-center justify-center transition-colors
+              ${
+                isSelected
+                  ? "bg-primary text-primary-foreground"
+                  : hasSnapshot
+                  ? "bg-accent text-accent-foreground hover:bg-accent/80"
+                  : "text-muted-foreground"
+              }
+              ${isToday && !isSelected ? "border border-primary" : ""}
+            `}
+            disabled={!hasSnapshot}
+          >
+            {day}
+          </button>
+        </div>,
+      )
+    }
+
+    return (
+      <div className="bg-muted/30 p-3 rounded-lg">
+        <div className="flex items-center justify-between mb-2">
+          <Button variant="ghost" size="sm" onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}>
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <div className="font-medium text-sm">
+            {currentDate.toLocaleString("default", { month: "long", year: "numeric" })}
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}>
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
+        <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground mb-2">
+          <div>Su</div>
+          <div>Mo</div>
+          <div>Tu</div>
+          <div>We</div>
+          <div>Th</div>
+          <div>Fr</div>
+          <div>Sa</div>
+        </div>
+        <div className="grid grid-cols-7 gap-1">{days}</div>
+        <div className="flex gap-2 mt-3">
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full flex items-center gap-2"
+            onClick={() => {
+              /* logic to create snapshot */
+            }}
+          >
+            <Camera className="w-4 h-4" />
+            Snapshot
+          </Button>
+          {selectedSnapshot && (
+            <Button size="sm" variant="secondary" className="w-full" onClick={() => setSelectedSnapshot(null)}>
+              View Live
+            </Button>
+          )}
+        </div>
+      </div>
     )
   }
 
@@ -972,8 +666,8 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
                     copyStatus === "success"
                       ? "border-green-500 bg-green-500/10 text-green-600 hover:bg-green-500/20 dark:border-green-400 dark:bg-green-400/10 dark:text-green-400 dark:hover:bg-green-400/20"
                       : copyStatus === "error"
-                        ? "border-red-500 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:border-red-400 dark:bg-red-400/10 dark:text-red-400 dark:hover:bg-red-400/20"
-                        : ""
+                      ? "border-red-500 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:border-red-400 dark:bg-red-400/10 dark:text-red-400 dark:hover:bg-red-400/20"
+                      : ""
                   }`}
                 >
                   {getCopyButtonContent()}
@@ -991,12 +685,12 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
                   style={{ userSelect: isDragging ? "none" : "auto" }}
                   onMouseMove={(e) => {
                     if (isDragging) {
-                      handleDotDrag(isDragging, e.clientX, e.clientY);
+                      handleDotDrag(isDragging, e.clientX, e.clientY)
                     }
                   }}
                   onMouseUp={() => {
-                    setIsDragging(null);
-                    setDraggingDot(null); // Clear immediate feedback
+                    setIsDragging(null)
+                    setDraggingDot(null) // Clear immediate feedback
                   }}
                 >
                   {/* Bell curve */}
@@ -1009,7 +703,15 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
                   />
 
                   {/* Base line */}
-                  <line className="leading-3" x1="0" y1="150" x2="600" y2="150" stroke="currentColor" strokeWidth="1" />
+                  <line
+                    className="leading-3"
+                    x1="0"
+                    y1="150"
+                    x2="600"
+                    y2="150"
+                    stroke="currentColor"
+                    strokeWidth="1"
+                  />
 
                   {/* Center divider */}
                   <line
@@ -1032,7 +734,12 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
                     Discovery
                   </text>
                   {!hideCollectionName && (
-                    <text x="300" y="175" textAnchor="middle" className="font-semibold text-sm fill-foreground">
+                    <text
+                      x="300"
+                      y="175"
+                      textAnchor="middle"
+                      className="font-semibold text-sm fill-foreground"
+                    >
                       {currentCollection?.name}
                     </text>
                   )}
@@ -1042,16 +749,16 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
 
                   {/* Dots */}
                   {currentCollection?.dots.map((dot) => {
-                    const dotX = (dot.x / 100) * 600;
-                    const dotRadius = 4 + dot.size * 2;
-                    const fontSize = 8 + dot.size * 1;
-                    const textWidth = dot.label.length * (fontSize * 0.6) + 16;
-                    const textHeight = fontSize + 12;
+                    const dotX = (dot.x / 100) * 600
+                    const dotRadius = 4 + dot.size * 2
+                    const fontSize = 8 + dot.size * 1
+                    const textWidth = dot.label.length * (fontSize * 0.6) + 16
+                    const textHeight = fontSize + 12
 
                     // Use draggingDot for immediate feedback if this dot is being dragged
-                    const isBeingDragged = draggingDot?.id === dot.id;
-                    const displayX = isBeingDragged ? (draggingDot.x / 100) * 600 : dotX;
-                    const displayY = isBeingDragged ? draggingDot.y : dot.y;
+                    const isBeingDragged = draggingDot?.id === dot.id
+                    const displayX = isBeingDragged ? (draggingDot.x / 100) * 600 : dotX
+                    const displayY = isBeingDragged ? draggingDot.y : dot.y
 
                     return (
                       <g key={dot.id}>
@@ -1064,8 +771,8 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
                           strokeWidth="2"
                           className="cursor-pointer hover:opacity-80 transition-all"
                           onMouseDown={(e) => {
-                            e.preventDefault();
-                            setIsDragging(dot.id);
+                            e.preventDefault()
+                            setIsDragging(dot.id)
                           }}
                         />
                         <rect
@@ -1236,7 +943,7 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
                       </button>
                       <label className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 cursor-pointer">
                         <UploadIcon className="w-4 h-4" /> Import Collections
-                        <input type="file" accept=".json" onChange={importCollections} className="hidden" />
+                        <input type="file" accept=".json" onChange={handleImport} className="hidden" />
                       </label>
                     </div>
                     <div className="py-1">
@@ -1354,16 +1061,16 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
                   <div key={dot.id} className="p-3 bg-muted/50 rounded-lg space-y-3">
                     {/* Dot Name and Controls Row */}
                     <div className="flex items-center gap-2">
-                      {/* Dot Name Input - takes remaining space */}
                       <Input
                         value={dot.label}
-                        onChange={(e) => updateDotLabel(dot.id, e.target.value)}
+                        onChange={(e) => updateDot(dot.id, { label: e.target.value })}
                         className="text-sm flex-1"
                         placeholder="Dot name"
                       />
-
-                      {/* Color Dropdown */}
-                      <Select value={dot.color} onValueChange={(value) => updateDotColor(dot.id, value)}>
+                      <Select
+                        value={dot.color}
+                        onValueChange={(value) => updateDot(dot.id, { color: value })}
+                      >
                         <SelectTrigger className="w-12 h-8 p-0 border-0 bg-transparent">
                           <div
                             className="w-6 h-6 rounded-full border-2 border-gray-300"
@@ -1378,17 +1085,17 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
                                   className="w-4 h-4 rounded-full border border-gray-300"
                                   style={{ backgroundColor: color }}
                                 />
-                                <span className="text-sm">{["Blue", "Green", "Red", "Orange", "Purple"][index]}</span>
+                                <span className="text-sm">
+                                  {["Blue", "Green", "Red", "Orange", "Purple"][index]}
+                                </span>
                               </div>
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-
-                      {/* Size Dropdown */}
                       <Select
                         value={dot.size.toString()}
-                        onValueChange={(value) => updateDotSize(dot.id, Number.parseInt(value))}
+                        onValueChange={(value) => updateDot(dot.id, { size: Number(value) })}
                       >
                         <SelectTrigger className="w-12 h-8">
                           <SelectValue />
@@ -1398,18 +1105,18 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
                             <SelectItem key={size} value={size.toString()}>
                               <div className="flex items-center gap-2">
                                 <span className="font-medium">{size}</span>
-                                <span className="text-xs text-gray-500">{["XS", "S", "M", "L", "XL"][size - 1]}</span>
+                                <span className="text-xs text-gray-500">
+                                  {["XS", "S", "M", "L", "XL"][size - 1]}
+                                </span>
                               </div>
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
-
-                      {/* Delete Button */}
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => showDeleteConfirm(dot.id, dot.label)}
+                        onClick={() => setDeleteConfirm({ dotId: dot.id, dotLabel: dot.label })}
                         className="h-8 w-8 p-0 border-red-200 hover:border-red-300 hover:bg-red-50"
                       >
                         <Trash2 className="w-4 h-4 text-red-500" />
@@ -1422,16 +1129,16 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
           </Card>
         </div>
       </div>
-      {/* Delete Confirmation Dialog */}
+      {/* Modals */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Delete Dot</h3>
-            <p className="text-gray-600 mb-4">
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
               Are you sure you want to delete "{deleteConfirm.dotLabel}"? This action cannot be undone.
             </p>
             <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={cancelDelete}>
+              <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
                 Cancel
               </Button>
               <Button variant="destructive" onClick={confirmDelete}>
@@ -1441,14 +1148,13 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
           </div>
         </div>
       )}
-      {/* Reset Collections Confirmation Dialog */}
       {showResetConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Reset All Collections</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Are you sure you want to delete all collections and snapshots? This action cannot be undone and will
-              remove all your data.
+              Are you sure you want to delete all collections and snapshots? This action cannot be undone and
+              will remove all your data.
             </p>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setShowResetConfirm(false)}>
@@ -1457,19 +1163,8 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
               <Button
                 variant="destructive"
                 onClick={() => {
-                  setCollections([])
-                  setSnapshots([])
-                  setSelectedCollection("")
-                  setCollectionInput("")
-                  setSelectedSnapshot(null)
+                  /* Logic to reset collections in Supabase will go here */
                   setShowResetConfirm(false)
-                  // Clear localStorage
-                  if (typeof window !== "undefined") {
-                    localStorage.removeItem("hill-chart-collections")
-                    localStorage.removeItem("hill-chart-snapshots")
-                    localStorage.removeItem("hill-chart-selected-collection")
-                    localStorage.removeItem("hill-chart-collection-input")
-                  }
                 }}
               >
                 Reset All
@@ -1478,7 +1173,6 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
           </div>
         </div>
       )}
-      {/* Info Modal */}
       {showInfoModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
@@ -1518,6 +1212,5 @@ const HillChartApp: React.FC<HillChartAppProps> = ({ onResetPassword }) => {
       )}
     </div>
   )
-};
-
-export default HillChartApp; 
+}
+export default HillChartApp 
