@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Camera,
   Info,
+  Heart, // Add Heart icon import
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { useTheme } from "next-themes"
@@ -35,6 +36,9 @@ import {
   updateDot as updateDotService,
   deleteDot as deleteDotService,
   importData,
+  createSnapshot,
+  fetchSnapshots,
+  loadSnapshot,
 } from "@/lib/services/supabaseService"
 
 export interface Dot {
@@ -68,6 +72,14 @@ export interface ExportData {
 }
 
 const defaultColors = ["#3b82f6", "#22c55e", "#ef4444", "#f97316", "#8b5cf6"]
+
+// Helper function to get local date string in YYYY-MM-DD format (consistent with backend)
+const getLocalDateString = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 const generateBellCurvePath = (width = 600, height = 150, centerX = 300) => {
   const points: string[] = []
@@ -117,18 +129,41 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [selectedSnapshot, setSelectedSnapshot] = useState<string | null>(null)
   const [draggingDot, setDraggingDot] = useState<{ id: string; x: number; y: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  
+  // Snapshot state management
+  const [isViewingSnapshot, setIsViewingSnapshot] = useState(false)
+  const [currentSnapshot, setCurrentSnapshot] = useState<Snapshot | null>(null)
+  const [snapshotCollections, setSnapshotCollections] = useState<Collection[]>([])
+  const [originalCollections, setOriginalCollections] = useState<Collection[]>([])
+  const [snapshotSuccess, setSnapshotSuccess] = useState(false)
 
   useEffect(() => {
     if (user) {
       fetchCollections(user.id).then((fetched) => {
         setCollections(fetched)
+        setOriginalCollections(fetched)
         if (fetched.length > 0 && !selectedCollection) {
           setSelectedCollection(fetched[0].id)
           setCollectionInput(fetched[0].name)
         }
       })
+      
+      // Fetch snapshots
+      fetchSnapshots(user.id).then((fetchedSnapshots) => {
+        setSnapshots(fetchedSnapshots)
+      })
     }
   }, [user, selectedCollection])
+
+  // Reset snapshot success state after 3 seconds
+  useEffect(() => {
+    if (snapshotSuccess) {
+      const timer = setTimeout(() => {
+        setSnapshotSuccess(false)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [snapshotSuccess])
 
   const filteredCollections = collections.filter((c) => c.name.toLowerCase().includes(collectionInput.toLowerCase()))
   const currentCollection = collections.find((c) => c.id === selectedCollection)
@@ -471,21 +506,19 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     reader.onload = async (e) => {
       try {
         const fileContent = e.target?.result as string
-        const success = await importData(fileContent, user.id)
-        if (success) {
-          const fetched = await fetchCollections(user.id)
-          setCollections(fetched)
-          if (fetched.length > 0) {
-            setSelectedCollection(fetched[0].id)
-            setCollectionInput(fetched[0].name)
-          }
-          alert("Data imported successfully!")
-        } else {
-          alert("Failed to import data. Please check the file format.")
+        const data = JSON.parse(fileContent) as ExportData
+        await importData(data, user.id)
+        
+        const fetched = await fetchCollections(user.id)
+        setCollections(fetched)
+        if (fetched.length > 0) {
+          setSelectedCollection(fetched[0].id)
+          setCollectionInput(fetched[0].name)
         }
+        alert("Data imported successfully!")
       } catch (error) {
         console.error("Import error:", error)
-        alert("An error occurred during import.")
+        alert("An error occurred during import. Please check the file format.")
       }
     }
     reader.readAsText(file)
@@ -552,6 +585,83 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     setSelectedSnapshot(null)
   }
 
+  // Snapshot functions
+  const handleCreateSnapshot = async () => {
+    if (!user || !currentCollection) return
+    
+    try {
+      const success = await createSnapshot(
+        user.id,
+        currentCollection.id,
+        currentCollection.name,
+        currentCollection.dots
+      )
+      
+      if (success) {
+        // Refresh snapshots
+        const updatedSnapshots = await fetchSnapshots(user.id)
+        setSnapshots(updatedSnapshots)
+        setSnapshotSuccess(true) // Set success state
+        // Could add a toast notification here for success
+      } else {
+        // Could add error handling here
+        console.error("Failed to create snapshot")
+      }
+    } catch (error) {
+      console.error("Error creating snapshot:", error)
+    }
+  }
+
+  const handleViewSnapshot = async (dateString: string) => {
+    if (!user) return
+    
+    try {
+      const snapshotForDate = snapshots.find(s => s.date === dateString)
+      if (!snapshotForDate) {
+        console.error("Snapshot not found for date:", dateString)
+        return
+      }
+      
+      // Store original collections before switching to snapshot
+      setOriginalCollections(collections)
+      
+      // Create snapshot collections with the snapshot data
+      const snapshotCollection: Collection = {
+        id: snapshotForDate.collectionId,
+        name: snapshotForDate.collectionName,
+        dots: snapshotForDate.dots
+      }
+      
+      setSnapshotCollections([snapshotCollection])
+      setCollections([snapshotCollection])
+      setSelectedCollection(snapshotCollection.id)
+      setCollectionInput(snapshotCollection.name)
+      setCurrentSnapshot(snapshotForDate)
+      setIsViewingSnapshot(true)
+      setSelectedSnapshot(dateString)
+    } catch (error) {
+      console.error("Error viewing snapshot:", error)
+    }
+  }
+
+  const handleViewLive = () => {
+    // Restore original collections
+    setCollections(originalCollections)
+    setSelectedCollection(originalCollections[0]?.id || null)
+    setCollectionInput(originalCollections[0]?.name || "")
+    setCurrentSnapshot(null)
+    setIsViewingSnapshot(false)
+    setSelectedSnapshot(null)
+  }
+
+  // Add tip handler function
+  const handleTipClick = () => {
+    // Replace 'your-paypal-username' with your actual PayPal.me username
+    const paypalLink = 'https://paypal.me/gfaurobert'
+    window.open(paypalLink, '_blank')
+    setShowEllipsisMenu(false)
+  }
+
   const renderCalendar = () => {
     const today = new Date()
     const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
@@ -566,7 +676,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
-      const dateString = date.toISOString().split("T")[0]
+      const dateString = getLocalDateString(date)
       const hasSnapshot = snapshots.some((s) => s.date === dateString)
       const isSelected = selectedSnapshot === dateString
       const isToday =
@@ -577,7 +687,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       days.push(
         <div key={day} className="flex items-center justify-center">
           <button
-            onClick={() => (hasSnapshot ? setSelectedSnapshot(dateString) : null)}
+            onClick={() => (hasSnapshot ? handleViewSnapshot(dateString) : null)}
             className={`w-8 h-8 rounded-full text-sm flex items-center justify-center transition-colors
               ${
                 isSelected
@@ -620,20 +730,28 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         </div>
         <div className="grid grid-cols-7 gap-1">{days}</div>
         <div className="flex gap-2 mt-3">
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full flex items-center gap-2"
-            onClick={() => {
-              /* logic to create snapshot */
-            }}
-          >
-            <Camera className="w-4 h-4" />
-            Snapshot
-          </Button>
-          {selectedSnapshot && (
-            <Button size="sm" variant="secondary" className="w-full" onClick={() => setSelectedSnapshot(null)}>
+          {isViewingSnapshot ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="w-full"
+              onClick={handleViewLive}
+            >
               View Live
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className={`w-full flex items-center gap-2 transition-all duration-300 ${
+                snapshotSuccess
+                  ? "border-green-500 bg-green-500/10 text-green-600 hover:bg-green-500/20 dark:border-green-400 dark:bg-green-400/10 dark:text-green-400 dark:hover:bg-green-400/20"
+                  : ""
+              }`}
+              onClick={handleCreateSnapshot}
+            >
+              <Camera className="w-4 h-4" />
+              {snapshotSuccess ? "New Snapshot Created" : "Snapshot"}
             </Button>
           )}
         </div>
@@ -961,6 +1079,17 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         Reset Password
                       </button>
                       <SignOutButton className="w-full px-3 py-2 text-sm text-left text-red-600 dark:text-red-500 hover:bg-accent hover:text-accent-foreground flex items-center gap-2" />
+
+                      {/* Support Section */}
+                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                        Support
+                      </div>
+                      <button
+                        onClick={handleTipClick}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <Heart className="w-4 h-4" /> Send Tip
+                      </button>
                     </div>
                   </div>
                 )}

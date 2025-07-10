@@ -1,6 +1,14 @@
 import { supabase } from "@/lib/supabaseClient"
 import { Collection, Dot, Snapshot, ExportData } from "@/components/HillChartApp"
 
+// Helper function to get local date string in YYYY-MM-DD format
+const getLocalDateString = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 // Types for Supabase table rows
 interface CollectionRow {
   id: string
@@ -17,6 +25,16 @@ interface DotRow {
   size: number
   user_id: string
   collection_id: string
+}
+
+interface SnapshotRow {
+  id: string
+  user_id: string
+  collection_id: string
+  collection_name: string
+  created_at: string
+  snapshot_date: string
+  dots_data: Dot[]
 }
 
 // Fetch all collections and their dots for the current user
@@ -94,7 +112,6 @@ export const updateDot = async (dot: Dot, userId: string): Promise<Dot | null> =
     return data ? data[0] : null;
 };
 
-
 // Delete a dot
 export const deleteDot = async (dotId: string, userId: string): Promise<{ success: boolean }> => {
   const { error } = await supabase.from("dots").delete().eq("id", dotId).eq("user_id", userId)
@@ -104,6 +121,89 @@ export const deleteDot = async (dotId: string, userId: string): Promise<{ succes
     return { success: false }
   }
   return { success: true }
+}
+
+// Create a snapshot of the current state
+export const createSnapshot = async (userId: string, collectionId: string, collectionName: string, dots: Dot[]): Promise<boolean> => {
+  const now = new Date()
+  const { error } = await supabase
+    .from("snapshots")
+    .insert([{
+      user_id: userId,
+      collection_id: collectionId,
+      collection_name: collectionName,
+      created_at: now.toISOString(),
+      snapshot_date: getLocalDateString(now),
+      dots_data: dots
+    }])
+
+  if (error) {
+    console.error("Error creating snapshot:", error)
+    return false
+  }
+  return true
+}
+
+// Fetch all snapshots for a user
+export const fetchSnapshots = async (userId: string): Promise<Snapshot[]> => {
+  const { data, error } = await supabase
+    .from("snapshots")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("Error fetching snapshots:", error)
+    return []
+  }
+
+  return data.map((row: SnapshotRow) => ({
+    date: row.snapshot_date,
+    collectionId: row.collection_id,
+    collectionName: row.collection_name,
+    dots: row.dots_data,
+    timestamp: new Date(row.created_at).getTime()
+  }))
+}
+
+// Load a specific snapshot
+export const loadSnapshot = async (userId: string, snapshotId: string): Promise<Snapshot | null> => {
+  const { data, error } = await supabase
+    .from("snapshots")
+    .select("*")
+    .eq("id", snapshotId)
+    .eq("user_id", userId)
+    .single()
+
+  if (error) {
+    console.error("Error loading snapshot:", error)
+    return null
+  }
+
+  if (!data) return null
+
+  return {
+    date: data.snapshot_date,
+    collectionId: data.collection_id,
+    collectionName: data.collection_name,
+    dots: data.dots_data,
+    timestamp: new Date(data.created_at).getTime()
+  }
+}
+
+// Delete a snapshot
+export const deleteSnapshot = async (userId: string, snapshotId: string): Promise<boolean> => {
+  const { error } = await supabase
+    .from("snapshots")
+    .delete()
+    .eq("id", snapshotId)
+    .eq("user_id", userId)
+
+  if (error) {
+    console.error("Error deleting snapshot:", error)
+    return false
+  }
+  return true
 }
 
 // Import data
