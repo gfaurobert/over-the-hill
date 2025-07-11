@@ -76,6 +76,21 @@ export const addCollection = async (collection: Collection, userId: string): Pro
   return data ? { ...data[0], dots: [] } : null
 }
 
+// Update an existing collection
+export const updateCollection = async (collectionId: string, newName: string, userId: string): Promise<boolean> => {
+  const { error } = await supabase
+    .from("collections")
+    .update({ name: newName })
+    .eq("id", collectionId)
+    .eq("user_id", userId)
+
+  if (error) {
+    console.error("Error updating collection:", error)
+    return false
+  }
+  return true
+}
+
 // Add a new dot
 export const addDot = async (dot: Dot, collectionId: string, userId: string): Promise<Dot | null> => {
   const { data, error } = await supabase

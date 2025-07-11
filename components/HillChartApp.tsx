@@ -24,6 +24,8 @@ import {
   Camera,
   Info,
   Heart, // Add Heart icon import
+  Edit2,
+  X,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { useTheme } from "next-themes"
@@ -32,6 +34,7 @@ import { useAuth } from "./AuthProvider"
 import {
   fetchCollections,
   addCollection,
+  updateCollection,
   addDot as addDotService,
   updateDot as updateDotService,
   deleteDot as deleteDotService,
@@ -136,6 +139,12 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [snapshotCollections, setSnapshotCollections] = useState<Collection[]>([])
   const [originalCollections, setOriginalCollections] = useState<Collection[]>([])
   const [snapshotSuccess, setSnapshotSuccess] = useState(false)
+
+  // Collection editing state
+  const [isEditingCollection, setIsEditingCollection] = useState(false)
+  const [editingCollectionName, setEditingCollectionName] = useState("")
+  const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null)
+  const editInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (user) {
@@ -583,6 +592,76 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     setShowDropdown(false)
     setIsTyping(false)
     setSelectedSnapshot(null)
+  }
+
+  // Start editing collection name
+  const startEditCollection = (collection: Collection) => {
+    setIsEditingCollection(true)
+    setEditingCollectionName(collection.name)
+    setEditingCollectionId(collection.id)
+    setShowDropdown(false)
+  }
+
+  // Save collection name changes
+  const saveCollectionEdit = async () => {
+    if (!user || !editingCollectionId || !editingCollectionName.trim()) {
+      cancelCollectionEdit()
+      return
+    }
+
+    const trimmedName = editingCollectionName.trim()
+    
+    // Check for duplicate names
+    const isDuplicate = collections.some(
+      c => c.id !== editingCollectionId && c.name.toLowerCase() === trimmedName.toLowerCase()
+    )
+    
+    if (isDuplicate) {
+      console.error("Collection name already exists")
+      cancelCollectionEdit()
+      return
+    }
+
+    // Optimistically update UI
+    const originalCollections = [...collections]
+    setCollections(prev => 
+      prev.map(c => 
+        c.id === editingCollectionId 
+          ? { ...c, name: trimmedName }
+          : c
+      )
+    )
+    setCollectionInput(trimmedName)
+
+    // Update backend
+    const success = await updateCollection(editingCollectionId, trimmedName, user.id)
+    
+    if (!success) {
+      // Revert on error
+      setCollections(originalCollections)
+      setCollectionInput(collections.find(c => c.id === editingCollectionId)?.name || "")
+      console.error("Failed to update collection name")
+    }
+
+    setIsEditingCollection(false)
+    setEditingCollectionName("")
+    setEditingCollectionId(null)
+  }
+
+  // Cancel collection name editing
+  const cancelCollectionEdit = () => {
+    setIsEditingCollection(false)
+    setEditingCollectionName("")
+    setEditingCollectionId(null)
+  }
+
+  // Handle key press in edit mode
+  const handleEditKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      saveCollectionEdit()
+    } else if (e.key === "Escape") {
+      cancelCollectionEdit()
+    }
   }
 
   // Snapshot functions
@@ -1099,23 +1178,74 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
               <div className="relative" ref={dropdownRef}>
                 <label className="text-sm font-medium mb-2 block">Collections</label>
                 <div className="relative">
-                  <Input
-                    ref={inputRef}
-                    value={collectionInput}
-                    onChange={handleInputChange}
-                    onKeyPress={handleCollectionInputKeyPress}
-                    onFocus={handleInputFocus}
-                    placeholder="Type to search or create collection..."
-                    className="pr-8"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-2"
-                    onClick={toggleDropdown}
-                  >
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
+                  {isEditingCollection ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        ref={editInputRef}
+                        value={editingCollectionName}
+                        onChange={(e) => setEditingCollectionName(e.target.value)}
+                        onKeyDown={handleEditKeyPress}
+                        className="flex-1"
+                        placeholder="Collection name"
+                        autoFocus
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={saveCollectionEdit}
+                        className="h-8 w-8 p-0"
+                        disabled={!editingCollectionName.trim()}
+                      >
+                        <Check className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={cancelCollectionEdit}
+                        className="h-8 w-8 p-0"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Input
+                        ref={inputRef}
+                        value={collectionInput}
+                        onChange={handleInputChange}
+                        onKeyPress={handleCollectionInputKeyPress}
+                        onFocus={handleInputFocus}
+                        placeholder="Type to search or create collection..."
+                        className="pr-16"
+                      />
+                      <div className="absolute right-0 top-0 h-full flex items-center gap-1">
+                        {selectedCollection && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-full px-2"
+                            onClick={() => {
+                              const collection = collections.find(c => c.id === selectedCollection)
+                              if (collection) {
+                                startEditCollection(collection)
+                              }
+                            }}
+                            title="Edit collection name"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-full px-2"
+                          onClick={toggleDropdown}
+                        >
+                          <ChevronDown className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {showDropdown && (
