@@ -8,6 +8,7 @@
 - Track tasks and features through "Up the Hill" (discovery) and "Down the Hill" (delivery) phases
 - Provide an intuitive drag-and-drop interface for progress management
 - Support multiple collections and snapshots for comprehensive project tracking
+- **Now a multi-tenant SaaS platform with secure, per-user data isolation and invite-only access**
 
 ## Key Features
 1. **Hill Chart Visualization**: Bell curve interface with drag-and-drop dot positioning
@@ -16,16 +17,18 @@
 4. **Export Capabilities**: PNG and SVG export with clipboard support
 5. **Snapshot System**: Calendar-based snapshot creation and restoration
 6. **Theme Support**: Light, dark, and system theme options
-7. **Data Persistence**: LocalStorage-based data persistence
+7. **Data Persistence**: Supabase backend for all user data (collections, dots, snapshots, preferences)
 8. **Import/Export**: JSON-based data import/export functionality
+9. **Authentication & Access Control**: Invite-only sign-in, request access flow, per-user data isolation
 
 ## Technical Stack
 - **Framework**: Next.js 15.2.4 with React 19
 - **Styling**: Tailwind CSS with shadcn/ui components
-- **State Management**: React useState hooks with localStorage persistence
+- **State Management**: React useState hooks with Supabase backend
 - **UI Components**: Radix UI primitives with custom styling
 - **Export**: HTML5 Canvas API for PNG generation, SVG manipulation
 - **Theme**: next-themes for theme management
+- **Backend**: Supabase (Postgres, Auth, RLS, Storage)
 
 ## Current Implementation Status
 - ✅ Core Hill Chart visualization with bell curve
@@ -35,8 +38,9 @@
 - ✅ Export functionality (PNG/SVG)
 - ✅ Theme switching
 - ✅ Snapshot system with calendar
-- ✅ LocalStorage persistence
+- ✅ Supabase persistence and multi-tenant SaaS architecture
 - ✅ Import/Export functionality
+- ✅ Authentication and access request flow
 
 ## Project Structure
 - Single-page application with main chart area and sidebar
@@ -45,7 +49,7 @@
 - Comprehensive state management for collections, dots, and snapshots
 
 ## Development Status
-The application is fully functional with all core features implemented. The codebase is well-structured and follows modern React/Next.js patterns.
+The application is fully functional as a SaaS platform with all core features implemented. The codebase is well-structured and follows modern React/Next.js patterns.
 
 ## Live Demo
 Available at: https://over-the-hill.faurobert.fr/

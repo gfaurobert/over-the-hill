@@ -1,4 +1,4 @@
-baseURL = 'https://gfaurobert.github.io/over-the-hill/'
+baseURL = 'https://docs.overthehill.faurobert.fr'
 languageCode = 'en-us'
 title = 'Over The Hill - Documentation'
 description = 'A web and desktop application designed to visualize project progress using Hill Charts'

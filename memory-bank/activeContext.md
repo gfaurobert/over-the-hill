@@ -1,23 +1,23 @@
 # Active Context
 
 ## Current Focus
-**Snapshot Functionality Implementation (Level 3) - COMPLETED**
+**SaaS Transformation (Level 4) - COMPLETED**
 
-- ✅ Comprehensive snapshot functionality implemented
-- ✅ Backend services for snapshot CRUD operations
-- ✅ Frontend state management for snapshot viewing
-- ✅ UI/UX enhancements with calendar navigation
-- ✅ Dynamic button states and visual indicators
-- ✅ Full integration with existing Supabase schema
+- ✅ Full SaaS transformation completed: multi-tenant, per-user data isolation
+- ✅ Supabase backend integration for all data (collections, dots, snapshots, preferences)
+- ✅ Authentication and access request flow implemented (invite-only, no public signup)
+- ✅ All user data migrated from LocalStorage to Supabase
+- ✅ UI/UX updated for authentication, onboarding, and access management
+- ✅ Snapshot system, export, and all core features fully integrated with backend
 
 ## Key Context Points
-- Snapshot system allows saving/restoring collection states
-- Calendar-based navigation with visual indicators
-- Complex state management between live and snapshot modes
-- Database integration with existing collections and dots
-- Error handling and user feedback implemented
+- All features now operate on a per-user basis with secure backend storage
+- Access is managed via request/invite flow; no public signup
+- LocalStorage is deprecated in favor of Supabase for persistence
+- Robust error handling and user feedback for all auth/data flows
+- All user journeys tested: new user, existing user migration, unauthorized access
 
 ## Project State
-- Snapshot functionality fully implemented and tested
+- SaaS transformation fully implemented and tested
 - All user flows working as specified
-- Ready for next feature development or refinement
+- Ready for further enhancements, optimizations, or new features
