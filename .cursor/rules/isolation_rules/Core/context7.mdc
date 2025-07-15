@@ -1,0 +1,8 @@
+---
+description: Retrieve context on Libraries and Utilities for Implementation using context MCP
+globs: context7.mdc
+alwaysApply: true
+---
+[[calls]]
+match = "when implementing code changes that uses existing libraries, components, utilities, node packages use context7 to retrieve code examples, setup or configuration steps, or library/API documentation"
+tool  = "context7"
