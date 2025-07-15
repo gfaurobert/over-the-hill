@@ -291,9 +291,12 @@ export default function HillChartGenerator() {
     return snapshots.some((snapshot) => snapshot.date === dateKey)
   }
 
-  // Add getLocalDateString helper (before renderCalendar)
+  // Update getLocalDateString to use local time components (replace existing)
   const getLocalDateString = (date: Date) => {
-    return date.toISOString().split('T')[0] // YYYY-MM-DD
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
   }
 
   // Update createSnapshot to set success (replace existing around line 370)
