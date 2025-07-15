@@ -26,6 +26,8 @@ import {
   Camera,
   Info,
   FolderOpen,
+  Heart,
+  Edit2,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTheme } from "next-themes"
@@ -94,25 +96,13 @@ export default function HillChartGenerator() {
 
     return y
   }
-  const [collections, setCollections] = useState<Collection[]>([
-    {
-      id: "project-a",
-      name: "Project A",
-      dots: [
-        { id: "1", label: "Adding Collections", x: 75, y: getHillY(75), color: "#22c55e", size: 3 },
-        { id: "2", label: "Adding Dots to Collections", x: 65, y: getHillY(65), color: "#eab308", size: 3 },
-        { id: "3", label: "Tweaking Dots color and size", x: 25, y: getHillY(25), color: "#f97316", size: 3 },
-        { id: "4", label: "Saving to PNG, SVG and CPB", x: 15, y: getHillY(15), color: "#3b82f6", size: 3 },
-      ],
-    },
-  ])
-
-  const [selectedCollection, setSelectedCollection] = useState("project-a")
+  const [collections, setCollections] = useState<Collection[]>([])
+  const [selectedCollection, setSelectedCollection] = useState<string | null>(null)
   const [newDotLabel, setNewDotLabel] = useState("")
   const [isDragging, setIsDragging] = useState<string | null>(null)
-  const [collectionInput, setCollectionInput] = useState("Project A")
+  const [collectionInput, setCollectionInput] = useState("")
   const [showDropdown, setShowDropdown] = useState(false)
-  const [filteredCollections, setFilteredCollections] = useState<Collection[]>(collections)
+  const [filteredCollections, setFilteredCollections] = useState<Collection[]>([])
   const [isTyping, setIsTyping] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -141,6 +131,20 @@ export default function HillChartGenerator() {
   const [showInstallConfirm, setShowInstallConfirm] = useState(false)
   const [installStatus, setInstallStatus] = useState<"idle" | "installing" | "success" | "error">("idle")
   const [installMessage, setInstallMessage] = useState("")
+
+  // Add new state for dragging feedback
+  const [draggingDot, setDraggingDot] = useState<{ id: string; x: number; y: number } | null>(null)
+
+  // Add new states for snapshot viewing and success (around line 130, after other states)
+  const [isViewingSnapshot, setIsViewingSnapshot] = useState(false)
+  const [originalCollections, setOriginalCollections] = useState<Collection[]>([])
+  const [snapshotSuccess, setSnapshotSuccess] = useState(false)
+
+  // Add editing states (around line 130)
+  const [isEditingCollection, setIsEditingCollection] = useState(false)
+  const [editingCollectionName, setEditingCollectionName] = useState("")
+  const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null)
+  const editInputRef = useRef<HTMLInputElement>(null)
 
   // Check if running in Electron
   const isElectron = typeof window !== "undefined" && window.electronAPI
@@ -175,6 +179,7 @@ export default function HillChartGenerator() {
 
         if (savedData.collections) {
           setCollections(savedData.collections)
+          setOriginalCollections(savedData.collections) // Add this
         }
         if (savedData.snapshots) {
           setSnapshots(savedData.snapshots)
@@ -217,7 +222,7 @@ export default function HillChartGenerator() {
           // Fallback to localStorage for web version
           localStorage.setItem("hill-chart-collections", JSON.stringify(collections))
           localStorage.setItem("hill-chart-snapshots", JSON.stringify(snapshots))
-          localStorage.setItem("hill-chart-selected-collection", selectedCollection)
+          localStorage.setItem("hill-chart-selected-collection", selectedCollection || "")
           localStorage.setItem("hill-chart-collection-input", collectionInput)
           localStorage.setItem("hill-chart-hide-collection-name", JSON.stringify(hideCollectionName))
           localStorage.setItem("hill-chart-copy-format", copyFormat)
@@ -286,153 +291,134 @@ export default function HillChartGenerator() {
     return snapshots.some((snapshot) => snapshot.date === dateKey)
   }
 
+  // Add getLocalDateString helper (before renderCalendar)
+  const getLocalDateString = (date: Date) => {
+    return date.toISOString().split('T')[0] // YYYY-MM-DD
+  }
+
+  // Update createSnapshot to set success (replace existing around line 370)
   const createSnapshot = () => {
     if (!currentCollection) return
 
     const today = new Date()
-    const dateKey = formatDateKey(today)
+    const dateString = getLocalDateString(today) // Use new helper
 
-    const newSnapshot: Snapshot = {
-      date: dateKey,
+    const newSnapshot = {
+      date: dateString,
       collectionId: currentCollection.id,
       collectionName: currentCollection.name,
-      dots: [...currentCollection.dots],
-      timestamp: Date.now(),
+      dots: currentCollection.dots,
+      timestamp: Date.now(), // Add this
     }
 
-    setSnapshots((prev) => {
-      // Remove existing snapshot for the same date and collection
-      const filtered = prev.filter((s) => !(s.date === dateKey && s.collectionId === currentCollection.id))
-      return [...filtered, newSnapshot]
-    })
+    setSnapshots((prev) => [...prev, newSnapshot])
+    setSnapshotSuccess(true) // Add success feedback
   }
 
-  const loadSnapshot = (date: Date) => {
-    const dateKey = formatDateKey(date)
-    const snapshot = snapshots.find((s) => s.date === dateKey)
+  // Update loadSnapshot to set viewing state (replace existing around line 400)
+  const handleViewSnapshot = (dateString: string) => {
+    const snapshotForDate = snapshots.find(s => s.date === dateString)
+    if (!snapshotForDate) return
 
-    if (snapshot) {
-      // Check if collection exists, if not create it
-      let targetCollection = collections.find((c) => c.id === snapshot.collectionId)
-
-      if (!targetCollection) {
-        // Create the collection if it doesn't exist
-        const newCollection: Collection = {
-          id: snapshot.collectionId,
-          name: snapshot.collectionName,
-          dots: [],
-        }
-        setCollections((prev) => [...prev, newCollection])
-        targetCollection = newCollection
-      }
-
-      // Update the collection with snapshot data
-      setCollections((prev) =>
-        prev.map((collection) =>
-          collection.id === snapshot.collectionId ? { ...collection, dots: [...snapshot.dots] } : collection,
-        ),
-      )
-
-      // Switch to the snapshot's collection
-      setSelectedCollection(snapshot.collectionId)
-      setCollectionInput(snapshot.collectionName)
-      setSelectedSnapshot(dateKey)
+    setOriginalCollections(collections) // Store current
+    const snapshotCollection = {
+      id: snapshotForDate.collectionId,
+      name: snapshotForDate.collectionName,
+      dots: snapshotForDate.dots
     }
+    setCollections([snapshotCollection]) // Temporarily set to snapshot
+    setSelectedCollection(snapshotCollection.id)
+    setCollectionInput(snapshotCollection.name)
+    setIsViewingSnapshot(true)
+    setSelectedSnapshot(dateString)
   }
 
-  const navigateMonth = (direction: "prev" | "next") => {
-    setCurrentDate((prev) => {
-      const newDate = new Date(prev)
-      if (direction === "prev") {
-        newDate.setMonth(prev.getMonth() - 1)
-      } else {
-        newDate.setMonth(prev.getMonth() + 1)
-      }
-      return newDate
-    })
+  // Add handleViewLive function (after loadSnapshot)
+  const handleViewLive = () => {
+    setCollections(originalCollections)
+    setSelectedCollection(originalCollections[0]?.id || null)
+    setCollectionInput(originalCollections[0]?.name || "")
+    setIsViewingSnapshot(false)
+    setSelectedSnapshot(null)
   }
 
+  // Replace renderCalendar with improved version (around line 420)
   const renderCalendar = () => {
-    const daysInMonth = getDaysInMonth(currentDate)
-    const firstDay = getFirstDayOfMonth(currentDate)
-    const monthSnapshots = getSnapshotsForMonth(currentDate)
-
+    const today = new Date()
+    const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+    const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
+    const startDay = startOfMonth.getDay()
+    const daysInMonth = endOfMonth.getDate()
     const days = []
-    const dayNames = ["S", "M", "T", "W", "T", "F", "S"]
 
-    // Add day headers
-    const dayHeaders = dayNames.map((day, index) => (
-      <div key={`day-header-${index}`} className="text-center text-xs font-medium text-muted-foreground p-0.5">
-        {day}
-      </div>
-    ))
-
-    // Add empty cells for days before the first day of the month
-    for (let i = 0; i < firstDay; i++) {
-      days.push(<div key={`empty-${i}`} className="p-1"></div>)
+    for (let i = 0; i < startDay; i++) {
+      days.push(<div key={`empty-start-${i}`} className="w-8 h-8"></div>)
     }
 
-    // Add days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day)
-      const dateKey = formatDateKey(date)
-      const hasSnapshot = hasSnapshotForDate(date)
-      const isSelected = selectedSnapshot === dateKey
-      const isToday = formatDateKey(new Date()) === dateKey
+      const dateString = getLocalDateString(date)
+      const hasSnapshot = snapshots.some((s) => s.date === dateString)
+      const isSelected = selectedSnapshot === dateString
+      const isToday =
+        date.getDate() === today.getDate() &&
+        date.getMonth() === today.getMonth() &&
+        date.getFullYear() === today.getFullYear()
 
       days.push(
-        <div key={day} className="p-0.5">
+        <div key={day} className="flex items-center justify-center">
           <button
-            onClick={() => hasSnapshot && loadSnapshot(date)}
-            className={`w-5 h-5 text-xs rounded-full flex items-center justify-center transition-colors ${
-              hasSnapshot
-                ? `border-2 border-primary cursor-pointer hover:bg-primary hover:text-primary-foreground ${
-                    isSelected ? "bg-primary text-primary-foreground" : "bg-background text-foreground"
-                  }`
-                : isToday
-                  ? "bg-accent text-accent-foreground font-semibold"
-                  : "text-muted-foreground cursor-default"
-            }`}
+            onClick={() => (hasSnapshot ? handleViewSnapshot(dateString) : null)}
+            className={`w-8 h-8 rounded-full text-sm flex items-center justify-center transition-colors
+            ${isSelected ? "bg-primary text-primary-foreground" : hasSnapshot ? "bg-accent text-accent-foreground hover:bg-accent/80" : "text-muted-foreground"}
+            ${isToday && !isSelected ? "border border-primary" : ""}`}
             disabled={!hasSnapshot}
           >
-            {day.toString().padStart(2, "0")}
+            {day}
           </button>
         </div>,
       )
     }
 
     return (
-      <div className="border rounded-lg p-2 bg-background">
-        {/* Calendar header */}
+      <div className="bg-muted/30 p-3 rounded-lg">
         <div className="flex items-center justify-between mb-2">
-          <Button variant="ghost" size="sm" onClick={() => navigateMonth("prev")} className="h-5 w-5 p-0">
-            <ChevronLeft className="w-3 h-3" />
+          <Button variant="ghost" size="sm" onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() - 1)))}>
+            <ChevronLeft className="w-4 h-4" />
           </Button>
-          <div className="flex items-center gap-1">
-            <span className="text-xs font-medium">
-              {currentDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-            </span>
-            <Button variant="ghost" size="sm" onClick={() => setCurrentDate(new Date())} className="h-4 px-1 text-xs">
-              Today
-            </Button>
+          <div className="font-medium text-sm">
+            {currentDate.toLocaleString("default", { month: "long", year: "numeric" })}
           </div>
-          <Button variant="ghost" size="sm" onClick={() => navigateMonth("next")} className="h-5 w-5 p-0">
-            <ChevronRight className="w-3 h-3" />
+          <Button variant="ghost" size="sm" onClick={() => setCurrentDate(new Date(currentDate.setMonth(currentDate.getMonth() + 1)))}>
+            <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
-
-        {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-0.5">
-          {dayHeaders}
-          {days}
+        <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground mb-2">
+          <div>Su</div>
+          <div>Mo</div>
+          <div>Tu</div>
+          <div>We</div>
+          <div>Th</div>
+          <div>Fr</div>
+          <div>Sa</div>
         </div>
-
-        {/* Snapshot button */}
-        <div className="mt-2 pt-2 border-t">
-          <Button variant="outline" size="sm" onClick={createSnapshot} className="w-full text-xs h-7">
-            <Camera className="w-3 h-3 mr-1" />
-            Save Today's Snapshot
-          </Button>
+        <div className="grid grid-cols-7 gap-1">{days}</div>
+        <div className="flex gap-2 mt-3">
+          {isViewingSnapshot ? (
+            <Button size="sm" variant="secondary" className="w-full" onClick={handleViewLive}>
+              View Live
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className={`w-full flex items-center gap-2 transition-all duration-300 ${snapshotSuccess ? "border-green-500 bg-green-500/10 text-green-600 hover:bg-green-500/20 dark:border-green-400 dark:bg-green-400/10 dark:text-green-400 dark:hover:bg-green-400/20" : ""}`}
+              onClick={createSnapshot}
+            >
+              <Camera className="w-4 h-4" />
+              {snapshotSuccess ? "New Snapshot Created" : "Snapshot"}
+            </Button>
+          )}
         </div>
       </div>
     )
@@ -504,17 +490,37 @@ export default function HillChartGenerator() {
     return () => clearInterval(interval)
   }, [collections, snapshots, selectedCollection, collectionInput, hideCollectionName, copyFormat])
 
-  const handleDotDrag = (dotId: string, clientX: number, clientY: number, rect: DOMRect) => {
-    const x = ((clientX - rect.left) / rect.width) * 100
-    const y = getHillY(x)
+  // Add effect for snapshotSuccess timeout (after other useEffects)
+  useEffect(() => {
+    if (snapshotSuccess) {
+      const timer = setTimeout(() => {
+        setSnapshotSuccess(false)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [snapshotSuccess])
 
+  const handleDotDrag = (dotId: string, clientX: number, clientY: number) => {
+    if (!svgRef.current) return
+    const svg = svgRef.current
+    const pt = svg.createSVGPoint()
+    pt.x = clientX
+    pt.y = clientY
+    const ctm = svg.getScreenCTM()
+    if (!ctm) return
+    const svgP = pt.matrixTransform(ctm.inverse())
+    let svgX = Math.max(0, Math.min(600, svgP.x))
+    const xPercent = (svgX / 600) * 100
+    const y = getHillY(xPercent)
+    setDraggingDot({ id: dotId, x: xPercent, y })
+    
     setCollections((prev) =>
       prev.map((collection) =>
         collection.id === selectedCollection
           ? {
               ...collection,
               dots: collection.dots.map((dot) =>
-                dot.id === dotId ? { ...dot, x: Math.max(0, Math.min(100, x)), y } : dot,
+                dot.id === dotId ? { ...dot, x: xPercent, y } : dot,
               ),
             }
           : collection,
@@ -1053,6 +1059,62 @@ export default function HillChartGenerator() {
     )
   }
 
+  // Add functions for editing (after other handlers)
+  const startEditCollection = (collection: Collection) => {
+    setIsEditingCollection(true)
+    setEditingCollectionName(collection.name)
+    setEditingCollectionId(collection.id)
+    setShowDropdown(false)
+  }
+
+  const saveCollectionEdit = () => {
+    if (!editingCollectionId || !editingCollectionName.trim()) {
+      cancelCollectionEdit()
+      return
+    }
+
+    const trimmedName = editingCollectionName.trim()
+    
+    // Check for duplicate names
+    const isDuplicate = collections.some(
+      c => c.id !== editingCollectionId && c.name.toLowerCase() === trimmedName.toLowerCase()
+    )
+    
+    if (isDuplicate) {
+      console.error("Collection name already exists")
+      cancelCollectionEdit()
+      return
+    }
+
+    // Update local state
+    setCollections(prev => 
+      prev.map(c => 
+        c.id === editingCollectionId 
+          ? { ...c, name: trimmedName }
+          : c
+      )
+    )
+    setCollectionInput(trimmedName)
+
+    setIsEditingCollection(false)
+    setEditingCollectionName("")
+    setEditingCollectionId(null)
+  }
+
+  const cancelCollectionEdit = () => {
+    setIsEditingCollection(false)
+    setEditingCollectionName("")
+    setEditingCollectionId(null)
+  }
+
+  const handleEditKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      saveCollectionEdit()
+    } else if (e.key === "Escape") {
+      cancelCollectionEdit()
+    }
+  }
+
   // Load platform information
   const loadPlatform = async () => {
     if (isElectron) {
@@ -1093,6 +1155,13 @@ export default function HillChartGenerator() {
         setInstallMessage("")
       }, 3000)
     }
+  }
+
+  // Add handleTipClick (after other handlers, around line 800)
+  const handleTipClick = () => {
+    const paypalLink = 'https://paypal.me/gfaurobert'
+    window.open(paypalLink, '_blank')
+    setShowEllipsisMenu(false)
   }
 
   return (
@@ -1139,12 +1208,13 @@ export default function HillChartGenerator() {
                   style={{ userSelect: "none" }}
                   onMouseMove={(e) => {
                     if (isDragging) {
-                      const rect = e.currentTarget.getBoundingClientRect()
-                      const x = ((e.clientX - rect.left) / rect.width) * 100
-                      handleDotDrag(isDragging, e.clientX, e.clientY, rect)
+                      handleDotDrag(isDragging, e.clientX, e.clientY)
                     }
                   }}
-                  onMouseUp={() => setIsDragging(null)}
+                  onMouseUp={() => {
+                    setIsDragging(null)
+                    setDraggingDot(null)
+                  }}
                 >
                   {/* Bell curve */}
                   <path
@@ -1195,11 +1265,15 @@ export default function HillChartGenerator() {
                     const textWidth = dot.label.length * (fontSize * 0.6) + 16
                     const textHeight = fontSize + 12
 
+                    const isBeingDragged = draggingDot?.id === dot.id
+                    const displayX = isBeingDragged ? (draggingDot.x / 100) * 600 : dotX
+                    const displayY = isBeingDragged ? draggingDot.y : dot.y
+
                     return (
                       <g key={dot.id}>
                         <circle
-                          cx={dotX}
-                          cy={dot.y}
+                          cx={displayX}
+                          cy={displayY}
                           r={dotRadius}
                           fill={dot.color}
                           stroke="#fff"
@@ -1208,8 +1282,8 @@ export default function HillChartGenerator() {
                           onMouseDown={() => setIsDragging(dot.id)}
                         />
                         <rect
-                          x={dotX - textWidth / 2}
-                          y={dot.y - 35}
+                          x={displayX - textWidth / 2}
+                          y={displayY - 35}
                           width={textWidth}
                           height={textHeight}
                           rx="8"
@@ -1220,8 +1294,8 @@ export default function HillChartGenerator() {
                           className="pointer-events-none"
                         />
                         <text
-                          x={dotX}
-                          y={dot.y - 35 + textHeight / 2}
+                          x={displayX}
+                          y={displayY - 35 + textHeight / 2}
                           textAnchor="middle"
                           className="fill-foreground pointer-events-none select-none"
                           dominantBaseline="central"
@@ -1425,6 +1499,17 @@ export default function HillChartGenerator() {
                           </button>
                         </>
                       )}
+
+                      {/* Support Section */}
+                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                        Support
+                      </div>
+                      <button
+                        onClick={handleTipClick}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <Heart className="w-4 h-4" /> Send Tip
+                      </button>
                     </div>
                   </div>
                 )}
@@ -1434,15 +1519,27 @@ export default function HillChartGenerator() {
               <div className="relative" ref={dropdownRef}>
                 <label className="text-sm font-medium mb-2 block">Collections</label>
                 <div className="relative">
-                  <Input
-                    ref={inputRef}
-                    value={collectionInput}
-                    onChange={handleInputChange}
-                    onKeyPress={handleCollectionInputKeyPress}
-                    onFocus={handleInputFocus}
-                    placeholder="Type to search or create collection..."
-                    className="pr-8"
-                  />
+                  {isEditingCollection ? (
+                    <Input
+                      ref={editInputRef}
+                      value={editingCollectionName}
+                      onChange={(e) => setEditingCollectionName(e.target.value)}
+                      onKeyDown={handleEditKeyPress}
+                      onBlur={saveCollectionEdit}
+                      className="h-8 text-sm"
+                      autoFocus
+                    />
+                  ) : (
+                    <Input
+                      ref={inputRef}
+                      value={collectionInput}
+                      onChange={handleInputChange}
+                      onKeyPress={handleCollectionInputKeyPress}
+                      onFocus={handleInputFocus}
+                      placeholder="Type to search or create collection..."
+                      className="pr-8"
+                    />
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1459,10 +1556,21 @@ export default function HillChartGenerator() {
                       filteredCollections.map((collection) => (
                         <div
                           key={collection.id}
-                          className="px-3 py-2 hover:bg-accent cursor-pointer text-sm"
+                          className="px-3 py-2 hover:bg-accent cursor-pointer text-sm flex items-center justify-between"
                           onClick={() => handleCollectionSelect(collection)}
                         >
                           {collection.name}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              startEditCollection(collection)
+                            }}
+                            className="h-6 w-6 p-0"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                          </Button>
                         </div>
                       ))
                     ) : (
