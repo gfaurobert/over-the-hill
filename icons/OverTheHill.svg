@@ -1,0 +1,13 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+	<title>Over The Hill Icon</title>
+	<defs>
+		<image  width="128" height="128" id="img1" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACAAQMAAAD58POIAAAAAXNSR0IB2cksfwAAAAZQTFRFAAAA////pdmf3QAAAAJ0Uk5TAP9bkSK1AAAA40lEQVR4nO3UPQrCMBgG4MYU2kGwN2hPYutRPIK7khS8iEdwdNRbdHDoAYoICorS+hPD9wPSdC3N+BC+kPcNER5bYoDeg1xpCvEmo5DmDNSMQZPTGeLh01PkNWRQRRSCIqEw2WYMFppCPOdQssulewbTQxss123w9BncwhYQp6gryGPSFYJd1hUgUmeAjJ0BWvgBhO4M0IIzQAuugFpwBdSCK6AW/gA8fQvQggF4+hYgdAModAMoUgP1iIK8+xTiIiQg6nNEQOkywaC0Zz8CCw065At4xAcU3vCG8cWjwNYA/YUXvKRMgfaRbM8AAAAASUVORK5CYII="/>
+		<image  width="57" height="70" id="img2" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADkAAABGAQMAAABMoq7SAAAAAXNSR0IB2cksfwAAAAZQTFRFAAAA////pdmf3QAAAAJ0Uk5TAP9bkSK1AAAAwUlEQVR4nHXSsQ3CMBCFYTtGSgqkZIN4EggbQY+IgxiAFRiBkhI2yABIuKRANEihiALxvaMgurj6dNX9OuvlXtHTXcT46B8qB5SLAkhrC8T3DDAPhm4SQLUTxnrH2GwZswtjfmbkfoh05YY4FkB8GsJc7Rj0MxuDeiejwNIisL0I9PRAhgj0iECPCPSIQI8I9PyBzhJAPQF0lgDKCKCMAFqacCiA1GdA3ESAab0l6E5Vjj5N6VRFyG8M0zL6EUNNX1+paktHWaTnaAAAAABJRU5ErkJggg=="/>
+	</defs>
+	<style>
+		.s0 { fill: #000000 } 
+	</style>
+	<path id="Shape 3" fill-rule="evenodd" class="s0" d="m15 5h98c5.5 0 10 4.5 10 10v98c0 5.5-4.5 10-10 10h-98c-5.5 0-10-4.5-10-10v-98c0-5.5 4.5-10 10-10z"/>
+	<use id="Layer 1" href="#img1" x="0" y="0"/>
+	<use id="Layer 1 copy" href="#img2" x="62" y="29"/>
+</svg>
