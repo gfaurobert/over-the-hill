@@ -623,16 +623,16 @@ ipcMain.handle("install-app", async () => {
     await fs.copyFile(currentAppImagePath, targetAppImagePath)
     await fs.chmod(targetAppImagePath, 0o755)
     
-    // Copy the SVG icon
-    const iconSourcePath = path.join(__dirname, '..', 'OverTheHill.svg')
-    const iconTargetPath = path.join(appDir, 'OverTheHill.svg')
+    // Copy the 512px icon for better resolution
+    const iconSourcePath = path.join(__dirname, 'assets', 'icon-512.png')
+    const iconTargetPath = path.join(appDir, 'OverTheHill.png')
     
-    // Check if SVG icon exists, if not fallback to PNG
+    // Check if 512px icon exists, if not fallback to regular icon
     let iconSourcePathFinal = iconSourcePath
     try {
       await fs.access(iconSourcePath)
     } catch (error) {
-      // SVG doesn't exist, use PNG
+      // 512px doesn't exist, use regular icon
       iconSourcePathFinal = path.join(__dirname, 'assets', 'icon.png')
     }
     
