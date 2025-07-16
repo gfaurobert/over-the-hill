@@ -132,6 +132,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [selectedSnapshot, setSelectedSnapshot] = useState<string | null>(null)
   const [draggingDot, setDraggingDot] = useState<{ id: string; x: number; y: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null)
   
   // Snapshot state management
   const [isViewingSnapshot, setIsViewingSnapshot] = useState(false)
@@ -202,21 +203,68 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     [user, collections],
   )
 
-  const handleDotDrag = (dotId: string, clientX: number, clientY: number) => {
+  const handleDotDrag = useCallback((dotId: string, clientX: number, clientY: number) => {
     if (!svgRef.current) return
-    const svg = svgRef.current,
-      pt = svg.createSVGPoint()
-    pt.x = clientX
-    pt.y = clientY
-    const ctm = svg.getScreenCTM()
-    if (!ctm) return
-    const svgP = pt.matrixTransform(ctm.inverse())
-    let svgX = Math.max(0, Math.min(600, svgP.x))
-    const xPercent = (svgX / 600) * 100
+    
+    const svgRect = svgRef.current.getBoundingClientRect()
+    const svgWidth = svgRect.width
+    const svgHeight = svgRect.height
+    
+    // Calculate relative position within SVG
+    const relativeX = clientX - svgRect.left
+    const relativeY = clientY - svgRect.top
+    
+    // Convert to SVG coordinates (viewBox is "-50 0 700 180")
+    const svgX = (relativeX / svgWidth) * 700 - 50
+    const svgY = (relativeY / svgHeight) * 180
+    
+    // Constrain to chart area (0 to 600 in SVG coordinates)
+    const constrainedX = Math.max(0, Math.min(600, svgX))
+    const xPercent = (constrainedX / 600) * 100
     const y = getHillY(xPercent)
+    
+    // Update immediate visual feedback
     setDraggingDot({ id: dotId, x: xPercent, y })
-    updateDot(dotId, { x: xPercent, y })
-  }
+  }, [])
+
+  const handleDotMouseDown = useCallback((e: React.MouseEvent, dotId: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(dotId)
+    setDragStartPos({ x: e.clientX, y: e.clientY })
+    
+    // Set initial dragging dot position
+    handleDotDrag(dotId, e.clientX, e.clientY)
+  }, [handleDotDrag])
+
+  // Document-level mouse event handlers for smooth dragging
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (isDragging) {
+        handleDotDrag(isDragging, e.clientX, e.clientY)
+      }
+    }
+
+    const handleMouseUp = () => {
+      if (isDragging && draggingDot) {
+        // Update the actual dot position in collections
+        updateDot(draggingDot.id, { x: draggingDot.x, y: draggingDot.y })
+      }
+      setIsDragging(null)
+      setDraggingDot(null)
+      setDragStartPos(null)
+    }
+
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseup', handleMouseUp)
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging, draggingDot, handleDotDrag, updateDot])
 
   const addDot = async () => {
     if (!newDotLabel.trim() || !selectedCollection || !user) return
@@ -880,15 +928,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                   viewBox="-50 0 700 180" // Adjusted viewBox for padding
                   className="overflow-visible max-w-full"
                   style={{ userSelect: isDragging ? "none" : "auto" }}
-                  onMouseMove={(e) => {
-                    if (isDragging) {
-                      handleDotDrag(isDragging, e.clientX, e.clientY)
-                    }
-                  }}
-                  onMouseUp={() => {
-                    setIsDragging(null)
-                    setDraggingDot(null) // Clear immediate feedback
-                  }}
                 >
                   {/* Bell curve */}
                   <path
@@ -966,11 +1005,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                           fill={dot.color}
                           stroke="#fff"
                           strokeWidth="2"
-                          className="cursor-pointer hover:opacity-80 transition-all"
-                          onMouseDown={(e) => {
-                            e.preventDefault()
-                            setIsDragging(dot.id)
-                          }}
+                          className={`cursor-pointer hover:opacity-80 ${isBeingDragged ? '' : 'transition-all'}`}
+                          onMouseDown={(e) => handleDotMouseDown(e, dot.id)}
                         />
                         <rect
                           x={displayX - textWidth / 2}
