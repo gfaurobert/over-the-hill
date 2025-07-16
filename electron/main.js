@@ -614,7 +614,10 @@ ipcMain.handle("install-app", async () => {
       }
     }
     
-    const targetAppImagePath = path.join(appDir, 'Over-The-Hill-1.0.0.AppImage')
+    // Get version from package.json
+    const packageJson = require('../package.json')
+    const appVersion = packageJson.version || '1.0.0'
+    const targetAppImagePath = path.join(appDir, `Over-The-Hill-${appVersion}.AppImage`)
     
     // Copy the AppImage
     await fs.copyFile(currentAppImagePath, targetAppImagePath)
