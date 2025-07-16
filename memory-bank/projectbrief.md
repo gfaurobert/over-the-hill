@@ -1,7 +1,7 @@
 # Over The Hill - Project Brief
 
 ## Project Overview
-**Over The Hill** is a Next.js web application that implements a Hill Chart visualization tool, inspired by 37signals' Hill Charts methodology. The application allows users to create, manage, and visualize project progress using an intuitive bell curve interface.
+**Over The Hill** is a Next.js web and desktop application that implements a Hill Chart visualization tool, inspired by 37signals' Hill Charts methodology. The application allows users to create, manage, and visualize project progress using an intuitive bell curve interface.
 
 ## Core Purpose
 - Visualize project progress using Hill Charts (bell curve visualization)

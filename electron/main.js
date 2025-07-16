@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage } = require("electron")
+const { app, BrowserWindow, ipcMain, dialog, clipboard, nativeImage, Menu, shell } = require("electron")
 const path = require("path")
 const fs = require("fs").promises
 const os = require("os")
@@ -24,6 +24,183 @@ if (process.env.NODE_ENV === "development") {
 }
 
 let mainWindow
+let updateAvailable = false
+let latestVersion = null
+
+// Check for updates from GitHub
+async function checkForUpdates() {
+  try {
+    const https = require('https')
+    const packageJson = require('../package.json')
+    const currentVersion = packageJson.version
+    
+    // GitHub API to get latest release
+    const options = {
+      hostname: 'api.github.com',
+      path: '/repos/gfaurobert/over-the-hill/releases/latest',
+      headers: {
+        'User-Agent': 'Over-The-Hill-App'
+      }
+    }
+    
+    return new Promise((resolve) => {
+      https.get(options, (res) => {
+        let data = ''
+        
+        res.on('data', (chunk) => {
+          data += chunk
+        })
+        
+        res.on('end', () => {
+          try {
+            const release = JSON.parse(data)
+            const releaseVersion = release.tag_name.replace('v', '')
+            
+            // Simple version comparison (you might want to use a library like semver for more robust comparison)
+            if (releaseVersion !== currentVersion) {
+              updateAvailable = true
+              latestVersion = releaseVersion
+              // Recreate menu to show update notification
+              createMenu()
+            }
+          } catch (error) {
+            console.error('Failed to parse update response:', error)
+          }
+          resolve()
+        })
+      }).on('error', (error) => {
+        console.error('Failed to check for updates:', error)
+        resolve()
+      })
+    })
+  } catch (error) {
+    console.error('Failed to check for updates:', error)
+  }
+}
+
+function createMenu() {
+  // Read version from package.json
+  const packageJson = require('../package.json')
+  const appVersion = packageJson.version || '0.0.0'
+  
+  const template = [
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Quit',
+          accelerator: process.platform === 'darwin' ? 'Cmd+Q' : 'Ctrl+Q',
+          click: () => {
+            app.quit()
+          }
+        }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { label: 'Reload', accelerator: 'CmdOrCtrl+R', role: 'reload' },
+        { label: 'Force Reload', accelerator: 'CmdOrCtrl+Shift+R', role: 'forceReload' },
+        { type: 'separator' },
+        { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', role: 'resetZoom' },
+        { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', role: 'zoomIn' },
+        { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', role: 'zoomOut' },
+        { type: 'separator' },
+        { label: 'Toggle Fullscreen', accelerator: 'F11', role: 'togglefullscreen' }
+      ]
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'About Over The Hill',
+          click: async () => {
+            dialog.showMessageBox(mainWindow, {
+              type: 'info',
+              title: 'About Over The Hill',
+              message: 'Over The Hill',
+              detail: `A hill chart generator inspired by 37signals Hill Chart.\n\nVersion: ${appVersion}`,
+              buttons: ['OK']
+            })
+          }
+        },
+        {
+          label: 'Learn More',
+          click: async () => {
+            await shell.openExternal('https://github.com/gfaurobert/over-the-hill')
+          }
+        },
+        {
+          label: 'View Documentation',
+          click: async () => {
+            await shell.openExternal('https://your-docs-url.com')
+          }
+        },
+        { type: 'separator' },
+        // Conditionally add update notification
+        ...(updateAvailable ? [
+          {
+            label: `Update Available (v${latestVersion})`,
+            click: async () => {
+              await shell.openExternal('https://github.com/gfaurobert/over-the-hill/releases/latest')
+            }
+          },
+          { type: 'separator' }
+        ] : []),
+        {
+          label: 'Check for Updates',
+          click: async () => {
+            await checkForUpdates()
+            if (!updateAvailable) {
+              dialog.showMessageBox(mainWindow, {
+                type: 'info',
+                title: 'No Updates Available',
+                message: 'You are running the latest version',
+                detail: `Current version: ${appVersion}`,
+                buttons: ['OK']
+              })
+            }
+          }
+        },
+        { type: 'separator' },
+        {
+          label: 'Report Issue',
+          click: async () => {
+            await shell.openExternal('https://github.com/gfaurobert/over-the-hill/issues')
+          }
+        },
+        {
+          label: 'Toggle Developer Tools',
+          accelerator: process.platform === 'darwin' ? 'Alt+Cmd+I' : 'Ctrl+Shift+I',
+          click: () => {
+            mainWindow.webContents.toggleDevTools()
+          }
+        }
+      ]
+    }
+  ]
+
+  // On macOS, add app menu
+  if (process.platform === 'darwin') {
+    template.unshift({
+      label: app.getName(),
+      submenu: [
+        { label: 'About ' + app.getName(), role: 'about' },
+        { type: 'separator' },
+        { label: 'Services', role: 'services', submenu: [] },
+        { type: 'separator' },
+        { label: 'Hide ' + app.getName(), accelerator: 'Command+H', role: 'hide' },
+        { label: 'Hide Others', accelerator: 'Command+Shift+H', role: 'hideothers' },
+        { label: 'Show All', role: 'unhide' },
+        { type: 'separator' },
+        { label: 'Quit', accelerator: 'Command+Q', click: () => app.quit() }
+      ]
+    })
+  }
+
+  const menu = Menu.buildFromTemplate(template)
+  Menu.setApplicationMenu(menu)
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -60,6 +237,14 @@ function createWindow() {
     
     mainWindow.loadFile(indexPath)
   }
+  
+  // Create the menu after window is created
+  createMenu()
+  
+  // Check for updates on startup (after a short delay)
+  setTimeout(() => {
+    checkForUpdates()
+  }, 3000)
 }
 
 app.whenReady().then(createWindow)
@@ -269,12 +454,26 @@ ipcMain.handle("clear-data", async () => {
 
 ipcMain.handle("copy-image-to-clipboard", async (event, svgString) => {
   try {
-    // Create image from SVG data URL
-    const dataUrl = "data:image/svg+xml;base64," + Buffer.from(svgString).toString("base64")
+    // For PNG clipboard operations, we need to receive a PNG blob from the renderer
+    // The renderer should handle the SVG to PNG conversion using Canvas API
+    // This handler should receive base64 PNG data, not SVG
+    console.error("copy-image-to-clipboard: This handler expects PNG data, not SVG")
+    throw new Error("Invalid data format: Expected PNG data")
+  } catch (error) {
+    console.error("Failed to copy image to clipboard:", error)
+    throw error
+  }
+})
+
+// New handler specifically for PNG clipboard operations
+ipcMain.handle("copy-png-to-clipboard", async (event, pngBase64) => {
+  try {
+    // Create image from PNG base64 data
+    const dataUrl = `data:image/png;base64,${pngBase64}`
     const image = nativeImage.createFromDataURL(dataUrl)
     clipboard.writeImage(image)
   } catch (error) {
-    console.error("Failed to copy image to clipboard:", error)
+    console.error("Failed to copy PNG to clipboard:", error)
     throw error
   }
 })
@@ -298,15 +497,34 @@ ipcMain.handle("save-image-file", async (event, svgString, filename) => {
         // Save as SVG
         await fs.writeFile(filePath, svgString)
       } else {
-        // Convert SVG to PNG using nativeImage
-        const dataUrl = "data:image/svg+xml;base64," + Buffer.from(svgString).toString("base64")
-        const image = nativeImage.createFromDataURL(dataUrl)
-        const buffer = image.toPNG()
-        await fs.writeFile(filePath, buffer)
+        // For PNG, we need the renderer to convert SVG to PNG first
+        console.error("save-image-file: Direct SVG to PNG conversion not supported. Use save-png-file instead.")
+        throw new Error("Direct SVG to PNG conversion not supported")
       }
     }
   } catch (error) {
     console.error("Failed to save image file:", error)
+    throw error
+  }
+})
+
+// New handler specifically for saving PNG files
+ipcMain.handle("save-png-file", async (event, pngBase64, filename) => {
+  try {
+    const { filePath } = await dialog.showSaveDialog(mainWindow, {
+      defaultPath: filename,
+      filters: [
+        { name: "PNG Images", extensions: ["png"] }
+      ],
+    })
+
+    if (filePath) {
+      // Convert base64 to buffer and save
+      const buffer = Buffer.from(pngBase64, 'base64')
+      await fs.writeFile(filePath, buffer)
+    }
+  } catch (error) {
+    console.error("Failed to save PNG file:", error)
     throw error
   }
 })

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,6 +28,7 @@ import {
   FolderOpen,
   Heart,
   Edit2,
+  X,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useTheme } from "next-themes"
@@ -134,6 +135,9 @@ export default function HillChartGenerator() {
 
   // Add new state for dragging feedback
   const [draggingDot, setDraggingDot] = useState<{ id: string; x: number; y: number } | null>(null)
+
+  // Add new state for better drag handling
+  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null)
 
   // Add new states for snapshot viewing and success (around line 130, after other states)
   const [isViewingSnapshot, setIsViewingSnapshot] = useState(false)
@@ -471,7 +475,18 @@ export default function HillChartGenerator() {
   useEffect(() => {
     if (isElectron) {
       loadStorageLocation()
-      loadPlatform()
+      
+      // Load platform information
+      const getPlatform = async () => {
+        try {
+          const platformInfo = await window.electronAPI.getPlatform()
+          console.log("Platform detected:", platformInfo) // Debug log
+          setPlatform(platformInfo)
+        } catch (error) {
+          console.error("Error loading platform:", error)
+        }
+      }
+      getPlatform()
     }
   }, [isElectron])
 
@@ -503,33 +518,71 @@ export default function HillChartGenerator() {
     }
   }, [snapshotSuccess])
 
-  const handleDotDrag = (dotId: string, clientX: number, clientY: number) => {
+  const updateDot = (dotId: string, updates: Partial<Dot>) => {
+    setCollections((prev) =>
+      prev.map((collection) => ({
+        ...collection,
+        dots: collection.dots.map((dot) =>
+          dot.id === dotId ? { ...dot, ...updates } : dot
+        ),
+      }))
+    );
+  };
+
+  const handleDotDrag = useCallback((dotId: string, clientX: number, clientY: number) => {
     if (!svgRef.current) return
     const svg = svgRef.current
-    const pt = svg.createSVGPoint()
-    pt.x = clientX
-    pt.y = clientY
-    const ctm = svg.getScreenCTM()
-    if (!ctm) return
-    const svgP = pt.matrixTransform(ctm.inverse())
-    let svgX = Math.max(0, Math.min(600, svgP.x))
-    const xPercent = (svgX / 600) * 100
-    const y = getHillY(xPercent)
-    setDraggingDot({ id: dotId, x: xPercent, y })
+    const rect = svg.getBoundingClientRect()
     
-    setCollections((prev) =>
-      prev.map((collection) =>
-        collection.id === selectedCollection
-          ? {
-              ...collection,
-              dots: collection.dots.map((dot) =>
-                dot.id === dotId ? { ...dot, x: xPercent, y } : dot,
-              ),
-            }
-          : collection,
-      ),
-    )
-  }
+    // Calculate SVG coordinates more accurately
+    const svgX = ((clientX - rect.left) / rect.width) * 600
+    const clampedX = Math.max(0, Math.min(600, svgX))
+    const xPercent = (clampedX / 600) * 100
+    const y = getHillY(xPercent)
+    
+    setDraggingDot({ id: dotId, x: xPercent, y })
+  }, [])
+
+  // Enhanced mouse up handler
+  const handleDotDragEnd = useCallback(() => {
+    if (isDragging && draggingDot) {
+      updateDot(isDragging, { x: draggingDot.x, y: draggingDot.y })
+    }
+    setIsDragging(null)
+    setDraggingDot(null)
+    setDragStartPos(null)
+  }, [isDragging, draggingDot, updateDot])
+
+  // Enhanced mouse down handler
+  const handleDotMouseDown = useCallback((dotId: string, event: React.MouseEvent) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setIsDragging(dotId)
+    setDragStartPos({ x: event.clientX, y: event.clientY })
+  }, [])
+
+  // Add document-level mouse event listeners
+  useEffect(() => {
+    if (!isDragging) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      e.preventDefault()
+      handleDotDrag(isDragging, e.clientX, e.clientY)
+    }
+
+    const handleMouseUp = (e: MouseEvent) => {
+      e.preventDefault()
+      handleDotDragEnd()
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging, handleDotDrag, handleDotDragEnd])
 
   const addDot = () => {
     if (!newDotLabel.trim()) return
@@ -659,42 +712,69 @@ export default function HillChartGenerator() {
     }
 
     try {
-      if (isElectron) {
-        // Use Electron's clipboard API
-        await window.electronAPI.copyImageToClipboard(svgString)
-        setCopyStatus("success")
-        setTimeout(() => setCopyStatus("idle"), 2000)
-      } else {
-        // Fallback to web clipboard API
-        const isDarkMode = document.documentElement.classList.contains("dark")
-        const backgroundColor = isDarkMode ? "#0f0f0f" : "#ffffff"
+      // Always convert SVG to PNG in the renderer process
+      const isDarkMode = document.documentElement.classList.contains("dark")
+      const backgroundColor = isDarkMode ? "#0f0f0f" : "#ffffff"
 
-        const canvas = document.createElement("canvas")
-        const ctx = canvas.getContext("2d")
-        if (!ctx) {
-          setCopyStatus("error")
-          setTimeout(() => setCopyStatus("idle"), 3000)
-          return
-        }
+      const canvas = document.createElement("canvas")
+      const ctx = canvas.getContext("2d")
+      if (!ctx) {
+        setCopyStatus("error")
+        setTimeout(() => setCopyStatus("idle"), 3000)
+        return
+      }
 
-        const scale = 3
-        canvas.width = 800 * scale
-        canvas.height = 360 * scale
+      const scale = 3
+      canvas.width = 800 * scale
+      canvas.height = 360 * scale
 
-        ctx.imageSmoothingEnabled = true
-        ctx.imageSmoothingQuality = "high"
-        ctx.scale(scale, scale)
-        ctx.fillStyle = backgroundColor
-        ctx.fillRect(0, 0, 800, 360)
+      ctx.imageSmoothingEnabled = true
+      ctx.imageSmoothingQuality = "high"
+      ctx.scale(scale, scale)
+      ctx.fillStyle = backgroundColor
+      ctx.fillRect(0, 0, 800, 360)
 
-        const img = new Image()
-        img.crossOrigin = "anonymous"
-        const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
-        const url = URL.createObjectURL(svgBlob)
+      const img = new Image()
+      img.crossOrigin = "anonymous"
+      const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
+      const url = URL.createObjectURL(svgBlob)
 
-        img.onload = async () => {
-          ctx.drawImage(img, 0, 0, 800, 360)
-          URL.revokeObjectURL(url)
+      img.onload = async () => {
+        ctx.drawImage(img, 0, 0, 800, 360)
+        URL.revokeObjectURL(url)
+        
+        if (isElectron) {
+          // Convert canvas to base64 PNG for Electron
+          canvas.toBlob(
+            async (blob) => {
+              if (blob) {
+                try {
+                  // Convert blob to base64
+                  const reader = new FileReader()
+                  reader.onloadend = async () => {
+                    const base64data = reader.result as string
+                    // Remove the data:image/png;base64, prefix
+                    const base64 = base64data.split(',')[1]
+                    await window.electronAPI.copyPngToClipboard(base64)
+                    setCopyStatus("success")
+                    setTimeout(() => setCopyStatus("idle"), 2000)
+                  }
+                  reader.readAsDataURL(blob)
+                } catch (err) {
+                  console.error("Failed to copy PNG to clipboard:", err)
+                  setCopyStatus("error")
+                  setTimeout(() => setCopyStatus("idle"), 3000)
+                }
+              } else {
+                setCopyStatus("error")
+                setTimeout(() => setCopyStatus("idle"), 3000)
+              }
+            },
+            "image/png",
+            1.0,
+          )
+        } else {
+          // Web clipboard API
           canvas.toBlob(
             async (blob) => {
               if (blob) {
@@ -716,13 +796,13 @@ export default function HillChartGenerator() {
             1.0,
           )
         }
-        img.onerror = () => {
-          URL.revokeObjectURL(url)
-          setCopyStatus("error")
-          setTimeout(() => setCopyStatus("idle"), 3000)
-        }
-        img.src = url
       }
+      img.onerror = () => {
+        URL.revokeObjectURL(url)
+        setCopyStatus("error")
+        setTimeout(() => setCopyStatus("idle"), 3000)
+      }
+      img.src = url
     } catch (error) {
       console.error("Failed to copy to clipboard:", error)
       setCopyStatus("error")
@@ -755,8 +835,6 @@ export default function HillChartGenerator() {
   }
 
   const downloadChartAsPNG = async () => {
-    // This function can now also use prepareSvgForExport and the canvas logic from copyChartAsPNG
-    // For brevity, assuming it's similar to copyChartAsPNG but triggers download
     const svgString = prepareSvgForExport()
     if (!svgString) return
 
@@ -764,35 +842,57 @@ export default function HillChartGenerator() {
     const timestamp = now.toISOString().replace(/:/g, "-").replace(/\..+/, "").replace("T", "_")
     const filename = `${currentCollection?.name || "hill-chart"}_${timestamp}.png`
 
-    if (isElectron) {
-      // Use Electron's save dialog
-      await window.electronAPI.saveImageFile(svgString, filename)
-    } else {
-      // Fallback to web download
-      const isDarkMode = document.documentElement.classList.contains("dark")
-      const backgroundColor = isDarkMode ? "#0f0f0f" : "#ffffff"
+    // Always convert SVG to PNG in the renderer process
+    const isDarkMode = document.documentElement.classList.contains("dark")
+    const backgroundColor = isDarkMode ? "#0f0f0f" : "#ffffff"
 
-      const canvas = document.createElement("canvas")
-      const ctx = canvas.getContext("2d")
-      if (!ctx) return
+    const canvas = document.createElement("canvas")
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
 
-      const scale = 3
-      canvas.width = 800 * scale
-      canvas.height = 360 * scale
-      ctx.imageSmoothingEnabled = true
-      ctx.imageSmoothingQuality = "high"
-      ctx.scale(scale, scale)
-      ctx.fillStyle = backgroundColor
-      ctx.fillRect(0, 0, 800, 360)
+    const scale = 3
+    canvas.width = 800 * scale
+    canvas.height = 360 * scale
+    ctx.imageSmoothingEnabled = true
+    ctx.imageSmoothingQuality = "high"
+    ctx.scale(scale, scale)
+    ctx.fillStyle = backgroundColor
+    ctx.fillRect(0, 0, 800, 360)
 
-      const img = new Image()
-      img.crossOrigin = "anonymous"
-      const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
-      const url = URL.createObjectURL(svgBlob)
+    const img = new Image()
+    img.crossOrigin = "anonymous"
+    const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" })
+    const url = URL.createObjectURL(svgBlob)
 
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, 800, 360)
-        URL.revokeObjectURL(url)
+    img.onload = async () => {
+      ctx.drawImage(img, 0, 0, 800, 360)
+      URL.revokeObjectURL(url)
+      
+      if (isElectron) {
+        // Convert canvas to base64 PNG for Electron
+        canvas.toBlob(
+          async (blob) => {
+            if (blob) {
+              try {
+                // Convert blob to base64
+                const reader = new FileReader()
+                reader.onloadend = async () => {
+                  const base64data = reader.result as string
+                  // Remove the data:image/png;base64, prefix
+                  const base64 = base64data.split(',')[1]
+                  await window.electronAPI.savePngFile(base64, filename)
+                }
+                reader.readAsDataURL(blob)
+              } catch (err) {
+                console.error("Failed to save PNG file:", err)
+              }
+            }
+          },
+          "image/png",
+          1.0,
+        )
+      } else {
+        // Web download
         canvas.toBlob(
           (blob) => {
             if (blob) {
@@ -809,12 +909,12 @@ export default function HillChartGenerator() {
           1.0,
         )
       }
-      img.onerror = () => {
-        URL.revokeObjectURL(url)
-        console.error("Failed to load SVG for PNG download")
-      }
-      img.src = url
     }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      console.error("Failed to load SVG for PNG download")
+    }
+    img.src = url
   }
 
   const downloadChartAsSVG = async () => {
@@ -1167,6 +1267,11 @@ export default function HillChartGenerator() {
     setShowEllipsisMenu(false)
   }
 
+  // Debug useEffect to log platform state
+  useEffect(() => {
+    console.log("Platform state changed:", { isElectron, platform })
+  }, [isElectron, platform])
+
   return (
     <div className="min-h-screen p-4 bg-transparent" style={{ userSelect: isDragging ? "none" : "auto" }}>
       <div className="max-w-screen-2xl mx-auto grid grid-cols-1 lg:grid-cols-[2.4fr_1.2fr] gap-6">
@@ -1209,15 +1314,6 @@ export default function HillChartGenerator() {
                   viewBox="-50 0 700 180" // Adjusted viewBox for padding
                   className="overflow-visible max-w-full"
                   style={{ userSelect: "none" }}
-                  onMouseMove={(e) => {
-                    if (isDragging) {
-                      handleDotDrag(isDragging, e.clientX, e.clientY)
-                    }
-                  }}
-                  onMouseUp={() => {
-                    setIsDragging(null)
-                    setDraggingDot(null)
-                  }}
                 >
                   {/* Bell curve */}
                   <path
@@ -1269,7 +1365,7 @@ export default function HillChartGenerator() {
                     const textHeight = fontSize + 12
 
                     const isBeingDragged = draggingDot?.id === dot.id
-                    const displayX = isBeingDragged ? (draggingDot.x / 100) * 600 : dotX
+                    const displayX = isBeingDragged ? (draggingDot.x / 100) * 600 : (dot.x / 100) * 600
                     const displayY = isBeingDragged ? draggingDot.y : dot.y
 
                     return (
@@ -1281,8 +1377,8 @@ export default function HillChartGenerator() {
                           fill={dot.color}
                           stroke="#fff"
                           strokeWidth="2"
-                          className="cursor-pointer hover:opacity-80 transition-all"
-                          onMouseDown={() => setIsDragging(dot.id)}
+                          className={`cursor-pointer hover:opacity-80 ${isBeingDragged ? '' : 'transition-all'}`}
+                          onMouseDown={(e) => handleDotMouseDown(dot.id, e)}
                         />
                         <rect
                           x={displayX - textWidth / 2}
@@ -1523,34 +1619,63 @@ export default function HillChartGenerator() {
                 <label className="text-sm font-medium mb-2 block">Collections</label>
                 <div className="relative">
                   {isEditingCollection ? (
-                    <Input
-                      ref={editInputRef}
-                      value={editingCollectionName}
-                      onChange={(e) => setEditingCollectionName(e.target.value)}
-                      onKeyDown={handleEditKeyPress}
-                      onBlur={saveCollectionEdit}
-                      className="h-8 text-sm"
-                      autoFocus
-                    />
+                    <div className="flex items-center gap-2">
+                      <Input
+                        ref={editInputRef}
+                        value={editingCollectionName}
+                        onChange={(e) => setEditingCollectionName(e.target.value)}
+                        onKeyDown={handleEditKeyPress}
+                        className="flex-1 h-8 text-sm"
+                        autoFocus
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={saveCollectionEdit}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Check className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={cancelCollectionEdit}
+                        className="h-8 w-8 p-0"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
                   ) : (
-                    <Input
-                      ref={inputRef}
-                      value={collectionInput}
-                      onChange={handleInputChange}
-                      onKeyPress={handleCollectionInputKeyPress}
-                      onFocus={handleInputFocus}
-                      placeholder="Type to search or create collection..."
-                      className="pr-8"
-                    />
+                    <div className="flex items-center">
+                      <Input
+                        ref={inputRef}
+                        value={collectionInput}
+                        onChange={handleInputChange}
+                        onFocus={handleInputFocus}
+                        onKeyPress={handleCollectionInputKeyPress}
+                        className="pr-8 h-8 text-sm"
+                        placeholder="Select or create collection..."
+                      />
+                      {selectedCollection && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => startEditCollection(currentCollection!)}
+                          className="absolute right-8 h-8 w-8 p-0"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={toggleDropdown}
+                        className="absolute right-0 h-8 w-8 p-0 rounded-l-none"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </Button>
+                    </div>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-0 top-0 h-full px-2"
-                    onClick={toggleDropdown}
-                  >
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
                 </div>
 
                 {showDropdown && (
@@ -1559,21 +1684,10 @@ export default function HillChartGenerator() {
                       filteredCollections.map((collection) => (
                         <div
                           key={collection.id}
-                          className="px-3 py-2 hover:bg-accent cursor-pointer text-sm flex items-center justify-between"
+                          className="px-3 py-2 hover:bg-accent cursor-pointer text-sm"
                           onClick={() => handleCollectionSelect(collection)}
                         >
                           {collection.name}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              startEditCollection(collection)
-                            }}
-                            className="h-6 w-6 p-0"
-                          >
-                            <Edit2 className="w-3 h-3" />
-                          </Button>
                         </div>
                       ))
                     ) : (
@@ -1832,52 +1946,30 @@ export default function HillChartGenerator() {
       {showInstallConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Install on System</h3>
+            <h3 className="text-lg font-semibold mb-4">Install Application</h3>
             <div className="text-gray-600 dark:text-gray-300 space-y-3">
               <p>
-                This will install Over The Hill on your system by:
+                This will install Over The Hill on your system, creating a desktop entry and making it available in your applications menu.
               </p>
-              <ul className="list-disc list-inside space-y-1 text-sm">
-                <li>Copying the AppImage to <code className="bg-muted px-1 rounded">~/.local/bin/over-the-hill/Over-The-Hill-1.0.0.AppImage</code></li>
-                <li>Copying the icon to <code className="bg-muted px-1 rounded">~/.local/bin/over-the-hill/OverTheHill.svg</code></li>
-                <li>Creating a desktop entry in <code className="bg-muted px-1 rounded">~/.local/share/applications/</code></li>
-                <li>Making the app available in your system menu</li>
-              </ul>
-              <p className="text-sm text-muted-foreground">
-                The app will be launched with the <code className="bg-muted px-1 rounded">--no-sandbox</code> flag for better Linux compatibility.
-              </p>
-            </div>
-            <div className="flex gap-2 justify-end mt-6">
-              <Button variant="outline" onClick={() => setShowInstallConfirm(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleInstallApp} disabled={installStatus === "installing"}>
-                {installStatus === "installing" ? (
-                  <>
-                    <div className="w-4 h-4 mr-2 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                    Installing...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4 mr-2" />
-                    Install
-                  </>
-                )}
-              </Button>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setShowInstallConfirm(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleInstallApp}>
+                  Install
+                </Button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
       {/* Installation Status Messages */}
-      {installStatus === "success" && (
-        <div className="fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
-          {installMessage}
-        </div>
-      )}
-      {installStatus === "error" && (
-        <div className="fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50">
-          {installMessage}
+      {installStatus !== "idle" && (
+        <div className="fixed bottom-4 right-4 bg-background p-4 rounded-lg shadow-lg z-50">
+          <p className={`${installStatus === "success" ? "text-green-600" : installStatus === "error" ? "text-red-600" : "text-blue-600"}`}>
+            {installMessage}
+          </p>
         </div>
       )}
     </div>

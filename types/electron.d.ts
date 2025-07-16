@@ -3,8 +3,10 @@ export interface ElectronAPI {
   saveData: (data: any) => Promise<void>
   clearData: () => Promise<void>
   copyImageToClipboard: (svgString: string) => Promise<void>
+  copyPngToClipboard: (pngBase64: string) => Promise<void>
   copyTextToClipboard: (text: string) => Promise<void>
   saveImageFile: (svgString: string, filename: string) => Promise<void>
+  savePngFile: (pngBase64: string, filename: string) => Promise<void>
   saveTextFile: (content: string, filename: string) => Promise<void>
   openFile: () => Promise<any>
   getStorageLocation: () => Promise<string>
