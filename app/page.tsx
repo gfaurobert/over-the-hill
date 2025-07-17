@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -133,6 +133,7 @@ export default function HillChartGenerator() {
 
   // Add this state for immediate visual feedback
   const [draggingDot, setDraggingDot] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
 
   // Load data from localStorage
   const loadFromStorage = () => {
@@ -422,44 +423,85 @@ export default function HillChartGenerator() {
     return () => clearInterval(interval)
   }, [collections, snapshots, selectedCollection, collectionInput, hideCollectionName, copyFormat])
 
-  const handleDotDrag = (dotId: string, clientX: number, clientY: number) => {
+  // Improved handleDotDrag function with better coordinate calculation
+  const handleDotDrag = useCallback((dotId: string, clientX: number, clientY: number) => {
     if (!svgRef.current) return;
 
-    // Convert mouse coordinates to SVG coordinates
     const svg = svgRef.current;
-    const pt = svg.createSVGPoint();
-    pt.x = clientX;
-    pt.y = clientY;
-    const ctm = svg.getScreenCTM();
-    if (!ctm) return;
-    const svgP = pt.matrixTransform(ctm.inverse());
-
-    // SVG viewBox: -50 0 700 180, so x runs from -50 to 650
+    const rect = svg.getBoundingClientRect();
+    
+    // Calculate relative position within the SVG
+    const svgX = ((clientX - rect.left) / rect.width) * 600; // 600 is the SVG coordinate width
+    
     // Clamp to the visible hill area (0 to 600)
-    let svgX = Math.max(0, Math.min(600, svgP.x));
+    const clampedX = Math.max(0, Math.min(600, svgX));
+    
     // Convert to percentage (0-100)
-    const xPercent = (svgX / 600) * 100;
+    const xPercent = (clampedX / 600) * 100;
     const y = getHillY(xPercent);
 
     // Immediate visual feedback
     setDraggingDot({ id: dotId, x: xPercent, y });
+  }, []);
 
-    // Debounced state update to avoid excessive re-renders
-    requestAnimationFrame(() => {
+  // Document-level mouse event handlers for better drag coordination
+  const handleDocumentMouseMove = useCallback((e: MouseEvent) => {
+    if (isDragging) {
+      handleDotDrag(isDragging, e.clientX, e.clientY);
+    }
+  }, [isDragging, handleDotDrag]);
+
+  const handleDocumentMouseUp = useCallback(() => {
+    if (isDragging && draggingDot) {
+      // Update the main state only when drag ends
       setCollections((prev) =>
         prev.map((collection) =>
           collection.id === selectedCollection
             ? {
                 ...collection,
                 dots: collection.dots.map((dot) =>
-                  dot.id === dotId ? { ...dot, x: xPercent, y } : dot,
+                  dot.id === draggingDot.id 
+                    ? { ...dot, x: draggingDot.x, y: draggingDot.y } 
+                    : dot,
                 ),
               }
             : collection,
         ),
       );
-    });
-  };
+    }
+    
+    setIsDragging(null);
+    setDraggingDot(null);
+    setDragStartPos(null);
+  }, [isDragging, draggingDot, selectedCollection]);
+
+  // Add document event listeners for drag handling
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleDocumentMouseMove);
+      document.addEventListener('mouseup', handleDocumentMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleDocumentMouseMove);
+        document.removeEventListener('mouseup', handleDocumentMouseUp);
+      };
+    }
+  }, [isDragging, handleDocumentMouseMove, handleDocumentMouseUp]);
+
+  // Handle dot mouse down with proper event handling
+  const handleDotMouseDown = useCallback((e: React.MouseEvent, dotId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    setIsDragging(dotId);
+    setDragStartPos({ x: e.clientX, y: e.clientY });
+    
+    // Initialize dragging dot with current position
+    const currentDot = currentCollection?.dots.find(dot => dot.id === dotId);
+    if (currentDot) {
+      setDraggingDot({ id: dotId, x: currentDot.x, y: currentDot.y });
+    }
+  }, [currentCollection]);
 
   const addDot = () => {
     if (!newDotLabel.trim()) return
@@ -1002,15 +1044,6 @@ export default function HillChartGenerator() {
                   viewBox="-50 0 700 180" // Adjusted viewBox for padding
                   className="overflow-visible max-w-full"
                   style={{ userSelect: isDragging ? "none" : "auto" }}
-                  onMouseMove={(e) => {
-                    if (isDragging) {
-                      handleDotDrag(isDragging, e.clientX, e.clientY);
-                    }
-                  }}
-                  onMouseUp={() => {
-                    setIsDragging(null);
-                    setDraggingDot(null); // Clear immediate feedback
-                  }}
                 >
                   {/* Bell curve */}
                   <path
@@ -1075,11 +1108,8 @@ export default function HillChartGenerator() {
                           fill={dot.color}
                           stroke="#fff"
                           strokeWidth="2"
-                          className="cursor-pointer hover:opacity-80 transition-all"
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            setIsDragging(dot.id);
-                          }}
+                          className={`cursor-pointer hover:opacity-80 ${isBeingDragged ? '' : 'transition-all'}`}
+                          onMouseDown={(e) => handleDotMouseDown(e, dot.id)}
                         />
                         <rect
                           x={displayX - textWidth / 2}
