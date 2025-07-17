@@ -37,31 +37,23 @@ This app allows you to:
 
   
 
-1. **Add Dots**: Click the "Add Dot" button to create a new task or item.
+1. **Create a Collection**: Enter a Collection name
+2. **Add Dots**: In the "Dots" section, enter a dot name and press enter to add.
+3. **Name and Customize**: In the dot editing panel, update the dot'sname, and select its color and size using the dropdowns.
+4. **Position on the Hill**: Drag the dot on the hill chart to reflect its current status.
+- **Up the Hill (Left Side)**: For tasks where you're still exploring, researching, or solving problems.
+- **Down the Hill (Right Side)**: For tasks where the path is clear, and you're actively implementing.
 
-2. **Name and Customize**: In the dot editing panel, give your dot a name, and select its color and size using the dropdowns.
-
-3. **Position on the Hill**: Drag the dot on the hill chart to reflect its current status.
-
-* **Up the Hill (Left Side)**: For tasks where you're still exploring, researching, or solving problems.
-
-* **Down the Hill (Right Side)**: For tasks where the path is clear, and you're actively implementing.
-
-4. **Manage Collections**: Use the "Collections" dropdown to create new collections, switch between them, or manage existing ones.
-
-5. **Export/Share**:
-
+5. **Manage Collections**: Use the "Collections" dropdown to create new collections, switch between them, or manage existing ones.
+6. **Export the Hill Chart**
+* Click the "Copy as" button in the chart header to copy the chart to your clipboard in the selected format.
+* Click the "Download PNG/SVG" buttons to either save the chart as a PNG or a SVG file to your system.
+7. **Settings**
 * Click the ellipsis menu (`...`) in the top right corner.
-
-* Under "Export Clipboard Format," choose "Copy as PNG" or "Copy as SVG" to set the clipboard format.
-
-* Click the "Copy" button in the chart header to copy the chart to your clipboard in the selected format.
-
-* Click the "Download PNG" button to save the chart as a PNG file to your system.
-
-6. **Theme Switching**: Use the ellipsis menu (`...`) to toggle between "Light," "Dark," or "Follow Browser" themes.
-
-  
+- **Theme Switching**: Use the ellipsis menu (`...`) to toggle between "Light," "Dark," or "Follow Browser" themes.
+* **Export Clipboard Format**: choose "Copy as PNG" or "Copy as SVG" to set the clipboard format.
+* **Chart Settings**: Hide Collection Name or Reset Collections (deletes all collections, dots and snapshopts)
+* **Export/Import Collections**
 
 ## Demo
 
@@ -71,7 +63,7 @@ Try it out live at:
 
   
 
-**[https://over-the-hill.faurobert.fr/](https://over-the-hill.faurobert.fr/)**
+**[https://demo.overthehill.faurobert.fr/](https://demo.overthehill.faurobert.fr/)**
 
   
 
@@ -79,4 +71,4 @@ Try it out live at:
 
   
 
-Check our documentation on [gfaurobert.github.io/over-the-hill/](https://gfaurobert.github.io/over-the-hill/)
+Check our documentation on [docs.overthehill.faurobert.fr](https://docs.overthehill.faurobert.fr)

@@ -2,7 +2,7 @@
 title: Self-Hosting Guide (Ubuntu)
 date: 2025-06-23
 draft: false
-description: This guide will help you deploy your Next.js app (`hill-chart-generator`) on your own Ubuntu server for production use.
+description: This guide will help you deploy your Next.js app Over The Hill on your own Ubuntu server for production use.
 tags:
   - getting-started
   - example
@@ -13,6 +13,12 @@ tags:
 - **Ubuntu server** (tested on 20.04/22.04)
 - **Root or sudo access**
 - **Domain name** (optional, for HTTPS)
+- **Supabase Account** (or access to a self-hosted instance of supabase)
+
+### Supabase Set-Up
+The Web App uses Supabase as backend for authenticating and storing data.
+You will have to set-up a project in Supabase and create the required tables in order for the app to run.
+
 
 ### Install Required Packages
 ```bash
@@ -80,7 +86,7 @@ pm2 startup
 By default, Next.js runs on port 3000. To check if something is already using this port:
 
 ```bash
-sudo lsof -i :3000
+sudo netstat -tuln | grep 3000
 ```
 - If you see output, port 3000 is in use. If there's no output, it's free.
 

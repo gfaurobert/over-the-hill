@@ -2,6 +2,7 @@
 -- Migration: 20250710091059_create_hill_chart_schema.sql
 
 -- Drop existing objects to ensure a clean migration
+DROP TABLE IF EXISTS access_requests CASCADE;
 DROP TABLE IF EXISTS user_preferences CASCADE;
 DROP TABLE IF EXISTS snapshots CASCADE;
 DROP TABLE IF EXISTS dots CASCADE;
@@ -64,6 +65,18 @@ CREATE TABLE user_preferences (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );
 
+-- Create access_requests table
+-- Stores access requests from new users (no user_id reference since they're not users yet)
+CREATE TABLE access_requests (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    email TEXT NOT NULL,
+    message TEXT DEFAULT '',
+    status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+    UNIQUE(email)
+);
+
 -- Create indexes for performance
 CREATE INDEX IF NOT EXISTS idx_collections_user_id ON collections(user_id);
 CREATE INDEX IF NOT EXISTS idx_dots_collection_id ON dots(collection_id);
@@ -71,6 +84,9 @@ CREATE INDEX IF NOT EXISTS idx_dots_user_id ON dots(user_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_user_id ON snapshots(user_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_collection_id ON snapshots(collection_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_created_at ON snapshots(created_at);
+CREATE INDEX IF NOT EXISTS idx_access_requests_email ON access_requests(email);
+CREATE INDEX IF NOT EXISTS idx_access_requests_status ON access_requests(status);
+CREATE INDEX IF NOT EXISTS idx_access_requests_created_at ON access_requests(created_at);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -89,6 +105,9 @@ CREATE TRIGGER update_dots_updated_at BEFORE UPDATE ON dots
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_user_preferences_updated_at BEFORE UPDATE ON user_preferences
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_access_requests_updated_at BEFORE UPDATE ON access_requests
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Row Level Security Policies
@@ -113,6 +132,9 @@ DROP POLICY IF EXISTS "Users can view their own preferences" ON user_preferences
 DROP POLICY IF EXISTS "Users can insert their own preferences" ON user_preferences;
 DROP POLICY IF EXISTS "Users can update their own preferences" ON user_preferences;
 DROP POLICY IF EXISTS "Users can delete their own preferences" ON user_preferences;
+
+DROP POLICY IF EXISTS "Anyone can submit access requests" ON access_requests;
+DROP POLICY IF EXISTS "Only service role can manage access requests" ON access_requests;
 
 -- Collections RLS Policies
 CREATE POLICY "Users can view their own collections" ON collections
@@ -166,8 +188,18 @@ CREATE POLICY "Users can update their own preferences" ON user_preferences
 CREATE POLICY "Users can delete their own user_preferences" ON user_preferences
     FOR DELETE USING (auth.uid() = user_id);
 
+-- Access Requests RLS Policies
+-- Allow anyone to submit access requests (public form)
+CREATE POLICY "Anyone can submit access requests" ON access_requests
+    FOR INSERT WITH CHECK (true);
+
+-- Only allow service role to view/manage access requests (admin functionality)
+CREATE POLICY "Only service role can manage access requests" ON access_requests
+    FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
+
 -- Enable RLS on all tables
 ALTER TABLE collections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
+ALTER TABLE access_requests ENABLE ROW LEVEL SECURITY;
