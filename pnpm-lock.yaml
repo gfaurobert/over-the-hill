@@ -132,8 +132,8 @@ importers:
         specifier: ^19.1.0
         version: 19.1.0
       react-day-picker:
-        specifier: ^8.10.1
-        version: 8.10.1(date-fns@4.1.0)(react@19.1.0)
+        specifier: 9.8.0
+        version: 9.8.0(react@19.1.0)
       react-dom:
         specifier: ^19.1.0
         version: 19.1.0(react@19.1.0)
@@ -156,18 +156,18 @@ importers:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@3.4.17)
       vaul:
-        specifier: ^0.9.9
-        version: 0.9.9(@types/react-dom@19.1.6(@types/react@19.1.8))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+        specifier: 1.1.2
+        version: 1.1.2(@types/react-dom@19.1.6(@types/react@19.1.8))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       zod:
         specifier: ^3.24.1
         version: 3.25.76
     devDependencies:
       '@stagewise-plugins/react':
-        specifier: ^0.5.0
-        version: 0.5.0(@stagewise/toolbar@0.5.0)
+        specifier: ^0.6.1
+        version: 0.6.1(@stagewise/toolbar@0.6.1)
       '@stagewise/toolbar-next':
-        specifier: ^0.5.0
-        version: 0.5.0(@types/react@19.1.8)(next@15.2.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)
+        specifier: ^0.6.1
+        version: 0.6.1(@types/react@19.1.8)(next@15.2.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)
       '@types/node':
         specifier: ^22.16.2
         version: 22.16.2
@@ -196,6 +196,9 @@ packages:
   '@babel/runtime@7.27.6':
     resolution: {integrity: sha512-vbavdySgbTTrmFE+EsiqUTzlOr5bzlnJtUv9PynGCAKvfQqjIXbvFdumPM/GxMDfyuGMJaJAU6TO4zc1Jf1i8Q==}
     engines: {node: '>=6.9.0'}
+
+  '@date-fns/tz@1.2.0':
+    resolution: {integrity: sha512-LBrd7MiJZ9McsOgxqWX7AaxrDjcFVjWH/tIKJd7pnR7McaslGYOP1QmmiBXdJH/H/yLCT+rcQ7FaPBUxRGUtrg==}
 
   '@emnapi/runtime@1.4.4':
     resolution: {integrity: sha512-hHyapA4A3gPaDCNfiqyZUStTMqIkKRshqPIuDOXv1hcBnD4U3l8cP0T1HMCfGRxQ6V64TGCcoswChANyOAwbQg==}
@@ -1255,26 +1258,26 @@ packages:
   '@radix-ui/rect@1.1.1':
     resolution: {integrity: sha512-HPwpGIzkl28mWyZqG52jiqDJ12waP11Pa1lGoiyUkIEuMLBP0oeK/C89esbXrxsky5we7dfd8U58nm0SgAWpVw==}
 
-  '@stagewise-plugins/react@0.5.0':
-    resolution: {integrity: sha512-ZO3l6dEqTaFaSk5HWqcM/6Jn5qLDexeI/uDHvPSXmj0c8i7V4ZZnuoJGGIRZO2+bpOBxEOGI7aZm9gspF2OteA==}
+  '@stagewise-plugins/react@0.6.1':
+    resolution: {integrity: sha512-2qNfDMy8hUz6vDRa7kzeGxhCXpobNs+w/dRiJx/2aaXRHBU+/8/SJ7hUSA21TGyxDCPB8adP2I6SCFkd49mXZA==}
     peerDependencies:
-      '@stagewise/toolbar': 0.5.0
+      '@stagewise/toolbar': 0.6.1
 
-  '@stagewise/toolbar-next@0.5.0':
-    resolution: {integrity: sha512-EXWyiDgPDI52ijsbcdmltEup3tPj7y6btxBFN1s3fbiLOHEAU4weB71M0Eaw/jpNOOyoXBTuiAb12pnDoP1gxg==}
+  '@stagewise/toolbar-next@0.6.1':
+    resolution: {integrity: sha512-DPmVS8ng9StLBQDVghCKz814HEj0l90tzUMTHfEf3cB+cC4cjP273zydEAW7sQkEicUXH05DLfjiiC0zJy9p4w==}
     peerDependencies:
       '@types/react': '>=18.0.0'
       next: '>=14.0.0'
       react: '>=18.0.0'
 
-  '@stagewise/toolbar-react@0.5.0':
-    resolution: {integrity: sha512-7dn3ZsX5vrT84RB4nzlcWPqkvcILDpR24cS3CpgKm/q54+9XWj9WxaqGU/D/B5Cef92bLBuCs1DJZj6vp7VPBA==}
+  '@stagewise/toolbar-react@0.6.1':
+    resolution: {integrity: sha512-Sb0ZNeOLBFoB/JkQ5KzuozxSdqi1yKHJak9MMHNNXcvKNqG1Rj9+ghkFSXibYtYqmzKTjzPVQy/cCfChD6HAfg==}
     peerDependencies:
       '@types/react': '>=18.0.0'
       react: '>=18.0.0'
 
-  '@stagewise/toolbar@0.5.0':
-    resolution: {integrity: sha512-Z8299P7IkXaxy2dTpS4lKyPHMeQ9R3MEtE9CJr9iRAnM8s4Xbc0CRutwzViPF34k/dP83vRZXJFQmEG55YlIOg==}
+  '@stagewise/toolbar@0.6.1':
+    resolution: {integrity: sha512-+oEDavuKT6QsGzTD44g3sxDLPa6RAbtvQMT7PIyL8YWYUNWbK2OJVgzxdinP/osGCdcomsNGk2VbtQQfO/ToXw==}
 
   '@supabase/auth-js@2.70.0':
     resolution: {integrity: sha512-BaAK/tOAZFJtzF1sE3gJ2FwTjLf4ky3PSvcvLGEgEmO4BSBkwWKu8l67rLLIBZPDnCyV7Owk2uPyKHa0kj5QGg==}
@@ -1508,6 +1511,9 @@ packages:
   d3-timer@3.0.1:
     resolution: {integrity: sha512-ndfJ/JxxMd3nw31uyKoY2naivF+r29V+Lc0svZxe1JvvIRmi8hUsrMvdOwgS1o6uBHmiz91geQ0ylPP0aj1VUA==}
     engines: {node: '>=12'}
+
+  date-fns-jalali@4.1.0-0:
+    resolution: {integrity: sha512-hTIP/z+t+qKwBDcmmsnmjWTduxCg+5KfdqWQvb2X/8C9+knYY6epN/pfxdDuyVlSVeFz0sM5eEfwIUQ70U4ckg==}
 
   date-fns@4.1.0:
     resolution: {integrity: sha512-Ukq0owbQXxa/U3EGtsdVBkR1w7KOQ5gIBqdH2hkvknzZPYvBxb/aa6E8L7tmjFtkwZBu3UXBbjIgPo/Ez4xaNg==}
@@ -1840,11 +1846,11 @@ packages:
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
 
-  react-day-picker@8.10.1:
-    resolution: {integrity: sha512-TMx7fNbhLk15eqcMt+7Z7S2KF7mfTId/XJDjKE8f+IUcFn0l08/kI4FiYTL/0yuOLmEcbR4Fwe3GJf/NiiMnPA==}
+  react-day-picker@9.8.0:
+    resolution: {integrity: sha512-E0yhhg7R+pdgbl/2toTb0xBhsEAtmAx1l7qjIWYfcxOy8w4rTSVfbtBoSzVVhPwKP/5E9iL38LivzoE3AQDhCQ==}
+    engines: {node: '>=18'}
     peerDependencies:
-      date-fns: ^2.28.0 || ^3.0.0
-      react: ^16.8.0 || ^17.0.0 || ^18.0.0
+      react: '>=16.8.0'
 
   react-dom@19.1.0:
     resolution: {integrity: sha512-Xs1hdnE+DyKgeHJeJznQmYMIBG3TKIHJJT95Q58nHLSrElKlGQqDTR2HQ9fx5CN/Gk6Vh/kupBTDLU11/nDk/g==}
@@ -2101,11 +2107,11 @@ packages:
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
-  vaul@0.9.9:
-    resolution: {integrity: sha512-7afKg48srluhZwIkaU+lgGtFCUsYBSGOl8vcc8N/M3YQlZFlynHD15AE+pwrYdc826o7nrIND4lL9Y6b9WWZZQ==}
+  vaul@1.1.2:
+    resolution: {integrity: sha512-ZFkClGpWyI2WUQjdLJ/BaGuV6AVQiJ3uELGk3OYtP+B6yCO7Cmn9vPFXVJkRaGkOJu3m8bQMgtyzNHixULceQA==}
     peerDependencies:
-      react: ^16.8 || ^17.0 || ^18.0
-      react-dom: ^16.8 || ^17.0 || ^18.0
+      react: ^16.8 || ^17.0 || ^18.0 || ^19.0.0 || ^19.0.0-rc
+      react-dom: ^16.8 || ^17.0 || ^18.0 || ^19.0.0 || ^19.0.0-rc
 
   victory-vendor@36.9.2:
     resolution: {integrity: sha512-PnpQQMuxlwYdocC8fIJqVXvkeViHYzotI+NJrCuav0ZYFoq912ZHBk3mCeuj+5/VpodOjPe1z0Fk2ihgzlXqjQ==}
@@ -2154,6 +2160,8 @@ snapshots:
   '@alloc/quick-lru@5.2.0': {}
 
   '@babel/runtime@7.27.6': {}
+
+  '@date-fns/tz@1.2.0': {}
 
   '@emnapi/runtime@1.4.4':
     dependencies:
@@ -3166,24 +3174,24 @@ snapshots:
 
   '@radix-ui/rect@1.1.1': {}
 
-  '@stagewise-plugins/react@0.5.0(@stagewise/toolbar@0.5.0)':
+  '@stagewise-plugins/react@0.6.1(@stagewise/toolbar@0.6.1)':
     dependencies:
-      '@stagewise/toolbar': 0.5.0
+      '@stagewise/toolbar': 0.6.1
 
-  '@stagewise/toolbar-next@0.5.0(@types/react@19.1.8)(next@15.2.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)':
+  '@stagewise/toolbar-next@0.6.1(@types/react@19.1.8)(next@15.2.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)':
     dependencies:
-      '@stagewise/toolbar-react': 0.5.0(@types/react@19.1.8)(react@19.1.0)
+      '@stagewise/toolbar-react': 0.6.1(@types/react@19.1.8)(react@19.1.0)
       '@types/react': 19.1.8
       next: 15.2.4(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react: 19.1.0
 
-  '@stagewise/toolbar-react@0.5.0(@types/react@19.1.8)(react@19.1.0)':
+  '@stagewise/toolbar-react@0.6.1(@types/react@19.1.8)(react@19.1.0)':
     dependencies:
-      '@stagewise/toolbar': 0.5.0
+      '@stagewise/toolbar': 0.6.1
       '@types/react': 19.1.8
       react: 19.1.0
 
-  '@stagewise/toolbar@0.5.0': {}
+  '@stagewise/toolbar@0.6.1': {}
 
   '@supabase/auth-js@2.70.0':
     dependencies:
@@ -3435,6 +3443,8 @@ snapshots:
       d3-array: 3.2.4
 
   d3-timer@3.0.1: {}
+
+  date-fns-jalali@4.1.0-0: {}
 
   date-fns@4.1.0: {}
 
@@ -3722,9 +3732,11 @@ snapshots:
 
   queue-microtask@1.2.3: {}
 
-  react-day-picker@8.10.1(date-fns@4.1.0)(react@19.1.0):
+  react-day-picker@9.8.0(react@19.1.0):
     dependencies:
+      '@date-fns/tz': 1.2.0
       date-fns: 4.1.0
+      date-fns-jalali: 4.1.0-0
       react: 19.1.0
 
   react-dom@19.1.0(react@19.1.0):
@@ -4003,7 +4015,7 @@ snapshots:
 
   util-deprecate@1.0.2: {}
 
-  vaul@0.9.9(@types/react-dom@19.1.6(@types/react@19.1.8))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
+  vaul@1.1.2(@types/react-dom@19.1.6(@types/react@19.1.8))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0):
     dependencies:
       '@radix-ui/react-dialog': 1.1.4(@types/react-dom@19.1.6(@types/react@19.1.8))(@types/react@19.1.8)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       react: 19.1.0
