@@ -19,6 +19,9 @@ tags:
 The Web App uses Supabase as backend for authenticating and storing data.
 You will have to set-up a project in Supabase and create the required tables in order for the app to run.
 
+In the github repository of the project you will find a script to run in the SQL editor on Supabse in order to deploy the DB.
+
+See link: https://github.com/gfaurobert/over-the-hill/blob/main/supabase/migrations/20250710091059_create_hill_chart_schema.sql
 
 ### Install Required Packages
 ```bash
@@ -52,14 +55,30 @@ pnpm install
 
 ---
 
-## 4. Build the App
+## 4. Create the .env.local
+
+```shell
+nano .env.local
+```
+
+Add the following environment variable
+
+```text
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-very-long-token
+```
+
+---
+
+## 5. Build the App
 ```bash
 pnpm build
 ```
 
 ---
 
-## 5. Run the App in Production
+## 6. Run the App in Production
 
 ### Install pm2 (Process Manager)
 ```bash
@@ -80,7 +99,7 @@ pm2 startup
 
 ---
 
-## 6. (Recommended) Set Up Nginx as a Reverse Proxy
+## 7. (Recommended) Set Up Nginx as a Reverse Proxy
 
 ### Check if Port 3000 is in Use
 By default, Next.js runs on port 3000. To check if something is already using this port:
@@ -143,15 +162,6 @@ server {
 ```bash
 sudo apt install -y certbot python3-certbot-nginx
 sudo certbot --nginx -d yourdomain.com
-```
-
----
-
-## 7. Firewall (Optional but Recommended)
-```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 'Nginx Full'
-sudo ufw enable
 ```
 
 ---
