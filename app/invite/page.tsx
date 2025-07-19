@@ -1,12 +1,12 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import SetPasswordForm from '../../components/SetPasswordForm';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
 
-export default function InvitePage() {
+function InvitePageContent() {
   const { user, loading, supabase } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -197,5 +197,20 @@ export default function InvitePage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function InvitePage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+          <p className="mt-2">Loading...</p>
+        </div>
+      </div>
+    }>
+      <InvitePageContent />
+    </Suspense>
   );
 } 
