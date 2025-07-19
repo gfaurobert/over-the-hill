@@ -10,17 +10,26 @@ interface AuthContextType {
   loading: boolean;
   signOut: () => Promise<void>;
   supabase: typeof supabase; // Use the type of the imported instance
+  isInRecoveryMode: boolean;
 }
 const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isInRecoveryMode, setIsInRecoveryMode] = useState(false);
 
     useEffect(() => {
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
             setUser(session?.user ?? null);
             setLoading(false);
+            
+            // Track recovery mode
+            if (event === 'PASSWORD_RECOVERY') {
+                setIsInRecoveryMode(true);
+            } else if (event === 'SIGNED_OUT') {
+                setIsInRecoveryMode(false);
+            }
         });
 
         // Initial check
@@ -42,7 +51,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, signOut, supabase }}>
+        <AuthContext.Provider value={{ user, loading, signOut, supabase, isInRecoveryMode }}>
             {children}
         </AuthContext.Provider>
     );
@@ -54,4 +63,4 @@ export const useAuth = () => {
         throw new Error('useAuth must be used within an AuthProvider');
     }
     return context;
-}; 
+};

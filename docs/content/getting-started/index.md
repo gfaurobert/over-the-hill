@@ -12,7 +12,7 @@ You have 3 options, you can use the [Web App](#the-web-app) (requires signing up
 ## The Web App
 Follow the link below and click the `Request Access` link.
 
-Link [overthehill.faurobert.fr](https://overthehill.faurtobert.fr)
+Link [overthehill.faurobert.fr](https://overthehill.faurobert.fr)
 
 ![](images/index-3.png)
 ## The Desktop App

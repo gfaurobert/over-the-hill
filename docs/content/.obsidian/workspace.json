@@ -13,7 +13,7 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "self-host/index.md",
+                "file": "getting-started/index.md",
                 "mode": "source",
                 "source": false
               },
@@ -170,6 +170,7 @@
   },
   "active": "8447bf94f7b286cf",
   "lastOpenFiles": [
+    "self-host/index.md",
     "getting-started/index.md",
     "getting-started/images/index-11.png",
     "getting-started/images/index-10.png",
@@ -181,7 +182,6 @@
     "getting-started/images/index-4.png",
     "getting-started/images/index-3.png",
     "getting-started/images/index-2.png",
-    "self-host/index.md",
     "_index.md",
     "hello/index.md",
     "().md",
