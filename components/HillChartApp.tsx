@@ -1184,6 +1184,15 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
                         Account
                       </div>
+                      {/* Username Display */}
+                      <div className="px-3 py-2 text-sm text-muted-foreground border-b border-border">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
+                          <span className="truncate max-w-[180px]" title={user?.user_metadata?.name || user?.email || 'Unknown User'}>
+                            {user?.user_metadata?.name || user?.email || 'Unknown User'}
+                          </span>
+                        </div>
+                      </div>
                       <button
                         onClick={() => {
                           setShowEllipsisMenu(false)
