@@ -1051,18 +1051,28 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       positionsArray.sort((a: LabelPosition, b: LabelPosition) => a.x - b.x);
                       
                       // Define viewBox boundaries with padding
+                      const MIN_X = -40; // Left boundary with padding (viewBox starts at -50)
+                      const MAX_X = 640; // Right boundary with padding (viewBox ends at 650)  
                       const MIN_Y = 10; // Top boundary with padding
                       const MAX_Y = 160; // Bottom boundary (leave space for chart labels)
                       
                       positionsArray.forEach((current: LabelPosition) => {
                         let testY = current.y;
+                        let testX = current.x;
                         let stackLevel = 0;
                         let hasCollision = true;
                         let stackDirection = -1; // -1 for upward, 1 for downward
                         
+                        // First, handle horizontal boundary constraints
+                        if (testX < MIN_X) {
+                          testX = MIN_X;
+                        } else if (testX + current.width > MAX_X) {
+                          testX = MAX_X - current.width;
+                        }
+                        
                         while (hasCollision) {
                           hasCollision = Object.values(resolved).some((placed: LabelPosition) => 
-                            detectCollisions({...current, y: testY}, placed)
+                            detectCollisions({...current, x: testX, y: testY}, placed)
                           );
                           
                           if (hasCollision) {
@@ -1098,6 +1108,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         
                         resolved[current.id] = {
                           ...current,
+                          x: testX,
                           y: testY,
                           stackLevel,
                           stackDirection
@@ -1154,7 +1165,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                             className="pointer-events-none"
                           />
                           <text
-                            x={labelPos.displayX}
+                            x={labelPos.x + labelPos.width / 2}
                             y={labelPos.y + labelPos.height / 2}
                             textAnchor="middle"
                             className="fill-foreground pointer-events-none select-none"
