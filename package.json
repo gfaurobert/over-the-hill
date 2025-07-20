@@ -6,7 +6,13 @@
     "dev": "NODE_OPTIONS='--trace-deprecation' next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:codegen": "playwright codegen",
+    "test:install": "playwright install --with-deps"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -48,6 +54,8 @@
     "lucide-react": "^0.454.0",
     "next": "15.2.4",
     "next-themes": "latest",
+    "pnpm": "^10.13.1",
+    "puppeteer": "^24.14.0",
     "react": "^19.1.0",
     "react-day-picker": "9.8.0",
     "react-dom": "^19.1.0",
@@ -61,6 +69,10 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@playwright/browser-chromium": "^1.45.0",
+    "@playwright/browser-firefox": "^1.45.0",
+    "@playwright/browser-webkit": "^1.45.0",
+    "@playwright/test": "^1.45.0",
     "@stagewise-plugins/react": "^0.6.1",
     "@stagewise/toolbar-next": "^0.6.1",
     "@types/node": "^22.16.2",
