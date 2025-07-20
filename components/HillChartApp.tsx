@@ -984,11 +984,26 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                   </text>
                   {/* Dots with Collision Detection */}
                   {(() => {
+                    // Type definitions for collision detection
+                    interface LabelPosition {
+                      id: string;
+                      x: number;
+                      y: number;
+                      width: number;
+                      height: number;
+                      originalDotY: number;
+                      displayX: number;
+                      displayY: number;
+                      fontSize: number;
+                      stackLevel: number;
+                      stackDirection?: number;
+                    }
+
                     // Collision detection and label stacking functions
-                    const calculateLabelPositions = (dots) => {
+                    const calculateLabelPositions = (dots: Dot[]): Record<string, LabelPosition> => {
                       if (!dots || dots.length === 0) return {};
                       
-                      const positions = {};
+                      const positions: Record<string, LabelPosition> = {};
                       
                       // Calculate initial positions and dimensions for all labels
                       dots.forEach(dot => {
@@ -997,10 +1012,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         const textWidth = dot.label.length * (fontSize * 0.6) + 16;
                         const textHeight = fontSize + 12;
                         
-                        // Handle dragging
+                        // Handle dragging with null safety
                         const isBeingDragged = draggingDot?.id === dot.id;
-                        const displayX = isBeingDragged ? (draggingDot.x / 100) * 600 : dotX;
-                        const displayY = isBeingDragged ? draggingDot.y : dot.y;
+                        const displayX = isBeingDragged && draggingDot ? (draggingDot.x / 100) * 600 : dotX;
+                        const displayY = isBeingDragged && draggingDot ? draggingDot.y : dot.y;
                         
                         positions[dot.id] = {
                           id: dot.id,
@@ -1019,7 +1034,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       return positions;
                     };
 
-                    const detectCollisions = (label1, label2) => {
+                    const detectCollisions = (label1: LabelPosition, label2: LabelPosition): boolean => {
                       return !(
                         label1.x + label1.width < label2.x ||
                         label2.x + label2.width < label1.x ||
@@ -1028,25 +1043,25 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       );
                     };
 
-                    const resolveCollisions = (labelPositions) => {
-                      const resolved = {};
+                    const resolveCollisions = (labelPositions: Record<string, LabelPosition>): Record<string, LabelPosition> => {
+                      const resolved: Record<string, LabelPosition> = {};
                       const positionsArray = Object.values(labelPositions);
                       
                       // Sort by X position for left-to-right processing
-                      positionsArray.sort((a, b) => a.x - b.x);
+                      positionsArray.sort((a: LabelPosition, b: LabelPosition) => a.x - b.x);
                       
                       // Define viewBox boundaries with padding
                       const MIN_Y = 10; // Top boundary with padding
                       const MAX_Y = 160; // Bottom boundary (leave space for chart labels)
                       
-                      positionsArray.forEach(current => {
+                      positionsArray.forEach((current: LabelPosition) => {
                         let testY = current.y;
                         let stackLevel = 0;
                         let hasCollision = true;
                         let stackDirection = -1; // -1 for upward, 1 for downward
                         
                         while (hasCollision) {
-                          hasCollision = Object.values(resolved).some(placed => 
+                          hasCollision = Object.values(resolved).some((placed: LabelPosition) => 
                             detectCollisions({...current, y: testY}, placed)
                           );
                           
@@ -1054,7 +1069,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                             stackLevel++;
                             
                             // Calculate potential new position
-                            let newY;
+                            let newY: number;
                             if (stackDirection === -1) {
                               // Try stacking upward first
                               newY = current.originalDotY - 35 - (stackLevel * (current.height + 8));
@@ -1101,10 +1116,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       const dotX = (dot.x / 100) * 600;
                       const dotRadius = 4 + dot.size * 2;
                       
-                      // Use draggingDot for immediate feedback if this dot is being dragged
+                      // Use draggingDot for immediate feedback if this dot is being dragged with null safety
                       const isBeingDragged = draggingDot?.id === dot.id;
-                      const displayX = isBeingDragged ? (draggingDot.x / 100) * 600 : dotX;
-                      const displayY = isBeingDragged ? draggingDot.y : dot.y;
+                      const displayX = isBeingDragged && draggingDot ? (draggingDot.x / 100) * 600 : dotX;
+                      const displayY = isBeingDragged && draggingDot ? draggingDot.y : dot.y;
 
                       // Get calculated label position
                       const labelPos = labelPositions[dot.id];
