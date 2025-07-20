@@ -982,58 +982,147 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                   <text x="570" y="160" textAnchor="middle" className="text-[8px] fill-muted-foreground">
                     Delivery
                   </text>
+                  {/* Dots with Collision Detection */}
+                  {(() => {
+                    // Collision detection and label stacking functions
+                    const calculateLabelPositions = (dots) => {
+                      if (!dots || dots.length === 0) return {};
+                      
+                      const positions = {};
+                      
+                      // Calculate initial positions and dimensions for all labels
+                      dots.forEach(dot => {
+                        const dotX = (dot.x / 100) * 600;
+                        const fontSize = 8 + dot.size * 1;
+                        const textWidth = dot.label.length * (fontSize * 0.6) + 16;
+                        const textHeight = fontSize + 12;
+                        
+                        // Handle dragging
+                        const isBeingDragged = draggingDot?.id === dot.id;
+                        const displayX = isBeingDragged ? (draggingDot.x / 100) * 600 : dotX;
+                        const displayY = isBeingDragged ? draggingDot.y : dot.y;
+                        
+                        positions[dot.id] = {
+                          id: dot.id,
+                          x: displayX - textWidth / 2,
+                          y: displayY - 35,
+                          width: textWidth,
+                          height: textHeight,
+                          originalDotY: displayY,
+                          displayX,
+                          displayY,
+                          fontSize,
+                          stackLevel: 0
+                        };
+                      });
+                      
+                      return positions;
+                    };
 
-                  {/* Dots */}
-                  {currentCollection?.dots.map((dot) => {
-                    const dotX = (dot.x / 100) * 600
-                    const dotRadius = 4 + dot.size * 2
-                    const fontSize = 8 + dot.size * 1
-                    const textWidth = dot.label.length * (fontSize * 0.6) + 16
-                    const textHeight = fontSize + 12
+                    const detectCollisions = (label1, label2) => {
+                      return !(
+                        label1.x + label1.width < label2.x ||
+                        label2.x + label2.width < label1.x ||
+                        label1.y + label1.height < label2.y ||
+                        label2.y + label2.height < label1.y
+                      );
+                    };
 
-                    // Use draggingDot for immediate feedback if this dot is being dragged
-                    const isBeingDragged = draggingDot?.id === dot.id
-                    const displayX = isBeingDragged ? (draggingDot.x / 100) * 600 : dotX
-                    const displayY = isBeingDragged ? draggingDot.y : dot.y
+                    const resolveCollisions = (labelPositions) => {
+                      const resolved = {};
+                      const positionsArray = Object.values(labelPositions);
+                      
+                      // Sort by X position for left-to-right processing
+                      positionsArray.sort((a, b) => a.x - b.x);
+                      
+                      positionsArray.forEach(current => {
+                        let testY = current.y;
+                        let stackLevel = 0;
+                        let hasCollision = true;
+                        
+                        while (hasCollision) {
+                          hasCollision = Object.values(resolved).some(placed => 
+                            detectCollisions({...current, y: testY}, placed)
+                          );
+                          
+                          if (hasCollision) {
+                            stackLevel++;
+                            testY = current.originalDotY - 35 - (stackLevel * (current.height + 8));
+                          }
+                        }
+                        
+                        resolved[current.id] = {
+                          ...current,
+                          y: testY,
+                          stackLevel
+                        };
+                      });
+                      
+                      return resolved;
+                    };
 
-                    return (
-                      <g key={dot.id}>
-                        <circle
-                          cx={displayX}
-                          cy={displayY}
-                          r={dotRadius}
-                          fill={dot.color}
-                          stroke="#fff"
-                          strokeWidth="2"
-                          className={`cursor-pointer hover:opacity-80 ${isBeingDragged ? '' : 'transition-all'}`}
-                          onMouseDown={(e) => handleDotMouseDown(e, dot.id)}
-                        />
-                        <rect
-                          x={displayX - textWidth / 2}
-                          y={displayY - 35}
-                          width={textWidth}
-                          height={textHeight}
-                          rx="8"
-                          ry="8"
-                          fill="hsl(var(--background))"
-                          stroke="hsl(var(--border))"
-                          strokeWidth="1"
-                          className="pointer-events-none"
-                        />
-                        <text
-                          x={displayX}
-                          y={displayY - 35 + textHeight / 2}
-                          textAnchor="middle"
-                          className="fill-foreground pointer-events-none select-none"
-                          dominantBaseline="central"
-                          fontSize={fontSize}
-                          style={{ userSelect: "none" }}
-                        >
-                          {dot.label}
-                        </text>
-                      </g>
-                    )
-                  })}
+                    // Calculate label positions with collision detection
+                    const initialLabelPositions = calculateLabelPositions(currentCollection?.dots || []);
+                    const labelPositions = resolveCollisions(initialLabelPositions);
+
+                    // Render dots with collision-free labels
+                    return currentCollection?.dots.map((dot) => {
+                      const dotX = (dot.x / 100) * 600;
+                      const dotRadius = 4 + dot.size * 2;
+                      
+                      // Use draggingDot for immediate feedback if this dot is being dragged
+                      const isBeingDragged = draggingDot?.id === dot.id;
+                      const displayX = isBeingDragged ? (draggingDot.x / 100) * 600 : dotX;
+                      const displayY = isBeingDragged ? draggingDot.y : dot.y;
+
+                      // Get calculated label position
+                      const labelPos = labelPositions[dot.id];
+                      if (!labelPos) return null;
+
+                      // Calculate visual hierarchy opacity
+                      const opacity = Math.max(0.95, 1.0 - (labelPos.stackLevel * 0.025));
+
+                      return (
+                        <g key={dot.id}>
+                          <circle
+                            cx={displayX}
+                            cy={displayY}
+                            r={dotRadius}
+                            fill={dot.color}
+                            stroke="#fff"
+                            strokeWidth="2"
+                            className={`cursor-pointer hover:opacity-80 ${isBeingDragged ? '' : 'transition-all'}`}
+                            onMouseDown={(e) => handleDotMouseDown(e, dot.id)}
+                          />
+                          <rect
+                            x={labelPos.x}
+                            y={labelPos.y}
+                            width={labelPos.width}
+                            height={labelPos.height}
+                            rx="8"
+                            ry="8"
+                            fill="hsl(var(--background))"
+                            stroke="hsl(var(--border))"
+                            strokeWidth="1"
+                            opacity={opacity}
+                            className="pointer-events-none"
+                          />
+                          <text
+                            x={labelPos.displayX}
+                            y={labelPos.y + labelPos.height / 2}
+                            textAnchor="middle"
+                            className="fill-foreground pointer-events-none select-none"
+                            dominantBaseline="central"
+                            fontSize={labelPos.fontSize}
+                            opacity={opacity}
+                            style={{ userSelect: "none" }}
+                          >
+                            {dot.label}
+                          </text>
+                        </g>
+                      );
+                    });
+                  })()}
                 </svg>
               </div>
             </CardContent>
