@@ -7,6 +7,7 @@
 | Authentication Tests | [Magic Link Authentication Test](#magic-link-authentication-test) | ✅      |
 | Authentication Tests | [Login Authentication Test](#login-authentication-test)           | ✅      |
 
+| UI Tests             | [Boundary Label Stack Test](#boundary-label-stack-test)          | ⏳
 ---
 
 ## Authentication Tests
