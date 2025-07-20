@@ -1035,10 +1035,15 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       // Sort by X position for left-to-right processing
                       positionsArray.sort((a, b) => a.x - b.x);
                       
+                      // Define viewBox boundaries with padding
+                      const MIN_Y = 10; // Top boundary with padding
+                      const MAX_Y = 160; // Bottom boundary (leave space for chart labels)
+                      
                       positionsArray.forEach(current => {
                         let testY = current.y;
                         let stackLevel = 0;
                         let hasCollision = true;
+                        let stackDirection = -1; // -1 for upward, 1 for downward
                         
                         while (hasCollision) {
                           hasCollision = Object.values(resolved).some(placed => 
@@ -1047,14 +1052,40 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                           
                           if (hasCollision) {
                             stackLevel++;
-                            testY = current.originalDotY - 35 - (stackLevel * (current.height + 8));
+                            
+                            // Calculate potential new position
+                            let newY;
+                            if (stackDirection === -1) {
+                              // Try stacking upward first
+                              newY = current.originalDotY - 35 - (stackLevel * (current.height + 8));
+                              
+                              // Check if upward stacking would overflow top boundary
+                              if (newY < MIN_Y) {
+                                // Switch to downward stacking
+                                stackDirection = 1;
+                                stackLevel = 1; // Reset stack level for downward direction
+                                newY = current.originalDotY - 35 + (stackLevel * (current.height + 8));
+                              }
+                            } else {
+                              // Stack downward
+                              newY = current.originalDotY - 35 + (stackLevel * (current.height + 8));
+                              
+                              // Check if downward stacking would overflow bottom boundary
+                              if (newY + current.height > MAX_Y) {
+                                // Clamp to bottom boundary
+                                newY = MAX_Y - current.height;
+                              }
+                            }
+                            
+                            testY = newY;
                           }
                         }
                         
                         resolved[current.id] = {
                           ...current,
                           y: testY,
-                          stackLevel
+                          stackLevel,
+                          stackDirection
                         };
                       });
                       
