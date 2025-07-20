@@ -1,0 +1,358 @@
+{
+  "collections": [
+    {
+      "id": "project-a",
+      "name": "Project B",
+      "dots": [
+        {
+          "id": "3",
+          "collection_id": "project-a",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "label": "Tweaking Dots color and size",
+          "x": 100,
+          "y": 143.3336505,
+          "color": "#f97316",
+          "size": 3,
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-20T08:04:39.645895+00:00"
+        },
+        {
+          "id": "1",
+          "collection_id": "project-a",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "label": "Adding Collections",
+          "x": 100,
+          "y": 143.3336505,
+          "color": "#22c55e",
+          "size": 3,
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-20T07:42:27.086699+00:00"
+        },
+        {
+          "id": "4",
+          "collection_id": "project-a",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "label": "Saving to PNG, SVG and CPB",
+          "x": 100,
+          "y": 143.3336505,
+          "color": "#3b82f6",
+          "size": 3,
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-20T07:43:09.281836+00:00"
+        },
+        {
+          "id": "2",
+          "collection_id": "project-a",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "label": "Adding Dots to Collections",
+          "x": 100,
+          "y": 143.3336505,
+          "color": "#eab308",
+          "size": 3,
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-20T07:43:12.222968+00:00"
+        }
+      ]
+    },
+    {
+      "id": "1752848216127",
+      "name": "Website Redesign Project",
+      "dots": [
+        {
+          "id": "1752848245661",
+          "collection_id": "1752848216127",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "label": "User Research",
+          "x": 86.5334838,
+          "y": 131.4256293,
+          "color": "#22c55e",
+          "size": 3,
+          "created_at": "2025-07-18T14:17:25.713517+00:00",
+          "updated_at": "2025-07-18T14:17:44.240567+00:00"
+        },
+        {
+          "id": "1752848284355",
+          "collection_id": "1752848216127",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "label": "Frontend Development",
+          "x": 50,
+          "y": -5,
+          "color": "#3b82f6",
+          "size": 3,
+          "created_at": "2025-07-18T14:18:04.408398+00:00",
+          "updated_at": "2025-07-18T14:18:04.408398+00:00"
+        },
+        {
+          "id": "1752848252915",
+          "collection_id": "1752848216127",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "label": "Design System",
+          "x": 64.8496399,
+          "y": 44.1419537,
+          "color": "#f97316",
+          "size": 5,
+          "created_at": "2025-07-18T14:17:32.957183+00:00",
+          "updated_at": "2025-07-18T14:18:31.592754+00:00"
+        },
+        {
+          "id": "1752848290327",
+          "collection_id": "1752848216127",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "label": "Testing & QA",
+          "x": 9.4026368,
+          "y": 137.2787777,
+          "color": "#3b82f6",
+          "size": 1,
+          "created_at": "2025-07-18T14:18:10.362944+00:00",
+          "updated_at": "2025-07-18T14:18:43.919222+00:00"
+        }
+      ]
+    },
+    {
+      "id": "1752863529488",
+      "name": "New Collections",
+      "dots": [
+        {
+          "id": "1752863548969",
+          "collection_id": "1752863529488",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "label": "Plan",
+          "x": 50,
+          "y": -5,
+          "color": "#3b82f6",
+          "size": 3,
+          "created_at": "2025-07-18T18:32:29.022121+00:00",
+          "updated_at": "2025-07-18T18:32:29.022121+00:00"
+        }
+      ]
+    }
+  ],
+  "snapshots": [
+    {
+      "date": "2025-07-18",
+      "collectionId": "1752848216127",
+      "collectionName": "Website Redesign Project",
+      "dots": [
+        {
+          "x": 86.5334838,
+          "y": 131.4256293,
+          "id": "1752848245661",
+          "size": 3,
+          "color": "#22c55e",
+          "label": "User Research",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-18T14:17:25.713517+00:00",
+          "updated_at": "2025-07-18T14:17:44.240567+00:00",
+          "collection_id": "1752848216127"
+        },
+        {
+          "x": 50,
+          "y": -5,
+          "id": "1752848284355",
+          "size": 3,
+          "color": "#3b82f6",
+          "label": "Frontend Development",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-18T14:18:04.408398+00:00",
+          "updated_at": "2025-07-18T14:18:04.408398+00:00",
+          "collection_id": "1752848216127"
+        },
+        {
+          "x": 64.8496399,
+          "y": 44.1419537,
+          "id": "1752848252915",
+          "size": 5,
+          "color": "#f97316",
+          "label": "Design System",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-18T14:17:32.957183+00:00",
+          "updated_at": "2025-07-18T14:18:31.592754+00:00",
+          "collection_id": "1752848216127"
+        },
+        {
+          "x": 9.4026368,
+          "y": 137.2787777,
+          "id": "1752848290327",
+          "size": 1,
+          "color": "#3b82f6",
+          "label": "Testing & QA",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-18T14:18:10.362944+00:00",
+          "updated_at": "2025-07-18T14:18:43.919222+00:00",
+          "collection_id": "1752848216127"
+        }
+      ],
+      "timestamp": 1752848463992
+    },
+    {
+      "date": "2025-07-10",
+      "collectionId": "project-a",
+      "collectionName": "Project ABC",
+      "dots": [
+        {
+          "x": 15,
+          "y": 128.4624212,
+          "id": "4",
+          "size": 3,
+          "color": "#3b82f6",
+          "label": "Saving to PNG, SVG and CPB",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-10T10:17:51.093537+00:00",
+          "collection_id": "project-a"
+        },
+        {
+          "x": 56.9362284,
+          "y": 7.4434621,
+          "id": "2",
+          "size": 3,
+          "color": "#eab308",
+          "label": "Adding Dots to Collections",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-10T18:55:53.855292+00:00",
+          "collection_id": "project-a"
+        },
+        {
+          "x": 90.7110901,
+          "y": 137.4062302,
+          "id": "1",
+          "size": 3,
+          "color": "#22c55e",
+          "label": "Adding Collections",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-10T12:06:57.689675+00:00",
+          "collection_id": "project-a"
+        },
+        {
+          "x": 25,
+          "y": 96.3021299,
+          "id": "3",
+          "size": 3,
+          "color": "#f97316",
+          "label": "Tweaking Dots color and size",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-10T10:17:51.091837+00:00",
+          "collection_id": "project-a"
+        }
+      ],
+      "timestamp": 1752173974503
+    },
+    {
+      "date": "2025-07-10",
+      "collectionId": "project-a",
+      "collectionName": "Project ABC",
+      "dots": [
+        {
+          "x": 15,
+          "y": 128.4624212,
+          "id": "4",
+          "size": 3,
+          "color": "#3b82f6",
+          "label": "Saving to PNG, SVG and CPB",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-10T10:17:51.093537+00:00",
+          "collection_id": "project-a"
+        },
+        {
+          "x": 65,
+          "y": 44.9534784,
+          "id": "2",
+          "size": 3,
+          "color": "#eab308",
+          "label": "Adding Dots to Collections",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-10T10:17:51.099697+00:00",
+          "collection_id": "project-a"
+        },
+        {
+          "x": 90.7110901,
+          "y": 137.4062302,
+          "id": "1",
+          "size": 3,
+          "color": "#22c55e",
+          "label": "Adding Collections",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-10T12:06:57.689675+00:00",
+          "collection_id": "project-a"
+        },
+        {
+          "x": 25,
+          "y": 96.3021299,
+          "id": "3",
+          "size": 3,
+          "color": "#f97316",
+          "label": "Tweaking Dots color and size",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-10T10:17:51.091837+00:00",
+          "collection_id": "project-a"
+        }
+      ],
+      "timestamp": 1752173667124
+    },
+    {
+      "date": "2025-07-09",
+      "collectionId": "project-a",
+      "collectionName": "Project ABC",
+      "dots": [
+        {
+          "x": 15,
+          "y": 128.4624212,
+          "id": "4",
+          "size": 3,
+          "color": "#3b82f6",
+          "label": "Saving to PNG, SVG and CPB",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-10T10:17:51.093537+00:00",
+          "collection_id": "project-a"
+        },
+        {
+          "x": 65,
+          "y": 44.9534784,
+          "id": "2",
+          "size": 3,
+          "color": "#eab308",
+          "label": "Adding Dots to Collections",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-10T10:17:51.099697+00:00",
+          "collection_id": "project-a"
+        },
+        {
+          "x": 90.7110901,
+          "y": 137.4062302,
+          "id": "1",
+          "size": 3,
+          "color": "#22c55e",
+          "label": "Adding Collections",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-10T12:06:57.689675+00:00",
+          "collection_id": "project-a"
+        },
+        {
+          "x": 25,
+          "y": 96.3021299,
+          "id": "3",
+          "size": 3,
+          "color": "#f97316",
+          "label": "Tweaking Dots color and size",
+          "user_id": "21a3ec92-607d-4e71-9c29-a59edab98664",
+          "created_at": "2025-07-10T10:06:54.545635+00:00",
+          "updated_at": "2025-07-10T10:17:51.091837+00:00",
+          "collection_id": "project-a"
+        }
+      ],
+      "timestamp": 1752173078842
+    }
+  ],
+  "exportDate": "2025-07-20T08:12:59.535Z",
+  "version": "1.0.0"
+}

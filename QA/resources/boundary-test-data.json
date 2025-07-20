@@ -1,0 +1,115 @@
+{
+  "collections": [
+    {
+      "id": "boundary-test-collection-1",
+      "name": "Boundary Test Collection 1",
+      "dots": [
+        {
+          "id": "dot-1",
+          "label": "Very Long Label That Should Overflow Right Boundary And Test Horizontal Constraints",
+          "x": 85,
+          "y": 120,
+          "color": "#ff6b6b",
+          "size": 8
+        },
+        {
+          "id": "dot-2", 
+          "label": "Another Extremely Long Label For Testing Horizontal Constraints And Boundary Detection",
+          "x": 90,
+          "y": 120,
+          "color": "#4ecdc4",
+          "size": 8
+        },
+        {
+          "id": "dot-3",
+          "label": "Third Long Label To Test Vertical Stacking And Collision Detection Algorithm",
+          "x": 95,
+          "y": 120,
+          "color": "#45b7d1",
+          "size": 8
+        },
+        {
+          "id": "dot-4",
+          "label": "Fourth Label With Maximum Length For Boundary Testing And Overflow Prevention",
+          "x": 100,
+          "y": 120,
+          "color": "#96ceb4",
+          "size": 8
+        },
+        {
+          "id": "dot-5",
+          "label": "Fifth Label To Ensure Proper Stacking Behavior And Boundary Constraint Implementation",
+          "x": 105,
+          "y": 120,
+          "color": "#feca57",
+          "size": 8
+        },
+        {
+          "id": "dot-6",
+          "label": "Sixth Label Testing Right Edge Boundary Constraints And Horizontal Overflow Prevention",
+          "x": 110,
+          "y": 120,
+          "color": "#ff9ff3",
+          "size": 8
+        },
+        {
+          "id": "dot-7",
+          "label": "Seventh Label For Comprehensive Boundary Testing Including Vertical And Horizontal Constraints",
+          "x": 115,
+          "y": 120,
+          "color": "#54a0ff",
+          "size": 8
+        },
+        {
+          "id": "dot-8",
+          "label": "Eighth Label To Validate Export Compatibility And Complete Label Visibility In PNG/SVG",
+          "x": 120,
+          "y": 120,
+          "color": "#5f27cd",
+          "size": 8
+        }
+      ]
+    },
+    {
+      "id": "boundary-test-collection-2", 
+      "name": "Boundary Test Collection 2",
+      "dots": [
+        {
+          "id": "dot-9",
+          "label": "Left Edge Test Label To Validate Minimum X Boundary Constraints And Left Overflow Prevention",
+          "x": 5,
+          "y": 120,
+          "color": "#00d2d3",
+          "size": 8
+        },
+        {
+          "id": "dot-10",
+          "label": "Right Edge Test Label To Validate Maximum X Boundary Constraints And Right Overflow Prevention", 
+          "x": 95,
+          "y": 120,
+          "color": "#ff9f43",
+          "size": 8
+        },
+        {
+          "id": "dot-11",
+          "label": "Top Edge Test Label To Validate Minimum Y Boundary Constraints And Top Overflow Prevention",
+          "x": 50,
+          "y": 10,
+          "color": "#10ac84",
+          "size": 8
+        },
+        {
+          "id": "dot-12",
+          "label": "Bottom Edge Test Label To Validate Maximum Y Boundary Constraints And Bottom Overflow Prevention",
+          "x": 50,
+          "y": 150,
+          "color": "#ee5253",
+          "size": 8
+        }
+      ]
+    }
+  ],
+  "snapshots": [],
+  "exportDate": "2024-01-15T10:30:00.000Z",
+  "version": "1.0.0"
+} 
