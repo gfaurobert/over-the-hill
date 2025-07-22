@@ -182,8 +182,8 @@ Brief description of what this test validates.
 
 #### Steps
 
-| Steps | Expected Behavior | Actual Behavior | Status |
-| --- | --- | --- | --- |
+| Steps | Expected Behavior | Actual Behavior | Screenshot | Status |
+| --- | --- | --- | --- | --- |
 | Step 1 | Expected behavior description | Actual behavior with screenshot | ![step1.png](assets/{category}/{test-name}/step1.png) | Passed |
 | Step 2 | Expected behavior description | Actual behavior with screenshot | ![step2.png](assets/{category}/{test-name}/step2.png) | Passed |
 ```

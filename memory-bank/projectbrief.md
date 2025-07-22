@@ -34,7 +34,7 @@
 - ✅ Core Hill Chart visualization with bell curve
 - ✅ Drag-and-drop dot positioning
 - ✅ Collection management system
-- ✅ Dot customization (color, size, label)
+- ✅ Dot customization (color, size, label, **name length limited to 32 characters for performance**)
 - ✅ Export functionality (PNG/SVG)
 - ✅ Theme switching
 - ✅ Snapshot system with calendar

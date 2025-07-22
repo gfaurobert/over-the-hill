@@ -74,7 +74,8 @@
               "title": "Bookmarks"
             }
           }
-        ]
+        ],
+        "currentTab": 2
       }
     ],
     "direction": "horizontal",
@@ -168,7 +169,7 @@
       "command-palette:Open command palette": false
     }
   },
-  "active": "8447bf94f7b286cf",
+  "active": "b566c152e8b776b7",
   "lastOpenFiles": [
     "self-host/index.md",
     "getting-started/index.md",

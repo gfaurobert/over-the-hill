@@ -26,6 +26,8 @@ import {
   Heart, // Add Heart icon import
   Edit2,
   X,
+  Archive as ArchiveIcon,
+  Undo2,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { useTheme } from "next-themes"
@@ -51,6 +53,7 @@ export interface Dot {
   y: number
   color: string
   size: number
+  archived?: boolean // new
 }
 
 export interface Collection {
@@ -146,6 +149,12 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [editingCollectionName, setEditingCollectionName] = useState("")
   const [editingCollectionId, setEditingCollectionId] = useState<string | null>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
+
+  // Add state to track which dot is being edited
+  const [editingDotId, setEditingDotId] = useState<string | null>(null)
+
+  // Add state to track which dot's menu is open
+  const [dotMenuOpen, setDotMenuOpen] = useState<string | null>(null)
 
   useEffect(() => {
     if (user) {
@@ -275,6 +284,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       y: getHillY(50),
       color: defaultColors[0],
       size: 3,
+      archived: false,
     }
     const addedDot = await addDotService(newDot, selectedCollection, user.id)
     if (addedDot) {
@@ -886,6 +896,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     )
   }
 
+  // Before rendering the dot list, define activeDots and archivedDots
+  const activeDots: Dot[] = (currentCollection?.dots || []).filter((dot: Dot) => !dot.archived);
+  const archivedDots: Dot[] = (currentCollection?.dots || []).filter((dot: Dot) => dot.archived);
+
   return (
     <div className="min-h-screen p-4 bg-transparent" style={{ userSelect: isDragging ? "none" : "auto" }}>
       <div className="max-w-screen-2xl mx-auto grid grid-cols-1 lg:grid-cols-[2.4fr_1.2fr] gap-6">
@@ -997,6 +1011,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       fontSize: number;
                       stackLevel: number;
                       stackDirection?: number;
+                      textCenterX: number; // Added for text centering
                     }
 
                     // Collision detection and label stacking functions
@@ -1004,22 +1019,36 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       if (!dots || dots.length === 0) return {};
                       
                       const positions: Record<string, LabelPosition> = {};
+                      const SVG_WIDTH = 600;
                       
                       // Calculate initial positions and dimensions for all labels
                       dots.forEach(dot => {
-                        const dotX = (dot.x / 100) * 600;
+                        const dotX = (dot.x / 100) * SVG_WIDTH;
                         const fontSize = 8 + dot.size * 1;
                         const textWidth = dot.label.length * (fontSize * 0.6) + 16;
                         const textHeight = fontSize + 12;
                         
                         // Handle dragging with null safety
                         const isBeingDragged = draggingDot?.id === dot.id;
-                        const displayX = isBeingDragged && draggingDot ? (draggingDot.x / 100) * 600 : dotX;
+                        const displayX = isBeingDragged && draggingDot ? (draggingDot.x / 100) * SVG_WIDTH : dotX;
                         const displayY = isBeingDragged && draggingDot ? draggingDot.y : dot.y;
                         
+                        // Clamp label X so it never overflows left or right edge
+                        let labelX = displayX - textWidth / 2;
+                        if (labelX < 0) labelX = 0;
+                        if (labelX + textWidth > SVG_WIDTH) labelX = SVG_WIDTH - textWidth;
+
+                        // Calculate the text's actual X so it stays centered above the dot, but never outside the label background
+                        let textCenterX = displayX;
+                        if (textCenterX < labelX + textWidth / 2) textCenterX = Math.max(labelX + textWidth / 2, textCenterX);
+                        if (textCenterX > labelX + textWidth / 2) textCenterX = Math.min(labelX + textWidth / 2, textCenterX);
+                        // If the dot is near the edge, clamp the text center to the middle of the label background
+                        if (displayX < labelX) textCenterX = labelX + textWidth / 2;
+                        if (displayX > labelX + textWidth) textCenterX = labelX + textWidth / 2;
+
                         positions[dot.id] = {
                           id: dot.id,
-                          x: displayX - textWidth / 2,
+                          x: labelX,
                           y: displayY - 35,
                           width: textWidth,
                           height: textHeight,
@@ -1027,7 +1056,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                           displayX,
                           displayY,
                           fontSize,
-                          stackLevel: 0
+                          stackLevel: 0,
+                          textCenterX
                         };
                       });
                       
@@ -1051,30 +1081,20 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       positionsArray.sort((a: LabelPosition, b: LabelPosition) => a.x - b.x);
                       
                       // Define viewBox boundaries with padding
-                      const MIN_X = -40; // Left boundary with padding (viewBox starts at -50)
-                      const MAX_X = 640; // Right boundary with padding (viewBox ends at 650)  
                       const MIN_Y = 10; // Top boundary with padding
                       const MAX_Y = 160; // Bottom boundary (leave space for chart labels)
+                      const MAX_STACK_ATTEMPTS = 50; // Safeguard: max attempts to resolve collision
                       
                       positionsArray.forEach((current: LabelPosition) => {
                         let testY = current.y;
-                        let testX = current.x;
                         let stackLevel = 0;
                         let hasCollision = true;
                         let stackDirection = -1; // -1 for upward, 1 for downward
-                        
-                        // First, handle horizontal boundary constraints
-                        if (testX < MIN_X) {
-                          testX = MIN_X;
-                        } else if (testX + current.width > MAX_X) {
-                          testX = MAX_X - current.width;
-                        }
-                        
-                        while (hasCollision) {
+                        let attempts = 0;
+                        while (hasCollision && attempts < MAX_STACK_ATTEMPTS) {
                           hasCollision = Object.values(resolved).some((placed: LabelPosition) => 
-                            detectCollisions({...current, x: testX, y: testY}, placed)
+                            detectCollisions({...current, y: testY}, placed)
                           );
-                          
                           if (hasCollision) {
                             stackLevel++;
                             
@@ -1104,11 +1124,12 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                             
                             testY = newY;
                           }
+                          attempts++;
                         }
                         
+                        // If max attempts reached, just place at last tried position
                         resolved[current.id] = {
                           ...current,
-                          x: testX,
                           y: testY,
                           stackLevel,
                           stackDirection
@@ -1119,11 +1140,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                     };
 
                     // Calculate label positions with collision detection
-                    const initialLabelPositions = calculateLabelPositions(currentCollection?.dots || []);
+                    const initialLabelPositions = calculateLabelPositions((currentCollection?.dots || []).filter(dot => !dot.archived));
                     const labelPositions = resolveCollisions(initialLabelPositions);
 
                     // Render dots with collision-free labels
-                    return currentCollection?.dots.map((dot) => {
+                    return (currentCollection?.dots || []).filter(dot => !dot.archived).map((dot) => {
                       const dotX = (dot.x / 100) * 600;
                       const dotRadius = 4 + dot.size * 2;
                       
@@ -1165,7 +1186,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                             className="pointer-events-none"
                           />
                           <text
-                            x={labelPos.x + labelPos.width / 2}
+                            x={labelPos.textCenterX}
                             y={labelPos.y + labelPos.height / 2}
                             textAnchor="middle"
                             className="fill-foreground pointer-events-none select-none"
@@ -1502,20 +1523,36 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
               <Input
                 placeholder="Enter dot name and press Enter to add..."
                 value={newDotLabel}
-                onChange={(e) => setNewDotLabel(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value.length <= 24) {
+                    setNewDotLabel(e.target.value)
+                  }
+                }}
+                onFocus={() => setEditingDotId(null)}
                 onKeyPress={(e) => e.key === "Enter" && addDot()}
+                maxLength={24}
               />
+              {newDotLabel.length === 24 && editingDotId === null && (
+                <div className="text-xs text-red-500 mt-1">Dot name cannot exceed 24 characters.</div>
+              )}
 
               <div className="space-y-2 max-h-96 overflow-y-auto">
-                {currentCollection?.dots.map((dot) => (
+                {activeDots.map((dot: Dot) => (
                   <div key={dot.id} className="p-3 bg-muted/50 rounded-lg space-y-3">
                     {/* Dot Name and Controls Row */}
                     <div className="flex items-center gap-2">
                       <Input
                         value={dot.label}
-                        onChange={(e) => updateDot(dot.id, { label: e.target.value })}
+                        onChange={(e) => {
+                          if (e.target.value.length <= 24) {
+                            updateDot(dot.id, { label: e.target.value })
+                          }
+                        }}
+                        onFocus={() => setEditingDotId(dot.id)}
+                        onBlur={() => setEditingDotId(null)}
                         className="text-sm flex-1"
                         placeholder="Dot name"
+                        maxLength={24}
                       />
                       <Select
                         value={dot.color}
@@ -1563,18 +1600,82 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                           ))}
                         </SelectContent>
                       </Select>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setDeleteConfirm({ dotId: dot.id, dotLabel: dot.label })}
-                        className="h-8 w-8 p-0 border-red-200 hover:border-red-300 hover:bg-red-50"
-                      >
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </Button>
+                      {/* In the dot row, wrap the ellipsis button and menu in a relative div */}
+                      <div className="relative">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDotMenuOpen(dotMenuOpen === dot.id ? null : dot.id)}
+                          className="h-8 w-8 p-0 border-muted hover:border-accent hover:bg-accent/20"
+                        >
+                          <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                        </Button>
+                        {dotMenuOpen === dot.id && (
+                          <div className="absolute right-0 top-9 z-50 bg-background border border-border rounded shadow-lg min-w-[140px]">
+                            <button
+                              className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-accent hover:text-accent-foreground"
+                              onClick={() => {
+                                setDotMenuOpen(null)
+                                setDeleteConfirm({ dotId: dot.id, dotLabel: dot.label })
+                              }}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-500" /> Delete
+                            </button>
+                            <button
+                              className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-accent hover:text-accent-foreground"
+                              onClick={async () => {
+                                setDotMenuOpen(null)
+                                await updateDot(dot.id, { archived: true })
+                              }}
+                            >
+                              <ArchiveIcon className="w-4 h-4 text-muted-foreground" /> Archive
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </div>
+                    {dot.label.length === 24 && editingDotId === dot.id && (
+                      <div className="text-xs text-red-500 mt-1">Dot name cannot exceed 24 characters.</div>
+                    )}
                   </div>
                 ))}
               </div>
+              {archivedDots.length > 0 && (
+                <>
+                  <div className="border-t border-border my-2" />
+                  <div className="text-xs text-muted-foreground mb-1">Archived</div>
+                  {archivedDots.map((dot: Dot) => (
+                    <div key={dot.id} className="p-3 bg-muted/50 rounded-lg space-y-3 opacity-60 italic">
+                      <div className="flex items-center gap-2">
+                        <Input value={dot.label} disabled className="text-sm flex-1 italic" />
+                        <div className="relative">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setDotMenuOpen(dotMenuOpen === dot.id ? null : dot.id)}
+                            className="h-8 w-8 p-0 border-muted hover:border-accent hover:bg-accent/20"
+                          >
+                            <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                          {dotMenuOpen === dot.id && (
+                            <div className="absolute right-0 top-9 z-50 bg-background border border-border rounded shadow-lg min-w-[140px]">
+                              <button
+                                className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-accent hover:text-accent-foreground"
+                                onClick={async () => {
+                                  setDotMenuOpen(null)
+                                  await updateDot(dot.id, { archived: false })
+                                }}
+                              >
+                                <Undo2 className="w-4 h-4 text-muted-foreground" /> Unarchive
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

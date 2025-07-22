@@ -1,7 +1,16 @@
 # Active Context
 
 ## Current Focus
-**Level 2 Task: Stack Overlapping Dot Names on Hill Chart - COMPLETED ✅**
+**Level 2 Task: Limit Dot Name Length to 32 Characters - IN PROGRESS**
+
+### Rationale
+- Prevents app unresponsiveness when users enter excessively long dot names.
+- Ensures consistent user experience and performance.
+
+### Implementation Plan
+- Add a 32-character limit to all dot name input fields (add/edit)
+- Provide user feedback when the limit is reached
+- Test for responsiveness and correct feedback
 
 ### Final Status: ALL ISSUES RESOLVED ✅
 - ✅ **VAN Phase**: Problem identification and analysis complete

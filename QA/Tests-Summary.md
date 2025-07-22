@@ -7,7 +7,6 @@
 | Authentication Tests | [Magic Link Authentication Test](#magic-link-authentication-test) | ✅      |
 | Authentication Tests | [Login Authentication Test](#login-authentication-test)           | ✅      |
 
-| UI Tests             | [Boundary Label Stack Test](#boundary-label-stack-test)          | ⏳
 ---
 
 ## Authentication Tests
@@ -56,25 +55,6 @@ Test the traditional email/password login functionality to verify that users can
 
 ## User Interface Tests
 Tests that validate UI components, user interactions, and responsive design.
-
-### Boundary Label Stack Test
-
-#### Description
-Tests the boundary-aware label stacking feature that prevents dot labels from overflowing outside the SVG viewBox boundaries. Validates both horizontal and vertical constraints, collision detection, and export compatibility.
-
-#### Script
-- QA/scripts/ui/boundary-label-stack-test/run.js
-
-#### Steps
-
-| Steps | Expected Behavior | Actual Behavior | Status |
-| --- | --- | --- | --- |
-| Step 1 | App loads successfully | App loads with hill chart interface | ![step1.png](assets/ui/boundary-label-stack-test/step1-app-loaded.png) | Pending |
-| Step 2 | Collection created and dots with long labels added | Dots with long labels added to test boundary constraints | ![step2.png](assets/ui/boundary-label-stack-test/step2-dots-added.png) | Pending |
-| Step 3 | Horizontal boundary constraints working | No labels extend beyond right boundary (640px) | ![step3.png](assets/ui/boundary-label-stack-test/step3-horizontal-constraints.png) | Pending |
-| Step 4 | Vertical stacking behavior working | Labels stack vertically when overlapping | ![step4.png](assets/ui/boundary-label-stack-test/step4-vertical-stacking.png) | Pending |
-| Step 5 | Export dialog appears | Export functionality accessible | ![step5.png](assets/ui/boundary-label-stack-test/step5-export-dialog.png) | Pending |
-| Step 6 | All labels visible and within bounds | Labels stay within viewBox bounds (-50 to 650, 0 to 180) | ![step6.png](assets/ui/boundary-label-stack-test/step6-all-labels-visible.png) | Pending |
 
 ### **Future Tests:**
 - Navigation Menu Test

@@ -91,6 +91,27 @@ interface LabelPosition {
 
 ---
 
+## Current Task: Limit Dot Name Length to 32 Characters
+**Status**: IN PROGRESS  
+**Priority**: Medium  
+**Type**: Level 2 - Simple Enhancement  
+
+### Task Description
+Prevent app unresponsiveness by limiting the number of characters allowed for a dot name to 32. Provide user feedback when the limit is reached, and ensure both new dot creation and dot label editing are covered.
+
+### Problem Analysis & Solutions
+- **Original Issue**: App becomes unresponsive when entering very long dot names.
+- **Solution**: Add a character limit (32) to dot name input fields and show a warning when the limit is reached.
+
+### Plan & Subtasks
+- [ ] Analyze all dot name input locations (add/edit)
+- [ ] Implement 32-character limit for dot name input fields
+- [ ] Add user feedback when limit is reached
+- [ ] Test for unresponsiveness and correct feedback
+- [ ] Update documentation and context
+
+---
+
 ## Recently Completed Tasks
 
 ### Task: Add Username Display to Ellipsis Menu - COMPLETED ✅
