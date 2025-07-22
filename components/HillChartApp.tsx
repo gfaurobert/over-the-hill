@@ -327,35 +327,58 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   const prepareSvgForExport = (): string | null => {
     if (!svgRef.current) return null
-    const svgNode = svgRef.current.cloneNode(true) as SVGSVGElement
-    const style = getComputedStyle(document.documentElement)
 
     const isDarkMode = document.documentElement.classList.contains("dark")
     const backgroundColor = isDarkMode ? "#0f0f0f" : "#ffffff"
+    const textColor = isDarkMode ? "#fafafa" : "#0a0a0a"
+    const mutedColor = isDarkMode ? "#a1a1aa" : "#71717a"
+    const borderColor = isDarkMode ? "#27272a" : "#e4e4e7"
 
-    svgNode.style.backgroundColor = backgroundColor
-    svgNode.setAttribute("width", "800")
-    svgNode.setAttribute("height", "360")
-    svgNode.setAttribute("viewBox", "-50 0 700 180")
+    const svgElement = svgRef.current.cloneNode(true) as SVGSVGElement
+    svgElement.setAttribute("width", "800")
+    svgElement.setAttribute("height", "360")
+    svgElement.style.backgroundColor = backgroundColor
+    svgElement.setAttribute("viewBox", "-50 0 700 180")
 
-    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs")
-    const styleElement = document.createElementNS("http://www.w3.org/2000/svg", "style")
-    styleElement.textContent = `
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
-      svg { font-family: 'Inter', sans-serif; }
-      .fill-foreground { fill: ${isDarkMode ? "hsl(var(--foreground))" : "hsl(var(--foreground))"}; }
-      .fill-muted-foreground { fill: ${
-        isDarkMode ? "hsl(var(--muted-foreground))" : "hsl(var(--muted-foreground))"
-      }; }
-      .stroke-currentColor { stroke: ${isDarkMode ? "hsl(var(--foreground))" : "hsl(var(--foreground))"}; }
-      .stroke-muted-foreground { stroke: ${
-        isDarkMode ? "hsl(var(--muted-foreground))" : "hsl(var(--muted-foreground))"
-      }; }
-    `
-    defs.appendChild(styleElement)
-    svgNode.insertBefore(defs, svgNode.firstChild)
+    const paths = svgElement.querySelectorAll("path")
+    paths.forEach((path) => {
+      if (path.getAttribute("stroke") === "currentColor") path.setAttribute("stroke", textColor)
+    })
 
-    return new XMLSerializer().serializeToString(svgNode)
+    const lines = svgElement.querySelectorAll("line")
+    lines.forEach((line) => {
+      if (line.getAttribute("stroke") === "currentColor") line.setAttribute("stroke", textColor)
+      if (line.getAttribute("stroke") === "hsl(var(--muted-foreground))") line.setAttribute("stroke", mutedColor)
+    })
+
+    const texts = svgElement.querySelectorAll("text")
+    texts.forEach((text) => {
+      text.setAttribute("font-family", "Arial, Helvetica, sans-serif")
+      if (text.classList.contains("fill-foreground")) text.setAttribute("fill", textColor)
+      if (text.classList.contains("fill-muted-foreground")) text.setAttribute("fill", mutedColor)
+
+      const currentFontSize = text.getAttribute("fontSize") || text.style.fontSize
+      if (currentFontSize) {
+        text.setAttribute("font-size", currentFontSize)
+      } else {
+        if (text.classList.contains("text-[8px]")) text.setAttribute("font-size", "8px")
+        else if (text.classList.contains("text-sm")) text.setAttribute("font-size", "14px")
+        else {
+          const fontSizeAttr = text.getAttribute("fontSize")
+          if (fontSizeAttr) text.setAttribute("font-size", fontSizeAttr + "px")
+        }
+      }
+      if (text.classList.contains("font-semibold")) text.setAttribute("font-weight", "600")
+      else if (text.classList.contains("font-normal")) text.setAttribute("font-weight", "400")
+    })
+
+    const rects = svgElement.querySelectorAll("rect")
+    rects.forEach((rect) => {
+      if (rect.getAttribute("fill") === "hsl(var(--background))") rect.setAttribute("fill", backgroundColor)
+      if (rect.getAttribute("stroke") === "hsl(var(--border))") rect.setAttribute("stroke", borderColor)
+    })
+
+    return new XMLSerializer().serializeToString(svgElement)
   }
 
   const copyChartAsPNG = async () => {
