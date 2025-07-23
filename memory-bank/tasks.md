@@ -104,11 +104,11 @@ Prevent app unresponsiveness by limiting the number of characters allowed for a 
 - **Solution**: Add a character limit (32) to dot name input fields and show a warning when the limit is reached.
 
 ### Plan & Subtasks
-- [ ] Analyze all dot name input locations (add/edit)
-- [ ] Implement 32-character limit for dot name input fields
-- [ ] Add user feedback when limit is reached
-- [ ] Test for unresponsiveness and correct feedback
-- [ ] Update documentation and context
+- [x] Analyze all dot name input locations (add/edit)
+- [x] Implement 32-character limit for dot name input fields
+- [x] Add user feedback when limit is reached
+- [x] Test for unresponsiveness and correct feedback
+- [x] Update documentation and context
 
 ---
 
@@ -121,3 +121,42 @@ Prevent app unresponsiveness by limiting the number of characters allowed for a 
 ### Task: SaaS Transformation with Supabase Backend and Auth - COMPLETED ✅
 
 **All authentication, backend infrastructure, and UI enhancement features are complete and production-ready.**
+
+---
+
+## Task: Support Dot Archiving in Export, Import, and Snapshot
+
+**Status**: IN PROGRESS  
+**Priority**: High  
+**Type**: Level 2 - Simple Enhancement  
+
+### Task Description
+Update the Export, Import, and Snapshot features to fully support the `archived` property for dots. Ensure that the archived status is preserved and correctly handled in all data flows.
+
+### Plan & Subtasks
+
+#### 1. Export: Include `archived` in Exported JSON
+- [ X] Review the export logic (function that builds the export JSON)
+- [X ] Ensure each dot object in the export includes the `archived` property (true/false)
+- [ ] Update or add tests to verify that exported dots include the `archived` field
+
+#### 2. Import: Accept `archived` in Imported JSON
+- [ ] Review the import logic (where JSON is parsed and dots are inserted)
+- [ ] Update the dot creation logic to read and set the `archived` property from the imported JSON
+- [ ] Ensure that if `archived` is missing, it defaults to `false` (for old exports)
+- [ ] Add/Update tests to verify that imported dots have the correct `archived` status
+- [ ] Update documentation or UI hints if the import format changes
+
+#### 3. Snapshot: Save and Restore `archived` Status
+- [ ] Review the snapshot creation logic (where dots are serialized into the snapshot)
+- [ ] Ensure the `archived` property is included for each dot in the snapshot data
+- [ ] Review the snapshot restore logic to ensure it sets the `archived` property on dots
+- [ ] Add/Update tests to verify that snapshot/restore preserves the `archived` status
+- [ ] Update documentation or UI hints if the snapshot format changes
+
+#### General/Other Considerations
+- [ ] Update any type definitions or interfaces (e.g., `Dot`, `ExportData`, `Snapshot`) to ensure `archived` is always present and typed
+- [ ] Communicate the change in export/import/snapshot format to users if needed (e.g., changelog, migration note)
+- [ ] Consider versioning the export format if you expect more changes in the future
+
+---
