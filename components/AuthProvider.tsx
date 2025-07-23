@@ -31,46 +31,58 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Refs for intervals and timeouts
     const validationIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isValidatingRef = useRef(false);
 
     // Validate session server-side
     const validateSession = useCallback(async (): Promise<ValidationResponse> => {
+        // Prevent concurrent validations
+        if (isValidatingRef.current) {
+            console.log('[AUTH_PROVIDER] Validation already in progress, skipping');
+            return lastValidation || { valid: false, error: 'Validation in progress' };
+        }
+
+        isValidatingRef.current = true;
         console.log('[AUTH_PROVIDER] Validating session server-side');
         
-        const validation = await sessionValidationService.validateWithRefresh();
-        setLastValidation(validation);
-        
-        if (validation.valid) {
-            setIsSessionValid(true);
+        try {
+            const validation = await sessionValidationService.validateWithRefresh();
+            setLastValidation(validation);
             
-            // Schedule refresh if session expires soon
-            if (validation.session?.expires_at) {
-                const expiryInfo = sessionValidationService.getSessionExpiryInfo(validation.session.expires_at);
+            if (validation.valid) {
+                setIsSessionValid(true);
                 
-                if (expiryInfo.isExpiringSoon && !refreshTimeoutRef.current) {
-                    const refreshDelay = Math.max(0, (expiryInfo.timeUntilExpiry || 0) - 60) * 1000; // Refresh 1 minute before expiry
+                // Schedule refresh if session expires soon
+                if (validation.session?.expires_at) {
+                    const expiryInfo = sessionValidationService.getSessionExpiryInfo(validation.session.expires_at);
                     
-                    console.log(`[AUTH_PROVIDER] Scheduling session refresh in ${refreshDelay / 1000} seconds`);
-                    
-                    refreshTimeoutRef.current = setTimeout(async () => {
-                        console.log('[AUTH_PROVIDER] Auto-refreshing session');
-                        await refreshSession();
-                        refreshTimeoutRef.current = null;
-                    }, refreshDelay);
+                    if (expiryInfo.isExpiringSoon && !refreshTimeoutRef.current) {
+                        const refreshDelay = Math.max(0, (expiryInfo.timeUntilExpiry || 0) - 60) * 1000; // Refresh 1 minute before expiry
+                        
+                        console.log(`[AUTH_PROVIDER] Scheduling session refresh in ${refreshDelay / 1000} seconds`);
+                        
+                        refreshTimeoutRef.current = setTimeout(async () => {
+                            console.log('[AUTH_PROVIDER] Auto-refreshing session');
+                            await refreshSession();
+                            refreshTimeoutRef.current = null;
+                        }, refreshDelay);
+                    }
+                }
+            } else {
+                setIsSessionValid(false);
+                console.warn(`[AUTH_PROVIDER] Session validation failed: ${validation.error}`);
+                
+                // Clear any scheduled refresh
+                if (refreshTimeoutRef.current) {
+                    clearTimeout(refreshTimeoutRef.current);
+                    refreshTimeoutRef.current = null;
                 }
             }
-        } else {
-            setIsSessionValid(false);
-            console.warn(`[AUTH_PROVIDER] Session validation failed: ${validation.error}`);
             
-            // Clear any scheduled refresh
-            if (refreshTimeoutRef.current) {
-                clearTimeout(refreshTimeoutRef.current);
-                refreshTimeoutRef.current = null;
-            }
+            return validation;
+        } finally {
+            isValidatingRef.current = false;
         }
-        
-        return validation;
-    }, []);
+    }, [lastValidation]);
 
     // Refresh session
     const refreshSession = useCallback(async (): Promise<boolean> => {
@@ -106,10 +118,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsInRecoveryMode(false);
         }
         
-        if (newSession) {
-            // Validate new session server-side
+        if (newSession && event !== 'INITIAL_SESSION') {
+            // Only validate for non-initial session events to prevent loops
             await validateSession();
-        } else {
+        } else if (!newSession) {
             // Clear validation state when signed out
             setIsSessionValid(false);
             setLastValidation(null);
@@ -159,26 +171,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         initializeAuth();
 
-        // Set up periodic validation for active sessions
-        validationIntervalRef.current = setInterval(async () => {
-            if (session && mounted) {
-                console.log('[AUTH_PROVIDER] Periodic session validation');
-                await validateSession();
-            }
-        }, 5 * 60 * 1000); // Validate every 5 minutes
-
         return () => {
             mounted = false;
             subscription.unsubscribe();
-            
+        };
+    }, [handleAuthStateChange, validateSession]);
+
+    // Set up periodic validation for active sessions (separate effect)
+    useEffect(() => {
+        if (session && !validationIntervalRef.current) {
+            console.log('[AUTH_PROVIDER] Setting up periodic session validation');
+            validationIntervalRef.current = setInterval(async () => {
+                if (session) {
+                    console.log('[AUTH_PROVIDER] Periodic session validation');
+                    await validateSession();
+                }
+            }, 5 * 60 * 1000); // Validate every 5 minutes
+        } else if (!session && validationIntervalRef.current) {
+            console.log('[AUTH_PROVIDER] Clearing periodic session validation');
+            clearInterval(validationIntervalRef.current);
+            validationIntervalRef.current = null;
+        }
+
+        return () => {
             if (validationIntervalRef.current) {
                 clearInterval(validationIntervalRef.current);
+                validationIntervalRef.current = null;
             }
             if (refreshTimeoutRef.current) {
                 clearTimeout(refreshTimeoutRef.current);
+                refreshTimeoutRef.current = null;
             }
         };
-    }, [session, handleAuthStateChange, validateSession]);
+    }, [session, validateSession]);
 
     // Sign out the user
     const signOut = async () => {

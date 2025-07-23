@@ -34,6 +34,8 @@ class SessionValidationService {
   private validationCache = new Map<string, { result: ValidationResponse; timestamp: number }>();
   private readonly CACHE_DURATION = 30 * 1000; // 30 seconds
   private readonly REQUEST_TIMEOUT = 10 * 1000; // 10 seconds
+  private validationPromise: Promise<ValidationResponse> | null = null;
+  private refreshPromise: Promise<RefreshResponse> | null = null;
 
   private constructor() {}
 
@@ -80,16 +82,14 @@ class SessionValidationService {
    * Validates the current session server-side
    */
   async validateSession(accessToken?: string, refreshToken?: string): Promise<ValidationResponse> {
-    const tokens = accessToken && refreshToken ? { accessToken, refreshToken } : this.getStoredTokens();
-    const cacheKey = `session_validation_${tokens.accessToken?.substring(0, 10) || 'no_token'}`;
-    const cached = this.validationCache.get(cacheKey);
-    
-    // Return cached result if still valid
-    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
-      console.log('[SESSION_VALIDATION] Using cached validation result');
-      return cached.result;
+    // Return existing promise if validation is already in progress
+    if (this.validationPromise) {
+      console.log('[SESSION_VALIDATION] Using existing validation promise');
+      return this.validationPromise;
     }
 
+    const tokens = accessToken && refreshToken ? { accessToken, refreshToken } : this.getStoredTokens();
+    
     if (!tokens.accessToken) {
       return {
         valid: false,
@@ -98,6 +98,33 @@ class SessionValidationService {
       };
     }
 
+    // Create a stable cache key based on token hash
+    const tokenHash = this.hashToken(tokens.accessToken);
+    const cacheKey = `session_validation_${tokenHash}`;
+    const cached = this.validationCache.get(cacheKey);
+    
+    // Return cached result if still valid
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      console.log('[SESSION_VALIDATION] Using cached validation result');
+      return cached.result;
+    }
+
+    // Create validation promise with guaranteed accessToken
+    const validationTokens = {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken
+    };
+    this.validationPromise = this.performValidation(validationTokens, cacheKey);
+    
+    try {
+      const result = await this.validationPromise;
+      return result;
+    } finally {
+      this.validationPromise = null;
+    }
+  }
+
+  private async performValidation(tokens: { accessToken: string; refreshToken?: string }, cacheKey: string): Promise<ValidationResponse> {
     try {
       console.log('[SESSION_VALIDATION] Validating session server-side');
       
@@ -163,9 +190,28 @@ class SessionValidationService {
   }
 
   /**
+   * Create a simple hash of the token for cache key stability
+   */
+  private hashToken(token: string): string {
+    let hash = 0;
+    for (let i = 0; i < Math.min(token.length, 20); i++) {
+      const char = token.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return hash.toString();
+  }
+
+  /**
    * Refreshes the current session server-side
    */
   async refreshSession(refreshToken?: string): Promise<RefreshResponse> {
+    // Return existing promise if refresh is already in progress
+    if (this.refreshPromise) {
+      console.log('[SESSION_VALIDATION] Using existing refresh promise');
+      return this.refreshPromise;
+    }
+
     const tokens = this.getStoredTokens();
     const tokenToUse = refreshToken || tokens.refreshToken;
 
@@ -177,6 +223,18 @@ class SessionValidationService {
       };
     }
 
+    // Create refresh promise
+    this.refreshPromise = this.performRefresh(tokenToUse);
+    
+    try {
+      const result = await this.refreshPromise;
+      return result;
+    } finally {
+      this.refreshPromise = null;
+    }
+  }
+
+  private async performRefresh(refreshToken: string): Promise<RefreshResponse> {
     try {
       console.log('[SESSION_VALIDATION] Refreshing session server-side');
       
@@ -189,7 +247,7 @@ class SessionValidationService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          refreshToken: tokenToUse
+          refreshToken: refreshToken
         }),
         credentials: 'include',
         signal: controller.signal,
