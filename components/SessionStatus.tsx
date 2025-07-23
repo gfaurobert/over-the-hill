@@ -145,7 +145,7 @@ export function SessionStatus({ showDetails = false, className = '' }: SessionSt
           <div className="space-y-2 text-xs">
             <div className="flex justify-between">
               <span className="text-gray-600">User ID:</span>
-              <span className="font-mono">{user.id.substring(0, 8)}...</span>
+              <span className="font-mono">{user.id ? `${user.id.substring(0, 8)}...` : 'N/A'}</span>
             </div>
             
             <div className="flex justify-between">
