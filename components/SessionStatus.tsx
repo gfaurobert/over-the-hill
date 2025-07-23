@@ -8,6 +8,37 @@ interface SessionStatusProps {
   className?: string;
 }
 
+// Mapping for Tailwind classes by status color
+const statusColorClasses = {
+  red: {
+    bg: 'bg-red-50',
+    border: 'border-red-200',
+    dot: 'bg-red-500',
+    text: 'text-red-700',
+    text600: 'text-red-600',
+    buttonBg: 'bg-red-100',
+    buttonHover: 'hover:bg-red-200',
+  },
+  orange: {
+    bg: 'bg-orange-50',
+    border: 'border-orange-200',
+    dot: 'bg-orange-500',
+    text: 'text-orange-700',
+    text600: 'text-orange-600',
+    buttonBg: 'bg-orange-100',
+    buttonHover: 'hover:bg-orange-200',
+  },
+  green: {
+    bg: 'bg-green-50',
+    border: 'border-green-200',
+    dot: 'bg-green-500',
+    text: 'text-green-700',
+    text600: 'text-green-600',
+    buttonBg: 'bg-green-100',
+    buttonHover: 'hover:bg-green-200',
+  },
+};
+
 export function SessionStatus({ showDetails = false, className = '' }: SessionStatusProps) {
   const { 
     user, 
@@ -76,13 +107,14 @@ export function SessionStatus({ showDetails = false, className = '' }: SessionSt
 
   const statusColor = getStatusColor();
   const statusText = getStatusText();
+  const colorClasses = statusColorClasses[statusColor];
 
   return (
-    <div className={`p-3 bg-${statusColor}-50 border border-${statusColor}-200 rounded-lg ${className}`}>
+    <div className={`p-3 ${colorClasses.bg} ${colorClasses.border} rounded-lg ${className}`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className={`w-2 h-2 bg-${statusColor}-500 rounded-full`}></div>
-          <span className={`text-sm font-medium text-${statusColor}-700`}>
+          <div className={`w-2 h-2 ${colorClasses.dot} rounded-full`}></div>
+          <span className={`text-sm font-medium ${colorClasses.text}`}>
             {statusText}
           </span>
         </div>
@@ -91,7 +123,7 @@ export function SessionStatus({ showDetails = false, className = '' }: SessionSt
           <button
             onClick={handleValidate}
             disabled={isValidating}
-            className={`px-2 py-1 text-xs bg-${statusColor}-100 text-${statusColor}-700 rounded hover:bg-${statusColor}-200 disabled:opacity-50`}
+            className={`px-2 py-1 text-xs ${colorClasses.buttonBg} ${colorClasses.text} rounded ${colorClasses.buttonHover} disabled:opacity-50`}
           >
             {isValidating ? 'Validating...' : 'Validate'}
           </button>
@@ -132,7 +164,7 @@ export function SessionStatus({ showDetails = false, className = '' }: SessionSt
             
             <div className="flex justify-between">
               <span className="text-gray-600">Last Validation:</span>
-              <span className={`text-${statusColor}-600`}>
+              <span className={`${colorClasses.text600}`}>
                 {lastValidation.code || 'SUCCESS'}
               </span>
             </div>
