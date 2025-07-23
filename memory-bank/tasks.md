@@ -136,10 +136,9 @@ Update the Export, Import, and Snapshot features to fully support the `archived`
 ### Plan & Subtasks
 
 #### 1. Export: Include `archived` in Exported JSON
-- [ ] Review the export logic (function that builds the export JSON)
-- [ ] Ensure each dot object in the export includes the `archived` property (true/false)
+- [ X] Review the export logic (function that builds the export JSON)
+- [X ] Ensure each dot object in the export includes the `archived` property (true/false)
 - [ ] Update or add tests to verify that exported dots include the `archived` field
-- [ ] Update documentation or UI hints if the export format changes
 
 #### 2. Import: Accept `archived` in Imported JSON
 - [ ] Review the import logic (where JSON is parsed and dots are inserted)

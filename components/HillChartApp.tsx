@@ -337,6 +337,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   // Add state to track which dot's menu is open
   const [dotMenuOpen, setDotMenuOpen] = useState<string | null>(null)
 
+  // Add state to track import success
+  const [showImportSuccess, setShowImportSuccess] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+
   useEffect(() => {
     if (user) {
       fetchCollections(user.id).then((fetched) => {
@@ -794,10 +798,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           setSelectedCollection(fetched[0].id)
           setCollectionInput(fetched[0].name)
         }
-        alert("Data imported successfully!")
+        setShowImportSuccess(true)
       } catch (error) {
         console.error("Import error:", error)
-        alert("An error occurred during import. Please check the file format.")
+        setImportError(error instanceof Error ? error.message : String(error))
       }
     }
     reader.readAsText(file)
@@ -1877,6 +1881,36 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             </div>
             <div className="flex justify-end mt-6">
               <Button variant="outline" onClick={() => setShowInfoModal(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showImportSuccess && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Import Successful</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              Your data has been imported successfully.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowImportSuccess(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {importError && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Import Error</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              {importError}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setImportError(null)}>
                 Close
               </Button>
             </div>

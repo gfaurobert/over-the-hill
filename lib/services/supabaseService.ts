@@ -240,6 +240,7 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
   const dotRows: DotRow[] = collections.flatMap((collection) =>
     collection.dots.map((dot) => ({
       ...dot,
+      archived: dot.archived === true, // force boolean, default to false if missing
       user_id: userId,
       collection_id: collection.id,
     })),

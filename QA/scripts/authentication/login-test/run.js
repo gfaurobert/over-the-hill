@@ -20,6 +20,7 @@ async function testLogin() {
     console.log('1. Launching browser...');
     browser = await puppeteer.launch({ 
       headless: false,
+      product: 'firefox', // Use Firefox instead of Chrome
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     
