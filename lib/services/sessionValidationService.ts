@@ -383,8 +383,11 @@ class SessionValidationService {
   /**
    * Checks if session is valid without network request (uses cache)
    */
-  getCachedValidation(): ValidationResponse | null {
-    const cached = this.validationCache.get('session_validation');
+  getCachedValidation(token?: string): ValidationResponse | null {
+    if (!token) return null;
+    const tokenHash = this.hashToken(token);
+    const cacheKey = `session_validation_${tokenHash}`;
+    const cached = this.validationCache.get(cacheKey);
     
     if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
       return cached.result;
