@@ -1,3 +1,5 @@
+import { StagewiseToolbar } from '@stagewise/toolbar-next';
+import ReactPlugin from '@stagewise-plugins/react';
 import './globals.css';
 import { ReactNode } from 'react';
 import { AuthProvider } from '../components/AuthProvider';
@@ -16,6 +18,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>
       </body>
+      <StagewiseToolbar config={{ plugins: [ReactPlugin] }} />
     </html>
   );
 }

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useState, useRef, useEffect, useCallback } from "react"
+import ReactDOM from "react-dom"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
@@ -100,6 +101,186 @@ const generateBellCurvePath = (width = 600, height = 150, centerX = 300) => {
   return points.join(" ")
 }
 
+function DotMenuPortal({ children }: { children: React.ReactNode }) {
+  const [mounted, setMounted] = React.useState(false)
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+  if (!mounted) return null
+  return ReactDOM.createPortal(children, document.body)
+}
+
+function DotMenuDropdown({ anchorRef, onClose, onDelete, onArchive }: {
+  anchorRef: React.RefObject<HTMLDivElement | null>,
+  onClose: () => void,
+  onDelete: () => void,
+  onArchive: () => void,
+}) {
+  const dropdownRef = React.useRef<HTMLDivElement>(null)
+  const [position, setPosition] = React.useState<{ top: number; left: number } | null>(null)
+
+  React.useEffect(() => {
+    function updatePosition() {
+      if (anchorRef.current) {
+        const rect = anchorRef.current.getBoundingClientRect()
+        setPosition({
+          top: rect.bottom + window.scrollY,
+          left: rect.right - 160 + window.scrollX, // 160px = min width
+        })
+      }
+    }
+    updatePosition()
+    window.addEventListener('scroll', updatePosition, true)
+    window.addEventListener('resize', updatePosition)
+    return () => {
+      window.removeEventListener('scroll', updatePosition, true)
+      window.removeEventListener('resize', updatePosition)
+    }
+  }, [anchorRef])
+
+  React.useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        anchorRef.current &&
+        !anchorRef.current.contains(e.target as Node)
+      ) {
+        onClose()
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [onClose, anchorRef])
+
+  if (!position) return null
+  return (
+    <div
+      ref={dropdownRef}
+      style={{
+        position: 'absolute',
+        top: position.top,
+        left: position.left,
+        zIndex: 1000,
+        minWidth: 160,
+      }}
+      className="bg-background border border-border rounded shadow-lg"
+    >
+      <button
+        className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-accent hover:text-accent-foreground"
+        onClick={onDelete}
+      >
+        <Trash2 className="w-4 h-4 text-red-500" /> Delete
+      </button>
+      <button
+        className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-accent hover:text-accent-foreground"
+        onClick={onArchive}
+      >
+        <ArchiveIcon className="w-4 h-4 text-muted-foreground" /> Archive
+      </button>
+    </div>
+  )
+}
+
+function DotRow({ dot, dotMenuOpen, setDotMenuOpen, setDeleteConfirm, updateDot, editingDotId, setEditingDotId }: any) {
+  const menuButtonRef = React.useRef<HTMLDivElement>(null)
+  return (
+    <div className="p-3 bg-muted/50 rounded-lg space-y-3">
+      {/* Dot Name and Controls Row */}
+      <div className="flex items-center gap-2">
+        <Input
+          value={dot.label}
+          onChange={(e) => {
+            if (e.target.value.length <= 24) {
+              updateDot(dot.id, { label: e.target.value })
+            }
+          }}
+          onFocus={() => setEditingDotId(dot.id)}
+          onBlur={() => setEditingDotId(null)}
+          className="text-sm flex-1"
+          placeholder="Dot name"
+          maxLength={24}
+        />
+        <Select
+          value={dot.color}
+          onValueChange={(value) => updateDot(dot.id, { color: value })}
+        >
+          <SelectTrigger className="w-12 h-8 p-0 border-0 bg-transparent">
+            <div
+              className="w-6 h-6 rounded-full border-2 border-gray-300"
+              style={{ backgroundColor: dot.color }}
+            />
+          </SelectTrigger>
+          <SelectContent>
+            {defaultColors.map((color, index) => (
+              <SelectItem key={color} value={color}>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded-full border border-gray-300"
+                    style={{ backgroundColor: color }}
+                  />
+                  <span className="text-sm">
+                    {['Blue', 'Green', 'Red', 'Orange', 'Purple'][index]}
+                  </span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={dot.size.toString()}
+          onValueChange={(value) => updateDot(dot.id, { size: Number(value) })}
+        >
+          <SelectTrigger className="w-12 h-8">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[1, 2, 3, 4, 5].map((size) => (
+              <SelectItem key={size} value={size.toString()}>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">{size}</span>
+                  <span className="text-xs text-gray-500">
+                    {['XS', 'S', 'M', 'L', 'XL'][size - 1]}
+                  </span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="relative" ref={menuButtonRef}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setDotMenuOpen(dotMenuOpen === dot.id ? null : dot.id)}
+            className="h-8 w-8 p-0 border-muted hover:border-accent hover:bg-accent/20"
+          >
+            <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+          </Button>
+          {dotMenuOpen === dot.id && (
+            <DotMenuPortal>
+              <DotMenuDropdown
+                anchorRef={menuButtonRef}
+                onClose={() => setDotMenuOpen(null)}
+                onDelete={() => {
+                  setDotMenuOpen(null)
+                  setDeleteConfirm({ dotId: dot.id, dotLabel: dot.label })
+                }}
+                onArchive={async () => {
+                  setDotMenuOpen(null)
+                  await updateDot(dot.id, { archived: true })
+                }}
+              />
+            </DotMenuPortal>
+          )}
+        </div>
+      </div>
+      {dot.label.length === 24 && editingDotId === dot.id && (
+        <div className="text-xs text-red-500 mt-1">Dot name cannot exceed 24 characters.</div>
+      )}
+    </div>
+  )
+}
+
 const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPassword }) => {
   const getHillY = (x: number) => {
     const centerX = 300,
@@ -155,6 +336,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   // Add state to track which dot's menu is open
   const [dotMenuOpen, setDotMenuOpen] = useState<string | null>(null)
+
+  // Add state to track import success
+  const [showImportSuccess, setShowImportSuccess] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
 
   useEffect(() => {
     if (user) {
@@ -568,8 +753,16 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   }
 
   const exportCollections = () => {
+    // Ensure every dot has an explicit archived property
+    const collectionsWithArchived = collections.map((collection) => ({
+      ...collection,
+      dots: collection.dots.map(dot => ({
+        ...dot,
+        archived: dot.archived === true // force boolean
+      }))
+    }))
     const exportData: ExportData = {
-      collections,
+      collections: collectionsWithArchived,
       snapshots,
       exportDate: new Date().toISOString(),
       version: "1.0.0",
@@ -605,10 +798,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           setSelectedCollection(fetched[0].id)
           setCollectionInput(fetched[0].name)
         }
-        alert("Data imported successfully!")
+        setShowImportSuccess(true)
       } catch (error) {
         console.error("Import error:", error)
-        alert("An error occurred during import. Please check the file format.")
+        setImportError(error instanceof Error ? error.message : String(error))
       }
     }
     reader.readAsText(file)
@@ -1561,106 +1754,16 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {activeDots.map((dot: Dot) => (
-                  <div key={dot.id} className="p-3 bg-muted/50 rounded-lg space-y-3">
-                    {/* Dot Name and Controls Row */}
-                    <div className="flex items-center gap-2">
-                      <Input
-                        value={dot.label}
-                        onChange={(e) => {
-                          if (e.target.value.length <= 24) {
-                            updateDot(dot.id, { label: e.target.value })
-                          }
-                        }}
-                        onFocus={() => setEditingDotId(dot.id)}
-                        onBlur={() => setEditingDotId(null)}
-                        className="text-sm flex-1"
-                        placeholder="Dot name"
-                        maxLength={24}
-                      />
-                      <Select
-                        value={dot.color}
-                        onValueChange={(value) => updateDot(dot.id, { color: value })}
-                      >
-                        <SelectTrigger className="w-12 h-8 p-0 border-0 bg-transparent">
-                          <div
-                            className="w-6 h-6 rounded-full border-2 border-gray-300"
-                            style={{ backgroundColor: dot.color }}
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {defaultColors.map((color, index) => (
-                            <SelectItem key={color} value={color}>
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className="w-4 h-4 rounded-full border border-gray-300"
-                                  style={{ backgroundColor: color }}
-                                />
-                                <span className="text-sm">
-                                  {["Blue", "Green", "Red", "Orange", "Purple"][index]}
-                                </span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select
-                        value={dot.size.toString()}
-                        onValueChange={(value) => updateDot(dot.id, { size: Number(value) })}
-                      >
-                        <SelectTrigger className="w-12 h-8">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[1, 2, 3, 4, 5].map((size) => (
-                            <SelectItem key={size} value={size.toString()}>
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{size}</span>
-                                <span className="text-xs text-gray-500">
-                                  {["XS", "S", "M", "L", "XL"][size - 1]}
-                                </span>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {/* In the dot row, wrap the ellipsis button and menu in a relative div */}
-                      <div className="relative">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setDotMenuOpen(dotMenuOpen === dot.id ? null : dot.id)}
-                          className="h-8 w-8 p-0 border-muted hover:border-accent hover:bg-accent/20"
-                        >
-                          <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-                        </Button>
-                        {dotMenuOpen === dot.id && (
-                          <div className="absolute right-0 top-9 z-50 bg-background border border-border rounded shadow-lg min-w-[140px]">
-                            <button
-                              className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-accent hover:text-accent-foreground"
-                              onClick={() => {
-                                setDotMenuOpen(null)
-                                setDeleteConfirm({ dotId: dot.id, dotLabel: dot.label })
-                              }}
-                            >
-                              <Trash2 className="w-4 h-4 text-red-500" /> Delete
-                            </button>
-                            <button
-                              className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-accent hover:text-accent-foreground"
-                              onClick={async () => {
-                                setDotMenuOpen(null)
-                                await updateDot(dot.id, { archived: true })
-                              }}
-                            >
-                              <ArchiveIcon className="w-4 h-4 text-muted-foreground" /> Archive
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    {dot.label.length === 24 && editingDotId === dot.id && (
-                      <div className="text-xs text-red-500 mt-1">Dot name cannot exceed 24 characters.</div>
-                    )}
-                  </div>
+                  <DotRow
+                    key={dot.id}
+                    dot={dot}
+                    dotMenuOpen={dotMenuOpen}
+                    setDotMenuOpen={setDotMenuOpen}
+                    setDeleteConfirm={setDeleteConfirm}
+                    updateDot={updateDot}
+                    editingDotId={editingDotId}
+                    setEditingDotId={setEditingDotId}
+                  />
                 ))}
               </div>
               {archivedDots.length > 0 && (
@@ -1778,6 +1881,36 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             </div>
             <div className="flex justify-end mt-6">
               <Button variant="outline" onClick={() => setShowInfoModal(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showImportSuccess && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Import Successful</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              Your data has been imported successfully.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowImportSuccess(false)}>
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {importError && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Import Error</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              {importError}
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setImportError(null)}>
                 Close
               </Button>
             </div>
