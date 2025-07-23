@@ -38,7 +38,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Prevent concurrent validations
         if (isValidatingRef.current) {
             console.log('[AUTH_PROVIDER] Validation already in progress, skipping');
-            return lastValidation || { valid: false, error: 'Validation in progress' };
+            // Return the current lastValidation state without depending on it in the callback
+            return { valid: false, error: 'Validation in progress' };
         }
 
         isValidatingRef.current = true;
@@ -82,7 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } finally {
             isValidatingRef.current = false;
         }
-    }, [lastValidation]);
+    }, []); // Remove lastValidation dependency to prevent callback recreation
 
     // Refresh session
     const refreshSession = useCallback(async (): Promise<boolean> => {
@@ -101,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setIsSessionValid(false);
             return false;
         }
-    }, [validateSession]);
+    }, [validateSession]); // Keep validateSession dependency since it's now stable
 
     // Handle client-side auth state changes
     const handleAuthStateChange = useCallback(async (event: string, newSession: Session | null) => {
@@ -120,7 +121,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         
         if (newSession && event !== 'INITIAL_SESSION') {
             // Only validate for non-initial session events to prevent loops
+            console.log(`[AUTH_PROVIDER] Triggering validation for event: ${event}`);
             await validateSession();
+        } else if (newSession && event === 'INITIAL_SESSION') {
+            console.log(`[AUTH_PROVIDER] Skipping validation for INITIAL_SESSION event`);
         } else if (!newSession) {
             // Clear validation state when signed out
             setIsSessionValid(false);
