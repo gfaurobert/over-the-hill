@@ -1,0 +1,173 @@
+'use client';
+
+import React, { useState } from 'react';
+import { useAuth } from './AuthProvider';
+
+interface SessionStatusProps {
+  showDetails?: boolean;
+  className?: string;
+}
+
+export function SessionStatus({ showDetails = false, className = '' }: SessionStatusProps) {
+  const { 
+    user, 
+    session, 
+    isSessionValid, 
+    lastValidation, 
+    validateSession, 
+    refreshSession,
+    loading 
+  } = useAuth();
+  
+  const [isValidating, setIsValidating] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleValidate = async () => {
+    setIsValidating(true);
+    try {
+      await validateSession();
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshSession();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className={`p-3 bg-gray-100 rounded-lg ${className}`}>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
+          <span className="text-sm text-gray-600">Loading session...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user || !session) {
+    return (
+      <div className={`p-3 bg-red-50 border border-red-200 rounded-lg ${className}`}>
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+          <span className="text-sm text-red-700">Not authenticated</span>
+        </div>
+      </div>
+    );
+  }
+
+  const getStatusColor = () => {
+    if (!isSessionValid) return 'red';
+    if (lastValidation?.code === 'SESSION_EXPIRED') return 'orange';
+    return 'green';
+  };
+
+  const getStatusText = () => {
+    if (!isSessionValid) return 'Invalid Session';
+    if (lastValidation?.code === 'SESSION_EXPIRED') return 'Session Expired';
+    return 'Valid Session';
+  };
+
+  const statusColor = getStatusColor();
+  const statusText = getStatusText();
+
+  return (
+    <div className={`p-3 bg-${statusColor}-50 border border-${statusColor}-200 rounded-lg ${className}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className={`w-2 h-2 bg-${statusColor}-500 rounded-full`}></div>
+          <span className={`text-sm font-medium text-${statusColor}-700`}>
+            {statusText}
+          </span>
+        </div>
+        
+        <div className="flex gap-2">
+          <button
+            onClick={handleValidate}
+            disabled={isValidating}
+            className={`px-2 py-1 text-xs bg-${statusColor}-100 text-${statusColor}-700 rounded hover:bg-${statusColor}-200 disabled:opacity-50`}
+          >
+            {isValidating ? 'Validating...' : 'Validate'}
+          </button>
+          
+          {session && (
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className={`px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 disabled:opacity-50`}
+            >
+              {isRefreshing ? 'Refreshing...' : 'Refresh'}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showDetails && lastValidation && (
+        <div className="mt-3 pt-3 border-t border-gray-200">
+          <div className="space-y-2 text-xs">
+            <div className="flex justify-between">
+              <span className="text-gray-600">User ID:</span>
+              <span className="font-mono">{user.id.substring(0, 8)}...</span>
+            </div>
+            
+            <div className="flex justify-between">
+              <span className="text-gray-600">Email:</span>
+              <span>{user.email}</span>
+            </div>
+            
+            {lastValidation.session?.expires_at && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Expires:</span>
+                <span>
+                  {new Date(lastValidation.session.expires_at * 1000).toLocaleString()}
+                </span>
+              </div>
+            )}
+            
+            <div className="flex justify-between">
+              <span className="text-gray-600">Last Validation:</span>
+              <span className={`text-${statusColor}-600`}>
+                {lastValidation.code || 'SUCCESS'}
+              </span>
+            </div>
+
+            {lastValidation.error && (
+              <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
+                <span className="text-xs text-red-700">{lastValidation.error}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Simplified status indicator for headers/navbars
+export function SessionIndicator({ className = '' }: { className?: string }) {
+  const { isSessionValid, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className={`w-2 h-2 bg-gray-400 rounded-full animate-pulse ${className}`} 
+           title="Loading session...">
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      className={`w-2 h-2 rounded-full ${
+        isSessionValid ? 'bg-green-500' : 'bg-red-500'
+      } ${className}`}
+      title={isSessionValid ? 'Session valid' : 'Session invalid'}
+    >
+    </div>
+  );
+}
