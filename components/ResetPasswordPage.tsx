@@ -7,6 +7,12 @@ import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import SetPasswordForm from './SetPasswordForm';
 import { AuthChangeEvent, Session } from '@supabase/supabase-js';
+import { 
+  extractAndValidateToken, 
+  processTokenSecurely, 
+  logTokenOperation,
+  TokenValidationResult 
+} from '@/lib/tokenSecurity';
 
 const ResetPasswordPage: React.FC = () => {
   const { supabase } = useAuth();
@@ -16,169 +22,123 @@ const ResetPasswordPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isInRecoveryMode, setIsInRecoveryMode] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string[]>([]);
-
-  const addDebugInfo = (message: string) => {
-    console.log(`[Password Reset Debug] ${message}`);
-    setDebugInfo(prev => [...prev, `${new Date().toISOString()}: ${message}`]);
-  };
-
-  // Function to extract token from URL
-  const extractTokenFromUrl = () => {
-    // Try multiple ways to get the token
-    const urlParams = new URLSearchParams(window.location.search);
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    
-    // Check search params first
-    let token = searchParams.get('token') || urlParams.get('token');
-    let email = searchParams.get('email') || urlParams.get('email');
-    let type = searchParams.get('type') || urlParams.get('type');
-    
-    // If not found in search params, check hash params
-    if (!token) {
-      token = hashParams.get('token');
-      email = hashParams.get('email');
-      type = hashParams.get('type');
-    }
-    
-    // Also check for access_token in hash (common with Supabase)
-    if (!token) {
-      token = hashParams.get('access_token');
-    }
-    
-    addDebugInfo(`Token extraction - searchParams: ${!!searchParams.get('token')}, urlParams: ${!!urlParams.get('token')}, hashParams: ${!!hashParams.get('token')}`);
-    addDebugInfo(`Final token: ${!!token}, email: ${email}, type: ${type}`);
-    
-    return { token, email, type };
-  };
+  const [tokenValidation, setTokenValidation] = useState<TokenValidationResult | null>(null);
 
   useEffect(() => {
     const handlePasswordReset = async () => {
       try {
-        addDebugInfo('Starting password reset flow...');
-        addDebugInfo(`Current URL: ${window.location.href}`);
+        logTokenOperation('password_reset_start', true, { url: window.location.href });
         
-        // Extract token using our custom function
-        const { token, email, type } = extractTokenFromUrl();
+        // Step 1: Extract and validate token securely
+        const tokenResult = extractAndValidateToken(searchParams);
+        setTokenValidation(tokenResult);
+        
+        if (!tokenResult.isValid) {
+          setError(`Invalid password reset link: ${tokenResult.errors.join(', ')}`);
+          setLoading(false);
+          return;
+        }
+        
+        logTokenOperation('token_validation', true, { 
+          source: tokenResult.source,
+          hasEmail: !!tokenResult.email,
+          type: tokenResult.type 
+        });
         
         let recoveryEventDetected = false;
         let timeoutId: NodeJS.Timeout;
         
-        // Listen for auth state changes FIRST
+        // Step 2: Set up auth state listener
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
           async (event: AuthChangeEvent, session: Session | null) => {
-            addDebugInfo(`Auth state change: ${event}`);
+            logTokenOperation('auth_state_change', true, { event });
             
             if (event === 'PASSWORD_RECOVERY') {
-              addDebugInfo('✅ Password recovery event detected - setting recovery mode');
               recoveryEventDetected = true;
               setIsInRecoveryMode(true);
               setLoading(false);
-              // Clear the timeout since we got the recovery event
+              
               if (timeoutId) {
                 clearTimeout(timeoutId);
-                addDebugInfo('Timeout cleared - recovery mode confirmed');
               }
+              
+              logTokenOperation('password_recovery_mode_activated', true);
             } else if (event === 'SIGNED_IN') {
-              addDebugInfo('User signed in during recovery');
-              // Don't redirect yet - let them set the password first
+              logTokenOperation('user_signed_in_during_recovery', true);
             } else if (event === 'SIGNED_OUT') {
-              addDebugInfo('User signed out');
               setIsInRecoveryMode(false);
-            } else if (event === 'INITIAL_SESSION') {
-              addDebugInfo('Initial session detected');
-              // Check if we're already in recovery mode from a previous session
-              if (session?.user) {
-                addDebugInfo('User session found, checking if in recovery mode...');
-                // If we have a token but no recovery event yet, try to trigger it
-                if (token && !recoveryEventDetected) {
-                  addDebugInfo('Token found but no recovery event, attempting to trigger recovery...');
-                  // Try to verify the token to trigger recovery mode
-                  try {
-                    const { data, error } = await supabase.auth.verifyOtp({
-                      email: email || session.user.email || '',
-                      token: token,
-                      type: 'recovery'
-                    });
-                    
-                    if (!error && data) {
-                      addDebugInfo('✅ Successfully verified token and triggered recovery mode');
-                      recoveryEventDetected = true;
-                      setIsInRecoveryMode(true);
-                      setLoading(false);
-                      if (timeoutId) {
-                        clearTimeout(timeoutId);
-                        addDebugInfo('Timeout cleared - recovery mode confirmed via verification');
-                      }
-                    } else {
-                      addDebugInfo(`❌ Token verification failed: ${error?.message || 'Unknown error'}`);
-                    }
-                  } catch (verifyError) {
-                    addDebugInfo(`❌ Token verification error: ${verifyError}`);
-                  }
-                }
-              }
+              logTokenOperation('user_signed_out', true);
             }
           }
         );
 
-        // If we have a token, try to process it
-        if (token) {
-          addDebugInfo('Token found, attempting to process...');
-          
-          // Method 1: Try to exchange the token for a session
-          try {
-            addDebugInfo('Method 1: Trying to exchange token for session...');
-            const { data, error } = await supabase.auth.exchangeCodeForSession(token);
-            
-            if (!error && data.session) {
-              addDebugInfo('✅ Successfully exchanged token for session');
-              // Don't set recovery mode here - let the auth state change handle it
-            } else {
-              addDebugInfo(`❌ Token exchange failed: ${error?.message || 'Unknown error'}`);
-            }
-          } catch (exchangeError) {
-            addDebugInfo(`❌ Token exchange error: ${exchangeError}`);
-          }
-
-          // Method 2: Try to verify the recovery token with email
-          if (email) {
-            try {
-              addDebugInfo('Method 2: Trying to verify recovery token with email...');
-              const { data, error } = await supabase.auth.verifyOtp({
-                email: email,
-                token: token,
-                type: 'recovery'
-              });
-
-              if (!error && data) {
-                addDebugInfo('✅ Email-based verification successful');
-                recoveryEventDetected = true;
-                setIsInRecoveryMode(true);
-                setLoading(false);
-                return;
-              } else {
-                addDebugInfo(`❌ Email-based verification failed: ${error?.message || 'Unknown error'}`);
+        // Step 3: Process the token securely
+        const verificationResult = await processTokenSecurely(
+          'password_reset_verification',
+          tokenResult,
+          async (token, email, type) => {
+            // Try multiple verification methods in order of preference
+            const methods = [
+              {
+                name: 'verifyOtp',
+                handler: async () => {
+                  if (!email) {
+                    throw new Error('Email required for OTP verification');
+                  }
+                  return await supabase.auth.verifyOtp({
+                    email,
+                    token,
+                    type: 'recovery'
+                  });
+                }
+              },
+              {
+                name: 'exchangeCodeForSession',
+                handler: async () => {
+                  return await supabase.auth.exchangeCodeForSession(token);
+                }
               }
-            } catch (emailVerifyError) {
-              addDebugInfo(`❌ Email-based verification error: ${emailVerifyError}`);
+            ];
+            
+            for (const method of methods) {
+              try {
+                logTokenOperation(`attempting_${method.name}`, true);
+                const result = await method.handler();
+                
+                if (!result.error && result.data) {
+                  logTokenOperation(`${method.name}_success`, true);
+                  return result;
+                }
+                
+                logTokenOperation(`${method.name}_failed`, false, { 
+                  error: result.error?.message 
+                });
+              } catch (methodError) {
+                logTokenOperation(`${method.name}_error`, false, { 
+                  error: methodError instanceof Error ? methodError.message : 'Unknown error' 
+                });
+              }
             }
+            
+            throw new Error('All verification methods failed');
           }
-        } else {
-          addDebugInfo('No token found in URL');
-          setError('Invalid password reset link. Please request a new password reset.');
+        );
+        
+        if (!verificationResult.success) {
+          setError(verificationResult.error || 'Failed to verify password reset token');
           setLoading(false);
+          return;
         }
-
-        // Set a timeout to handle cases where no recovery event is triggered
-        // But only if we haven't already detected recovery mode
+        
+        // Step 4: Set timeout for recovery mode detection
         timeoutId = setTimeout(() => {
           if (!recoveryEventDetected && loading) {
-            addDebugInfo('Timeout reached - no recovery mode detected');
-            setError('Unable to process password reset. Please request a new password reset link.');
+            logTokenOperation('recovery_timeout', false, { 
+              timeoutMs: 5000,
+              recoveryDetected: recoveryEventDetected 
+            });
+            setError('Password reset verification timed out. Please request a new reset link.');
             setLoading(false);
-          } else if (recoveryEventDetected) {
-            addDebugInfo('Timeout reached but recovery mode was already detected - ignoring timeout');
           }
         }, 5000);
 
@@ -188,15 +148,18 @@ const ResetPasswordPage: React.FC = () => {
             clearTimeout(timeoutId);
           }
         };
+        
       } catch (err) {
-        addDebugInfo(`❌ Error in password reset flow: ${err}`);
+        logTokenOperation('password_reset_error', false, { 
+          error: err instanceof Error ? err.message : 'Unknown error' 
+        });
         setError('Failed to process password reset. Please try again.');
         setLoading(false);
       }
     };
 
     handlePasswordReset();
-  }, [searchParams, supabase]);
+  }, [searchParams, supabase, loading]);
 
   const handlePasswordSet = async (password: string) => {
     if (!isInRecoveryMode) {
@@ -204,25 +167,34 @@ const ResetPasswordPage: React.FC = () => {
       return;
     }
 
+    if (!tokenValidation?.isValid) {
+      setError('Invalid session. Please request a new password reset.');
+      return;
+    }
+
     try {
-      addDebugInfo('Attempting to update password...');
+      logTokenOperation('password_update_start', true);
+      
       const { error } = await supabase.auth.updateUser({ password });
       
       if (error) {
-        addDebugInfo(`❌ Password update error: ${error.message}`);
+        logTokenOperation('password_update_failed', false, { error: error.message });
         setError(error.message);
         return;
       }
 
-      addDebugInfo('✅ Password updated successfully');
+      logTokenOperation('password_update_success', true);
       setSuccess(true);
       
       // Redirect to home page after a short delay
       setTimeout(() => {
         router.push('/');
       }, 3000);
+      
     } catch (err) {
-      addDebugInfo(`❌ Password update error: ${err}`);
+      logTokenOperation('password_update_error', false, { 
+        error: err instanceof Error ? err.message : 'Unknown error' 
+      });
       setError('Failed to update password. Please try again.');
     }
   };
@@ -239,12 +211,12 @@ const ResetPasswordPage: React.FC = () => {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               <span className="ml-2">Verifying your reset link...</span>
             </div>
-            {debugInfo.length > 0 && (
+            {tokenValidation && (
               <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
-                <strong>Debug Info:</strong>
-                {debugInfo.slice(-5).map((info, index) => (
-                  <div key={index}>{info}</div>
-                ))}
+                <strong>Validation Status:</strong>
+                <div>Token Source: {tokenValidation.source}</div>
+                <div>Has Email: {tokenValidation.email ? 'Yes' : 'No'}</div>
+                <div>Token Type: {tokenValidation.type || 'Not specified'}</div>
               </div>
             )}
           </CardContent>
@@ -277,12 +249,12 @@ const ResetPasswordPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <p className="text-red-600 mb-4">{error}</p>
-            {debugInfo.length > 0 && (
-              <div className="mb-4 p-2 bg-gray-100 rounded text-xs">
-                <strong>Debug Info:</strong>
-                {debugInfo.slice(-8).map((info, index) => (
-                  <div key={index}>{info}</div>
-                ))}
+            {tokenValidation && (
+              <div className="mb-4 p-2 bg-red-50 rounded text-xs border border-red-200">
+                <strong>Token Validation Details:</strong>
+                <div>Valid: {tokenValidation.isValid ? 'Yes' : 'No'}</div>
+                <div>Source: {tokenValidation.source || 'None'}</div>
+                <div>Errors: {tokenValidation.errors.join(', ')}</div>
               </div>
             )}
             <Button 
@@ -306,14 +278,6 @@ const ResetPasswordPage: React.FC = () => {
           </CardHeader>
           <CardContent>
             <p>This password reset link is invalid or has expired. Please request a new password reset.</p>
-            {debugInfo.length > 0 && (
-              <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
-                <strong>Debug Info:</strong>
-                {debugInfo.slice(-8).map((info, index) => (
-                  <div key={index}>{info}</div>
-                ))}
-              </div>
-            )}
             <Button 
               onClick={() => router.push('/')}
               className="w-full mt-4"
