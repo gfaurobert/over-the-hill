@@ -7,7 +7,18 @@ const validationAttempts = new Map<string, { count: number; lastAttempt: number 
 const MAX_VALIDATION_ATTEMPTS = 10;
 const VALIDATION_WINDOW_MS = 60 * 1000; // 1 minute
 
+// Cleanup function to remove stale entries
+function cleanupValidationAttempts() {
+  const now = Date.now();
+  for (const [ip, entry] of validationAttempts.entries()) {
+    if (now - entry.lastAttempt > VALIDATION_WINDOW_MS) {
+      validationAttempts.delete(ip);
+    }
+  }
+}
+
 function isRateLimited(clientIP: string): boolean {
+  cleanupValidationAttempts();
   const now = Date.now();
   const attempts = validationAttempts.get(clientIP);
   
