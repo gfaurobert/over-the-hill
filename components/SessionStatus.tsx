@@ -153,14 +153,23 @@ export function SessionStatus({ showDetails = false, className = '' }: SessionSt
               <span>{user.email}</span>
             </div>
             
-            {lastValidation.session?.expires_at && (
-              <div className="flex justify-between">
-                <span className="text-gray-600">Expires:</span>
-                <span>
-                  {new Date(lastValidation.session.expires_at * 1000).toLocaleString()}
-                </span>
-              </div>
-            )}
+            {/* Robust expires_at validation */}
+            {(() => {
+              const expiresAt = lastValidation.session?.expires_at;
+              const isValidExpiresAt =
+                typeof expiresAt === 'number' &&
+                Number.isFinite(expiresAt) &&
+                expiresAt > 0;
+              if (!isValidExpiresAt) return null;
+              return (
+                <div className="flex justify-between">
+                  <span className="text-gray-600">Expires:</span>
+                  <span>
+                    {new Date(expiresAt * 1000).toLocaleString()}
+                  </span>
+                </div>
+              );
+            })()}
             
             <div className="flex justify-between">
               <span className="text-gray-600">Last Validation:</span>
