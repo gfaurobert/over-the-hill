@@ -86,7 +86,7 @@ export const fetchCollections = async (userId: string): Promise<Collection[]> =>
     }))
   } catch (error) {
     handleServiceError(error, 'fetch collections')
-    return []
+    throw error
   }
 }
 
