@@ -1,6 +1,51 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
- 
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY); 
+let supabaseInstance: SupabaseClient | null = null;
+
+const getSupabaseClient = (): SupabaseClient => {
+  if (supabaseInstance) {
+    return supabaseInstance;
+  }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    // During build time or when env vars are missing, return a mock client
+    // This prevents build failures while still allowing the app to work in runtime
+    if (typeof window === 'undefined') {
+      // Server-side/build-time: create a minimal mock
+      return {} as SupabaseClient;
+    }
+    
+    // Client-side: show a proper error with guidance
+    const missingVars = [];
+    if (!supabaseUrl) missingVars.push('NEXT_PUBLIC_SUPABASE_URL');
+    if (!supabaseAnonKey) missingVars.push('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+    
+    throw new Error(
+      `Missing required Supabase environment variables: ${missingVars.join(', ')}\n\n` +
+      'Please:\n' +
+      '1. Copy .env.example to .env.local\n' +
+      '2. Fill in your Supabase project URL and anon key\n' +
+      '3. Restart the development server\n\n' +
+      'Get these values from your Supabase project dashboard at https://supabase.com/dashboard'
+    );
+  }
+
+  supabaseInstance = createClient(supabaseUrl, supabaseAnonKey);
+  return supabaseInstance;
+};
+
+export const supabase = new Proxy({} as SupabaseClient, {
+  get(target, prop) {
+    const client = getSupabaseClient();
+    const value = client[prop as keyof SupabaseClient];
+    
+    if (typeof value === 'function') {
+      return value.bind(client);
+    }
+    
+    return value;
+  }
+}); 

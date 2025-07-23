@@ -18,6 +18,38 @@ Over The Hill is a web and desktop application designed to visualize project pro
 
 ### Join in [overthehill.faurobert.fr](https://overthehill.faurobert.fr)
 
+## Development Setup
+
+### Prerequisites
+- Node.js 18+ and npm/pnpm
+- A Supabase project
+
+### Environment Configuration
+1. Copy the environment template:
+   ```bash
+   cp .env.example .env.local
+   ```
+
+2. Fill in your Supabase credentials in `.env.local`:
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
+
+3. Get these values from your [Supabase project dashboard](https://supabase.com/dashboard)
+
+### Running the Application
+```bash
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+
+# Build for production
+npm run build
+```
+
 ![](image_readme.png)
 
 This app now operates as a **multi-tenant SaaS platform** with secure, per-user data isolation, powered by **Supabase** as the backend. Access is **invite-only** (no public signup), and all user data is securely stored and managed in the cloud.
