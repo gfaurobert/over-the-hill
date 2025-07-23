@@ -68,6 +68,22 @@ export async function POST(request: NextRequest) {
   try {
     const clientIP = getClientIP(request);
     
+    // Check if server-side validation is available
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!supabaseUrl || !serviceRoleKey) {
+      console.warn(`[Session Validation] Server-side validation not available - missing service role key`);
+      return NextResponse.json(
+        {
+          valid: false,
+          error: 'Server-side validation not available in development mode',
+          code: 'SERVER_VALIDATION_UNAVAILABLE'
+        },
+        { status: 503 }
+      );
+    }
+    
     // Check rate limiting
     if (isRateLimited(clientIP)) {
       console.warn(`[Session Validation] Rate limit exceeded for IP: ${clientIP}`);

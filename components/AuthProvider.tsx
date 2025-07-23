@@ -207,7 +207,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 refreshTimeoutRef.current = null;
             }
         };
-    }, [session, validateSession]);
+    }, [session]); // validateSession is now stable, so we don't need it in dependencies
 
     // Sign out the user
     const signOut = async () => {

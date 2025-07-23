@@ -156,6 +156,13 @@ class SessionValidationService {
 
       if (!response.ok) {
         console.warn(`[SESSION_VALIDATION] Validation failed: ${result.error} (${result.code})`);
+        
+        // If server-side validation is not available, fall back to client-side validation
+        if (result.code === 'SERVER_VALIDATION_UNAVAILABLE') {
+          console.log('[SESSION_VALIDATION] Falling back to client-side validation');
+          return await this.performClientSideValidation(tokens);
+        }
+        
         return result;
       }
 
@@ -200,6 +207,47 @@ class SessionValidationService {
       hash = hash & hash; // Convert to 32-bit integer
     }
     return hash.toString();
+  }
+
+  /**
+   * Performs client-side validation when server-side validation is not available
+   */
+  private async performClientSideValidation(tokens: { accessToken: string; refreshToken?: string }): Promise<ValidationResponse> {
+    try {
+      // Import supabase client dynamically to avoid SSR issues
+      const { supabase } = await import('@/lib/supabaseClient');
+      
+      // Get current user from client-side supabase
+      const { data: { user }, error } = await supabase.auth.getUser(tokens.accessToken);
+      
+      if (error || !user) {
+        console.warn('[SESSION_VALIDATION] Client-side validation failed:', error?.message);
+        return {
+          valid: false,
+          error: error?.message || 'Invalid session',
+          code: 'INVALID_SESSION'
+        };
+      }
+      
+      // Get current session
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      console.log('[SESSION_VALIDATION] Client-side validation successful');
+      return {
+        valid: true,
+        user: user,
+        session: session,
+        message: 'Session valid (client-side validation)'
+      };
+      
+    } catch (error) {
+      console.error('[SESSION_VALIDATION] Client-side validation error:', error);
+      return {
+        valid: false,
+        error: 'Client-side validation failed',
+        code: 'CLIENT_VALIDATION_ERROR'
+      };
+    }
   }
 
   /**
