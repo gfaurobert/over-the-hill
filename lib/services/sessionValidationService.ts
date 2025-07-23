@@ -51,8 +51,15 @@ class SessionValidationService {
    */
   private getStoredTokens(): { accessToken?: string; refreshToken?: string } {
     try {
-      // Try localStorage first
-      const localStorageSession = localStorage.getItem('sb-' + process.env.NEXT_PUBLIC_SUPABASE_URL?.split('//')[1]?.split('.')[0] + '-auth-token');
+      // Check NEXT_PUBLIC_SUPABASE_URL validity before parsing
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      let localStorageSession = null;
+      if (typeof supabaseUrl === 'string' && supabaseUrl.length > 0 && supabaseUrl.includes('//')) {
+        const urlPart = supabaseUrl.split('//')[1]?.split('.')[0];
+        if (urlPart) {
+          localStorageSession = localStorage.getItem('sb-' + urlPart + '-auth-token');
+        }
+      }
       if (localStorageSession) {
         const session = JSON.parse(localStorageSession);
         return {
