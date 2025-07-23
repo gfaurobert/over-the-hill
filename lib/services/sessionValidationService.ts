@@ -235,9 +235,15 @@ class SessionValidationService {
       console.log('[SESSION_VALIDATION] Client-side validation successful');
       return {
         valid: true,
-        user: user,
-        session: session,
-        message: 'Session valid (client-side validation)'
+        user: {
+          id: user.id,
+          email: user.email || '',
+          created_at: user.created_at || new Date().toISOString()
+        },
+        session: session ? {
+          expires_at: session.expires_at,
+          access_token: session.access_token
+        } : undefined
       };
       
     } catch (error) {
