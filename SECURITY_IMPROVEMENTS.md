@@ -43,7 +43,8 @@
 - Collection names: 100 characters max
 - Dot labels: 100 characters max
 - IDs: 100 characters max, alphanumeric only
-- Coordinates: -1 to 1 range (normalized)
+- X coordinates: 0 to 100 range (percentage)
+- Y coordinates: -10 to 150 range (SVG coordinates)
 - Dot sizes: 1 to 5 range
 - Colors: Valid CSS color formats only
 - Import limits: 100 collections, 1000 dots per collection, 1000 snapshots

@@ -91,8 +91,10 @@ export const validateDot = (dot: Partial<Dot>): Dot => {
     const validatedDot: Dot = {
       id: dot.id ? sanitizeId(dot.id) : '',
       label: dot.label ? sanitizeString(dot.label, 100) : '',
-      x: dot.x !== undefined ? sanitizeNumber(dot.x, -1, 1) : 0,
-      y: dot.y !== undefined ? sanitizeNumber(dot.y, -1, 1) : 0,
+      // X coordinate is percentage (0-100)
+      x: dot.x !== undefined ? sanitizeNumber(dot.x, 0, 100) : 0,
+      // Y coordinate is SVG coordinate (can range from -10 to 150 based on getHillY function)
+      y: dot.y !== undefined ? sanitizeNumber(dot.y, -10, 150) : 0,
       color: dot.color ? sanitizeColor(dot.color) : '#3b82f6',
       size: dot.size !== undefined ? sanitizeNumber(dot.size, 1, 5) : 3,
       archived: typeof dot.archived === 'boolean' ? dot.archived : false

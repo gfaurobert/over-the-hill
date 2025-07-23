@@ -60,8 +60,8 @@ runTest('validateDot - valid dot', () => {
   const validDot = {
     id: 'test-dot-1',
     label: 'Test Dot',
-    x: 0.5,
-    y: 0.3,
+    x: 50, // Percentage (0-100)
+    y: 75, // SVG coordinate (-10 to 150)
     color: '#ff0000',
     size: 3,
     archived: false
@@ -70,6 +70,8 @@ runTest('validateDot - valid dot', () => {
   const result = validateDot(validDot);
   if (result.id !== 'test-dot-1') throw new Error('ID validation failed');
   if (result.label !== 'Test Dot') throw new Error('Label validation failed');
+  if (result.x !== 50) throw new Error('X coordinate validation failed');
+  if (result.y !== 75) throw new Error('Y coordinate validation failed');
 });
 
 runTest('validateDot - throws on invalid data', () => {
@@ -77,8 +79,8 @@ runTest('validateDot - throws on invalid data', () => {
     validateDot({
       id: '',
       label: 'Test',
-      x: 2, // Invalid: outside -1 to 1 range
-      y: 0.5,
+      x: 150, // Invalid: outside 0-100 range
+      y: 50,
       color: '#ff0000',
       size: 3,
       archived: false
@@ -87,6 +89,38 @@ runTest('validateDot - throws on invalid data', () => {
   } catch (error) {
     if (!(error instanceof ValidationError)) throw new Error('Expected ValidationError');
   }
+});
+
+runTest('validateDot - valid coordinate boundaries', () => {
+  // Test minimum values
+  const minDot = {
+    id: 'min-dot',
+    label: 'Min Dot',
+    x: 0,    // Min X
+    y: -10,  // Min Y
+    color: '#ff0000',
+    size: 1,
+    archived: false
+  };
+  
+  const minResult = validateDot(minDot);
+  if (minResult.x !== 0) throw new Error('Min X validation failed');
+  if (minResult.y !== -10) throw new Error('Min Y validation failed');
+  
+  // Test maximum values
+  const maxDot = {
+    id: 'max-dot',
+    label: 'Max Dot',
+    x: 100,  // Max X
+    y: 150,  // Max Y
+    color: '#ff0000',
+    size: 5,
+    archived: false
+  };
+  
+  const maxResult = validateDot(maxDot);
+  if (maxResult.x !== 100) throw new Error('Max X validation failed');
+  if (maxResult.y !== 150) throw new Error('Max Y validation failed');
 });
 
 // Test validateUserId
