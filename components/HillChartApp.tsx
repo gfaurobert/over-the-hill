@@ -54,7 +54,7 @@ export interface Dot {
   y: number
   color: string
   size: number
-  archived?: boolean // new
+  archived: boolean // always present
 }
 
 export interface Collection {
@@ -758,7 +758,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       ...collection,
       dots: collection.dots.map(dot => ({
         ...dot,
-        archived: dot.archived === true // force boolean
+        archived: dot.archived // force boolean
       }))
     }))
     const exportData: ExportData = {
@@ -941,13 +941,19 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   // Snapshot functions
   const handleCreateSnapshot = async () => {
     if (!user || !currentCollection) return
-    
+
+    // Ensure every dot has an explicit archived property
+    const dotsWithArchived = currentCollection.dots.map(dot => ({
+      ...dot,
+      archived: dot.archived // force boolean
+    }))
+
     try {
       const success = await createSnapshot(
         user.id,
         currentCollection.id,
         currentCollection.name,
-        currentCollection.dots
+        dotsWithArchived
       )
       
       if (success) {
