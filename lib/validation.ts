@@ -175,6 +175,10 @@ export const validateDotId = (dotId: string): string => {
   return sanitizeId(dotId)
 }
 
+export const validateSnapshotId = (snapshotId: string): string => {
+  return sanitizeId(snapshotId)
+}
+
 export const validateImportData = (data: any): ExportData => {
   if (!data || typeof data !== 'object') {
     throw new ValidationError('Import data must be an object')

@@ -8,7 +8,8 @@ import {
   validateDotId, 
   validateImportData,
   ValidationError,
-  sanitizeString
+  sanitizeString,
+  validateSnapshotId
 } from "@/lib/validation"
 
 // Helper function to get local date string in YYYY-MM-DD format
@@ -309,7 +310,7 @@ export const fetchSnapshots = async (userId: string): Promise<Snapshot[]> => {
 export const loadSnapshot = async (userId: string, snapshotId: string): Promise<Snapshot | null> => {
   try {
     const validatedUserId = validateUserId(userId)
-    const validatedSnapshotId = validateDotId(snapshotId) // Reuse ID validation
+    const validatedSnapshotId = validateSnapshotId(snapshotId)
 
     const { data, error } = await supabase
       .from("snapshots")
@@ -341,7 +342,7 @@ export const loadSnapshot = async (userId: string, snapshotId: string): Promise<
 export const deleteSnapshot = async (userId: string, snapshotId: string): Promise<boolean> => {
   try {
     const validatedUserId = validateUserId(userId)
-    const validatedSnapshotId = validateDotId(snapshotId) // Reuse ID validation
+    const validatedSnapshotId = validateSnapshotId(snapshotId)
 
     const { error } = await supabase
       .from("snapshots")
