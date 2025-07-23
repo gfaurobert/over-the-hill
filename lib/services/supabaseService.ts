@@ -54,7 +54,7 @@ const handleServiceError = (error: any, operation: string): void => {
     throw error
   }
   console.error(`Database error in ${operation}:`, error)
-  throw new Error(`Failed to ${operation}`)
+  throw new Error(`Failed to ${operation}: ${error?.message || 'Unknown error'}`)
 }
 
 // Fetch all collections and their dots for the current user
