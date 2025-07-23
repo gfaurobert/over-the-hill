@@ -118,7 +118,7 @@ async function exportArchiveDotTest() {
     const dest = path.join(__dirname, '../../../assets/ui/export-archive-dot-test/', latestFile.replace('.json', '_test_archived.json'));
     fs.copyFileSync(src, dest);
     const exportedData = JSON.parse(fs.readFileSync(src, 'utf8'));
-    const importJsonDot = exportedData.dots.find(dot => dot.name === 'Import JSON');
+    const importJsonDot = exportedData.collections.flatMap(collection => collection.dots).find(dot => dot.label === 'Import JSON');
     if (!importJsonDot) throw new Error('Import JSON dot not found in export');
     if (importJsonDot.archived !== true) throw new Error('Import JSON dot archived property is not true after archiving');
     testResults.step6 = { status: 'Passed', screenshot: null };
@@ -193,7 +193,7 @@ async function exportArchiveDotTest() {
     const dest2 = path.join(__dirname, '../../../assets/ui/export-archive-dot-test/', latestFile2.replace('.json', '_test_unarchived.json'));
     fs.copyFileSync(src2, dest2);
     const exportedData2 = JSON.parse(fs.readFileSync(src2, 'utf8'));
-    const importJsonDot2 = exportedData2.dots.find(dot => dot.name === 'Import JSON');
+    const importJsonDot2 = exportedData2.collections.flatMap(collection => collection.dots).find(dot => dot.label === 'Import JSON');
     if (!importJsonDot2) throw new Error('Import JSON dot not found in export (unarchive)');
     if (importJsonDot2.archived !== false) throw new Error('Import JSON dot archived property is not false after unarchiving');
     testResults.step12 = { status: 'Passed', screenshot: null };
