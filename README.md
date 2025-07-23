@@ -10,6 +10,8 @@ Read [Shape Up: Show Porgress (Chapt. 13)](https://basecamp.com/shapeup/3.4-chap
 
 [![Built with v0](https://img.shields.io/badge/Built%20with-v0.dev-black?style=for-the-badge)](https://v0.dev/chat/projects/QlICJdqcWMK)
 
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/gfaurobert/over-the-hill?utm_source=oss&utm_medium=github&utm_campaign=gfaurobert%2Fover-the-hill&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 ## What is Over The Hill?
 
 Over The Hill is a web and desktop application designed to visualize project progress using a "Hill Chart." A Hill Chart is a simple yet powerful tool for tracking the status of tasks or features, categorizing them into two main phases: "Up the Hill" (discovery/problem-solving) and "Down the Hill" (execution/implementation).
