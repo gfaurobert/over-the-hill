@@ -10,22 +10,23 @@ function isRefreshRateLimited(clientIP: string): boolean {
   const now = Date.now();
   const attempts = refreshAttempts.get(clientIP);
   
-  if (!attempts) {
-    refreshAttempts.set(clientIP, { count: 1, lastAttempt: now });
-    return false;
+  // Cleanup: Remove stale entry if window has passed
+  if (attempts && (now - attempts.lastAttempt > REFRESH_WINDOW_MS)) {
+    refreshAttempts.delete(clientIP);
   }
-  
-  // Reset if window has passed
-  if (now - attempts.lastAttempt > REFRESH_WINDOW_MS) {
+
+  const currentAttempts = refreshAttempts.get(clientIP);
+
+  if (!currentAttempts) {
     refreshAttempts.set(clientIP, { count: 1, lastAttempt: now });
     return false;
   }
   
   // Increment attempts
-  attempts.count++;
-  attempts.lastAttempt = now;
+  currentAttempts.count++;
+  currentAttempts.lastAttempt = now;
   
-  return attempts.count > MAX_REFRESH_ATTEMPTS;
+  return currentAttempts.count > MAX_REFRESH_ATTEMPTS;
 }
 
 function getClientIP(request: NextRequest): string {
