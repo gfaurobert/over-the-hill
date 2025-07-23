@@ -151,6 +151,17 @@ export const addDot = async (dot: Dot, collectionId: string, userId: string): Pr
     const validatedCollectionId = validateCollectionId(collectionId)
     const validatedDot = validateDot(dot)
 
+    // Verify collection ownership
+    const { data: collectionData, error: collectionError } = await supabase
+      .from("collections")
+      .select("id")
+      .eq("id", validatedCollectionId)
+      .eq("user_id", validatedUserId)
+      .single()
+    if (collectionError || !collectionData) {
+      throw new Error('Collection not found or not owned by user')
+    }
+
     const { data, error } = await supabase
       .from("dots")
       .insert([{ 
