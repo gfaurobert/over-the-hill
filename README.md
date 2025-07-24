@@ -16,11 +16,13 @@ Read [Shape Up: Show Porgress (Chapt. 13)](https://basecamp.com/shapeup/3.4-chap
 
 Over The Hill is a web and desktop application designed to visualize project progress using a "Hill Chart." A Hill Chart is a simple yet powerful tool for tracking the status of tasks or features, categorizing them into two main phases: "Up the Hill" (discovery/problem-solving) and "Down the Hill" (execution/implementation).
 
-
+### See Video Introduction
 [![ntroducing Over The Hill - Show Project Progress with Hill Charts](https://i.ytimg.com/an_webp/SvkJ-YrMq6o/mqdefault_6s.webp?du=3000&sqp=CKLnicQG&rs=AOn4CLAVWrS_FfWI5iXeM0AOPMtrYPRnQg)](https://youtu.be/SvkJ-YrMq6o)   
 
 
 ### Join in [overthehill.faurobert.fr](https://overthehill.faurobert.fr)
+
+![](image_readme.png)
 
 ## Development Setup
 
@@ -68,14 +70,6 @@ npm run build
 ```
 
 The application will be available at `http://localhost:3000`.
-
-### Troubleshooting
-
-**PWA Loading Issues**: If your PWA gets stuck at "Loading..." but works in incognito mode, see the [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) guide for solutions.
-
-**Environment Variable Errors**: If you see Supabase environment variable errors, make sure you've completed the Environment Configuration step above and restarted your development server.
-
-![](image_readme.png)
 
 This app now operates as a **multi-tenant SaaS platform** with secure, per-user data isolation, powered by **Supabase** as the backend. Access is **invite-only** (no public signup), and all user data is securely stored and managed in the cloud.
 
