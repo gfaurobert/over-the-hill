@@ -25,6 +25,14 @@ Over The Hill is a web and desktop application designed to visualize project pro
 - A Supabase project
 
 ### Environment Configuration
+
+**Option 1: Interactive Setup (Recommended)**
+Run the setup script for guided configuration:
+```bash
+./setup-env.sh
+```
+
+**Option 2: Manual Setup**
 1. Copy the environment template:
    ```bash
    cp .env.example .env.local
@@ -32,11 +40,15 @@ Over The Hill is a web and desktop application designed to visualize project pro
 
 2. Fill in your Supabase credentials in `.env.local`:
    ```env
-   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key_here
    ```
 
-3. Get these values from your [Supabase project dashboard](https://supabase.com/dashboard)
+3. Get these values from your [Supabase project dashboard](https://supabase.com/dashboard):
+   - Go to **Settings** > **API**
+   - Copy the **Project URL** and **anon/public key**
+   - Copy the **service_role key** (keep this secure!)
 
 ### Running the Application
 ```bash
@@ -45,10 +57,19 @@ npm install
 
 # Run development server
 npm run dev
+# or: pnpm dev
 
 # Build for production
 npm run build
 ```
+
+The application will be available at `http://localhost:3000`.
+
+### Troubleshooting
+
+**PWA Loading Issues**: If your PWA gets stuck at "Loading..." but works in incognito mode, see the [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) guide for solutions.
+
+**Environment Variable Errors**: If you see Supabase environment variable errors, make sure you've completed the Environment Configuration step above and restarted your development server.
 
 ![](image_readme.png)
 
