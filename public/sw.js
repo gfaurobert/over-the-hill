@@ -76,7 +76,17 @@ self.addEventListener('fetch', (event) => {
 
             caches.open(CACHE_NAME)
               .then((cache) => {
-                cache.put(event.request, responseToCache);
+                cache.put(event.request, responseToCache)
+                  .catch((error) => {
+                    console.error('[SW] Failed to cache response:', event.request.url, error);
+                    // Handle specific error types
+                    if (error.name === 'QuotaExceededError') {
+                      console.warn('[SW] Storage quota exceeded, unable to cache:', event.request.url);
+                    }
+                  });
+              })
+              .catch((error) => {
+                console.error('[SW] Failed to open cache:', CACHE_NAME, error);
               });
 
             return response;
