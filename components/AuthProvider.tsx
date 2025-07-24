@@ -171,6 +171,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await validateSession();
         } else if (newSession && event === 'INITIAL_SESSION') {
             console.log(`[AUTH_PROVIDER] Skipping validation for INITIAL_SESSION event`);
+            // For initial session, still mark as valid if we have a session
+            // This helps preserve data during page refreshes when server validation fails
+            if (newSession.access_token) {
+                setIsSessionValid(true);
+                setLastValidation({
+                    valid: true,
+                    user: {
+                        id: newSession.user.id,
+                        email: newSession.user.email || '',
+                        created_at: newSession.user.created_at || new Date().toISOString()
+                    },
+                    session: {
+                        expires_at: newSession.expires_at,
+                        access_token: newSession.access_token
+                    }
+                });
+            }
         } else if (!newSession) {
             // Clear validation state when signed out
             setIsSessionValid(false);

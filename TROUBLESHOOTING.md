@@ -1,73 +1,68 @@
-# PWA Loading Issues - Troubleshooting Guide
+# Troubleshooting Guide
 
-## Problem: App Gets Stuck at "Loading..." Screen
+## Common Issues and Solutions
 
-If your PWA gets stuck at the loading screen but works fine in incognito mode, this is typically caused by cached authentication data that has become stale or corrupted.
+### 🔄 Collections Data Lost on Page Refresh
 
-### Why This Happens
+**Symptoms:**
+- Login works fine initially
+- After refreshing the page, all collections data disappears
+- Console shows errors like:
+  ```
+  POST /api/auth/validate 503 (Service Unavailable)
+  [SESSION_VALIDATION] Validation failed: Server-side validation not available in development mode (SERVER_VALIDATION_UNAVAILABLE)
+  [SESSION_VALIDATION] Falling back to client-side validation
+  ```
 
-1. **Stale Authentication Tokens**: Your browser has cached old authentication tokens in localStorage that are no longer valid
-2. **Service Worker Cache**: The service worker may have cached outdated resources
-3. **Browser Cache**: The browser's standard cache may contain stale data
-4. **Session Validation Cache**: The app's internal validation cache may have invalid entries
+**Root Cause:**
+The `SUPABASE_SERVICE_ROLE_KEY` environment variable is not set in your production environment. This causes server-side session validation to fail, leading to unreliable client-side fallback that doesn't properly preserve collections data.
 
-### Quick Fixes
+**Solution:**
 
-#### Option 1: Use the Built-in Clear Cache Button
-When you see the loading screen, there should be a "Clear Cache & Reload" button. Click it to automatically clear all cached data and restart the app.
+1. **Check your environment variables:**
+   ```bash
+   node check-env.js
+   ```
 
-#### Option 2: Manual Browser Cache Clear
-1. Open your browser's developer tools (F12)
-2. Go to the **Application** tab (Chrome) or **Storage** tab (Firefox)
-3. In the left sidebar, find **Storage** or **Clear Storage**
-4. Click **Clear site data** or similar option
-5. Refresh the page
+2. **Get your Supabase Service Role Key:**
+   - Go to [Supabase Dashboard](https://supabase.com/dashboard)
+   - Select your project
+   - Navigate to **Settings** > **API**
+   - Copy the **service_role** key (⚠️ Keep this secure!)
 
-#### Option 3: Hard Refresh
-1. Hold `Shift` and click the refresh button
-2. Or use keyboard shortcuts:
-   - **Chrome/Edge**: `Ctrl+Shift+R` (Windows) or `Cmd+Shift+R` (Mac)
-   - **Firefox**: `Ctrl+F5` (Windows) or `Cmd+Shift+R` (Mac)
+3. **Set the environment variable:**
 
-#### Option 4: Incognito/Private Mode (Temporary)
-1. Open an incognito/private browsing window
-2. Navigate to your app - it should work normally
-3. This is a temporary solution; you'll need to clear cache in regular mode
+   **For PM2 (production):**
+   ```bash
+   pm2 stop over-the-hill
+   pm2 set SUPABASE_SERVICE_ROLE_KEY "your_service_role_key_here"
+   pm2 restart over-the-hill
+   ```
 
-### Prevention
+   **For Docker:**
+   ```bash
+   docker run -e SUPABASE_SERVICE_ROLE_KEY="your_service_role_key_here" ...
+   ```
 
-To prevent this issue from happening again:
+   **For local development:**
+   Create `.env.local` file:
+   ```env
+   SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+   ```
 
-1. **Regular Updates**: Keep your browser updated
-2. **Avoid Force-Closing**: Don't force-close the browser while the app is running
-3. **Stable Network**: Ensure stable internet connection during authentication
-4. **Clear Cache Periodically**: Manually clear cache if you notice any issues
+4. **Verify the fix:**
+   - Restart your application
+   - Login to your account
+   - Refresh the page
+   - Collections data should persist
 
-### For Developers
+**Prevention:**
+- Always run `node check-env.js` before deploying
+- Include environment variable checks in your deployment pipeline
+- Monitor application logs for authentication errors
 
-The app now includes several mechanisms to prevent and recover from stuck loading states:
+---
 
-1. **Automatic Timeout**: Loading state automatically clears after 10 seconds with cache cleanup
-2. **Failure Recovery**: After 3 consecutive validation failures, all auth data is cleared
-3. **Service Worker Management**: Proper cache management and cleanup
-4. **Manual Recovery**: Clear cache button available during loading state
+## Authentication Issues
 
-### Still Having Issues?
-
-If the problem persists after trying all the above solutions:
-
-1. Check browser console for error messages
-2. Try a different browser
-3. Ensure JavaScript is enabled
-4. Check if you have any browser extensions that might interfere
-5. Contact support with browser version and console error details
-
-### Technical Details
-
-The loading issue is primarily caused by:
-- Corrupted localStorage entries for Supabase authentication
-- Stale session validation cache (30-second TTL)
-- Service worker cache mismatches
-- Network request failures during authentication validation
-
-The app now automatically detects and recovers from these states, but manual intervention may sometimes be necessary.
+### Login/Logout Problems

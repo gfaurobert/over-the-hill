@@ -288,6 +288,8 @@ class SessionValidationService {
    */
   private async performClientSideValidation(tokens: { accessToken: string; refreshToken?: string }): Promise<ValidationResponse> {
     try {
+      console.log('[SESSION_VALIDATION] Performing client-side validation fallback');
+      
       // Import supabase client dynamically to avoid SSR issues
       const { supabase } = await import('@/lib/supabaseClient');
       
@@ -306,8 +308,11 @@ class SessionValidationService {
       // Get current session
       const { data: { session } } = await supabase.auth.getSession();
       
+      // Reset consecutive failures on successful client-side validation
+      this.consecutiveFailures = 0;
+      
       console.log('[SESSION_VALIDATION] Client-side validation successful');
-      return {
+      const result: ValidationResponse = {
         valid: true,
         user: {
           id: user.id,
@@ -319,6 +324,16 @@ class SessionValidationService {
           access_token: session.access_token
         } : undefined
       };
+      
+      // Cache the successful client-side validation result
+      const tokenHash = this.hashToken(tokens.accessToken);
+      const cacheKey = `session_validation_${tokenHash}`;
+      this.validationCache.set(cacheKey, {
+        result,
+        timestamp: Date.now()
+      });
+      
+      return result;
       
     } catch (error) {
       console.error('[SESSION_VALIDATION] Client-side validation error:', error);
