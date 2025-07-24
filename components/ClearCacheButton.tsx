@@ -40,35 +40,27 @@ export const ClearCacheButton: React.FC<ClearCacheButtonProps> = ({
         }
       }
       
-      // Clear any other localStorage items that might be causing issues
-      const keysToRemove = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && (
-          key.includes('sb-') || 
-          key.includes('supabase') || 
-          key.includes('auth') ||
-          key.includes('session')
-        )) {
-          keysToRemove.push(key);
+      // Helper function to clear storage items based on key patterns
+      const clearStorageItems = (storage: Storage, storageType: string) => {
+        const keysToRemove = [];
+        for (let i = 0; i < storage.length; i++) {
+          const key = storage.key(i);
+          if (key && (
+            key.includes('sb-') || 
+            key.includes('supabase') || 
+            key.includes('auth') ||
+            key.includes('session')
+          )) {
+            keysToRemove.push(key);
+          }
         }
-      }
-      keysToRemove.forEach(key => localStorage.removeItem(key));
-      
-      // Clear sessionStorage as well
-      const sessionKeysToRemove = [];
-      for (let i = 0; i < sessionStorage.length; i++) {
-        const key = sessionStorage.key(i);
-        if (key && (
-          key.includes('sb-') || 
-          key.includes('supabase') || 
-          key.includes('auth') ||
-          key.includes('session')
-        )) {
-          sessionKeysToRemove.push(key);
-        }
-      }
-      sessionKeysToRemove.forEach(key => sessionStorage.removeItem(key));
+        keysToRemove.forEach(key => storage.removeItem(key));
+        console.log(`[CLEAR_CACHE] Cleared ${keysToRemove.length} items from ${storageType}`);
+      };
+
+      // Clear localStorage and sessionStorage
+      clearStorageItems(localStorage, 'localStorage');
+      clearStorageItems(sessionStorage, 'sessionStorage');
       
       console.log('[CLEAR_CACHE] Cache cleared successfully');
       
