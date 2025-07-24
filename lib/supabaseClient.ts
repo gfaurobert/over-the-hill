@@ -2,6 +2,33 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 let supabaseInstance: SupabaseClient | null = null;
 
+// Mock Supabase client for server-side/build-time when env vars are missing
+const createMockSupabaseClient = (): SupabaseClient => {
+  const mockMethods = {
+    from: () => ({
+      select: () => ({ eq: () => ({ single: () => ({ data: null, error: null }) }) }),
+      insert: () => ({ select: () => ({ data: null, error: null }) }),
+      update: () => ({ eq: () => ({ data: null, error: null }) }),
+      delete: () => ({ eq: () => ({ data: null, error: null }) }),
+      upsert: () => ({ data: null, error: null })
+    }),
+    auth: {
+      getUser: () => ({ data: { user: null }, error: null }),
+      signOut: () => ({ error: null }),
+      onAuthStateChange: () => ({ data: { subscription: null }, error: null })
+    },
+    storage: {
+      from: () => ({
+        upload: () => ({ data: null, error: null }),
+        download: () => ({ data: null, error: null }),
+        remove: () => ({ data: null, error: null })
+      })
+    }
+  };
+
+  return mockMethods as unknown as SupabaseClient;
+};
+
 const getSupabaseClient = (): SupabaseClient => {
   if (supabaseInstance) {
     return supabaseInstance;
@@ -14,8 +41,8 @@ const getSupabaseClient = (): SupabaseClient => {
     // During build time or when env vars are missing, return a mock client
     // This prevents build failures while still allowing the app to work in runtime
     if (typeof window === 'undefined') {
-      // Server-side/build-time: create a minimal mock
-      return {} as SupabaseClient;
+      // Server-side/build-time: create a proper mock
+      return createMockSupabaseClient();
     }
     
     // Client-side: show a proper error with guidance
