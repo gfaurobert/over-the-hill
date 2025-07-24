@@ -20,11 +20,26 @@ const AUTH_ROUTES = [
 ];
 
 // Rate limiting for middleware validation
+// TODO: For production/distributed environments, replace this in-memory Map with Redis
+// to handle rate limiting across multiple instances
 const validationAttempts = new Map<string, { count: number; lastAttempt: number }>();
 const MAX_MIDDLEWARE_ATTEMPTS = 20;
 const MIDDLEWARE_WINDOW_MS = 60 * 1000; // 1 minute
 
+// Cleanup function to remove stale entries
+function cleanupValidationAttempts(): void {
+  const now = Date.now();
+  for (const [ip, entry] of validationAttempts.entries()) {
+    if (now - entry.lastAttempt > MIDDLEWARE_WINDOW_MS) {
+      validationAttempts.delete(ip);
+    }
+  }
+}
+
 function isMiddlewareRateLimited(clientIP: string): boolean {
+  // Cleanup stale entries before processing
+  cleanupValidationAttempts();
+  
   const now = Date.now();
   const attempts = validationAttempts.get(clientIP);
   
