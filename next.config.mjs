@@ -9,6 +9,36 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  webpack: (config, { dev, isServer }) => {
+    // Optimize webpack cache to reduce large string serialization warnings
+    if (!dev) {
+      config.cache = {
+        ...config.cache,
+        compression: 'gzip',
+        maxMemoryGenerations: 1,
+      };
+    }
+    
+    // Optimize chunk splitting for large components
+    config.optimization = {
+      ...config.optimization,
+      splitChunks: {
+        ...config.optimization.splitChunks,
+        cacheGroups: {
+          ...config.optimization.splitChunks?.cacheGroups,
+          largeComponents: {
+            name: 'large-components',
+            chunks: 'all',
+            test: /[\\/]components[\\/]HillChartApp\.tsx$/,
+            priority: 20,
+            minSize: 50000,
+          },
+        },
+      },
+    };
+
+    return config;
+  },
 }
 
 export default nextConfig
