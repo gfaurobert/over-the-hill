@@ -1,0 +1,21 @@
+{
+  "name": "Over The Hill",
+  "short_name": "Over The Hill",
+  "description": "Over The Hill - Hill Chart Application",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "lang": "en-US",
+  "dir": "ltr"
+}

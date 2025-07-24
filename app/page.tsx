@@ -7,6 +7,7 @@ import RequestAccessForm from '../components/RequestAccessForm';
 import ImportDataPrompt from '../components/ImportDataPrompt';
 import SignOutButton from '../components/SignOutButton';
 import HillChartApp from '../components/HillChartApp';
+import ClearCacheButton from '../components/ClearCacheButton';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 
@@ -40,7 +41,15 @@ export default function HomePage() {
   };
 
 
-  if (loading) return <div className="p-8 text-center">Loading...</div>;
+  if (loading) return (
+    <div className="p-8 text-center">
+      <div className="mb-4">Loading...</div>
+      <div className="text-sm text-muted-foreground mb-4">
+        If the app is stuck loading, try clearing the cache:
+      </div>
+      <ClearCacheButton variant="outline" />
+    </div>
+  );
 
   return (
     <>

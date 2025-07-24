@@ -36,6 +36,8 @@ class SessionValidationService {
   private readonly REQUEST_TIMEOUT = 10 * 1000; // 10 seconds
   private validationPromise: Promise<ValidationResponse> | null = null;
   private refreshPromise: Promise<RefreshResponse> | null = null;
+  private consecutiveFailures = 0;
+  private readonly MAX_CONSECUTIVE_FAILURES = 3;
 
   private constructor() {}
 
@@ -44,6 +46,46 @@ class SessionValidationService {
       SessionValidationService.instance = new SessionValidationService();
     }
     return SessionValidationService.instance;
+  }
+
+  /**
+   * Clear all authentication-related data and reset service state
+   */
+  clearAllAuthData(): void {
+    try {
+      console.log('[SESSION_VALIDATION] Clearing all authentication data');
+      
+      // Clear validation cache
+      this.validationCache.clear();
+      
+      // Reset failure counter
+      this.consecutiveFailures = 0;
+      
+      // Cancel any pending promises
+      this.validationPromise = null;
+      this.refreshPromise = null;
+      
+      // Clear localStorage
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.includes('sb-') || key.includes('supabase'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      
+      console.log('[SESSION_VALIDATION] Authentication data cleared successfully');
+    } catch (error) {
+      console.error('[SESSION_VALIDATION] Error clearing auth data:', error);
+    }
+  }
+
+  /**
+   * Check if service is in a stuck state and needs recovery
+   */
+  isStuckState(): boolean {
+    return this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES;
   }
 
   /**
@@ -155,14 +197,20 @@ class SessionValidationService {
 
       const result: ValidationResponse = await response.json();
       
-      // Cache the result
-      this.validationCache.set(cacheKey, {
-        result,
-        timestamp: Date.now()
-      });
-
       if (!response.ok) {
         console.warn(`[SESSION_VALIDATION] Validation failed: ${result.error} (${result.code})`);
+        this.consecutiveFailures++;
+        
+        // If we've had too many failures, clear all auth data
+        if (this.isStuckState()) {
+          console.error('[SESSION_VALIDATION] Too many consecutive failures, clearing auth data');
+          this.clearAllAuthData();
+          return {
+            valid: false,
+            error: 'Authentication data cleared due to repeated failures',
+            code: 'AUTH_DATA_CLEARED'
+          };
+        }
         
         // If server-side validation is not available, fall back to client-side validation
         if (result.code === 'SERVER_VALIDATION_UNAVAILABLE') {
@@ -172,6 +220,13 @@ class SessionValidationService {
         
         return result;
       }
+
+      // Success - reset failure counter and cache the result
+      this.consecutiveFailures = 0;
+      this.validationCache.set(cacheKey, {
+        result,
+        timestamp: Date.now()
+      });
 
       if (result.valid) {
         console.log(`[SESSION_VALIDATION] Session valid for user: ${result.user?.id}`);
@@ -183,9 +238,21 @@ class SessionValidationService {
 
     } catch (error) {
       console.error('[SESSION_VALIDATION] Validation request failed:', error);
+      this.consecutiveFailures++;
       
       // Clear cache on error
       this.validationCache.delete(cacheKey);
+      
+      // If we've had too many failures, clear all auth data
+      if (this.isStuckState()) {
+        console.error('[SESSION_VALIDATION] Too many consecutive failures, clearing auth data');
+        this.clearAllAuthData();
+        return {
+          valid: false,
+          error: 'Authentication data cleared due to repeated failures',
+          code: 'AUTH_DATA_CLEARED'
+        };
+      }
       
       if (error instanceof Error && error.name === 'AbortError') {
         return {
