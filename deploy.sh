@@ -3,10 +3,10 @@
 set -euo pipefail
 set -x
 
-trap 'echo "\n[ERROR] Command failed: $BASH_COMMAND"; exit 1' ERR
+trap 'status=$?; echo -e "\n[ERROR] Command failed: $BASH_COMMAND"; exit $status' ERR
 
 # Stop the app
-pm2 stop over-the-hill
+pm2 stop over-the-hill || true
 
 # Remove lock file
 [ -f pnpm-lock.yaml ] && rm pnpm-lock.yaml
