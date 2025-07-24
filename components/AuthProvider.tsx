@@ -170,7 +170,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.log(`[AUTH_PROVIDER] Triggering validation for event: ${event}`);
             await validateSession();
         } else if (newSession && event === 'INITIAL_SESSION') {
-            console.log(`[AUTH_PROVIDER] Skipping validation for INITIAL_SESSION event`);
+            console.log(`[AUTH_PROVIDER] Processing INITIAL_SESSION event with validation`);
+            // For initial session, we should still validate to ensure token is valid
+            // but we can be more permissive with fallbacks during page refresh scenarios
+            if (newSession.access_token && newSession.user) {
+                // Perform validation but don't block the UI while validating
+                console.log(`[AUTH_PROVIDER] Validating initial session for user: ${newSession.user.id}`);
+                
+                // Set a temporary valid state to prevent UI flashing, but validate in background
+                setIsSessionValid(true);
+                setLastValidation({
+                    valid: true,
+                    user: {
+                        id: newSession.user.id,
+                        email: newSession.user.email || '',
+                        created_at: newSession.user.created_at || new Date().toISOString()
+                    },
+                    session: {
+                        expires_at: newSession.expires_at,
+                        access_token: newSession.access_token
+                    }
+                });
+                
+                // Validate in background and update state if validation fails
+                validateSession().then((validation) => {
+                    if (!validation.valid) {
+                        console.warn(`[AUTH_PROVIDER] Initial session validation failed: ${validation.error}`);
+                        setIsSessionValid(false);
+                        setLastValidation(validation);
+                        // Clear invalid session data
+                        sessionValidationService.clearValidationCache();
+                    } else {
+                        console.log(`[AUTH_PROVIDER] Initial session validation successful`);
+                        setLastValidation(validation);
+                    }
+                }).catch((error) => {
+                    console.error(`[AUTH_PROVIDER] Initial session validation error:`, error);
+                    // Don't immediately invalidate on network errors during page load
+                    // but log the issue for monitoring
+                });
+            } else {
+                console.warn(`[AUTH_PROVIDER] Initial session missing access_token or user data`);
+                setIsSessionValid(false);
+                setLastValidation({
+                    valid: false,
+                    error: 'Initial session missing required data',
+                    code: 'INCOMPLETE_SESSION_DATA'
+                });
+            }
         } else if (!newSession) {
             // Clear validation state when signed out
             setIsSessionValid(false);

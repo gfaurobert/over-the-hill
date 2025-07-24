@@ -359,28 +359,49 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [importError, setImportError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (user) {
+    if (user && user.id) {
+      console.log('[HILL_CHART] Loading collections for user:', user.id)
+      
       // Fetch active collections
       fetchCollections(user.id, false).then((activeCollections) => {
+        console.log('[HILL_CHART] Loaded active collections:', activeCollections.length)
         setCollections(activeCollections)
         setOriginalCollections(activeCollections)
         if (activeCollections.length > 0 && !selectedCollection) {
           setSelectedCollection(activeCollections[0].id)
           setCollectionInput(activeCollections[0].name)
         }
+      }).catch((error) => {
+        console.error('[HILL_CHART] Failed to fetch active collections:', error)
       })
       
       // Fetch archived collections
       fetchCollections(user.id, true).then((allCollections) => {
         const archived = allCollections.filter(c => c.status === 'archived')
+        console.log('[HILL_CHART] Loaded archived collections:', archived.length)
         setArchivedCollections(archived)
+      }).catch((error) => {
+        console.error('[HILL_CHART] Failed to fetch archived collections:', error)
       })
       
       // Fetch snapshots
       fetchSnapshots(user.id).then((fetchedSnapshots) => {
+        console.log('[HILL_CHART] Loaded snapshots:', fetchedSnapshots.length)
         setSnapshots(fetchedSnapshots)
+      }).catch((error) => {
+        console.error('[HILL_CHART] Failed to fetch snapshots:', error)
       })
+    } else if (user === null) {
+      // Clear data when user is explicitly null (signed out)
+      console.log('[HILL_CHART] User signed out, clearing collections data')
+      setCollections([])
+      setOriginalCollections([])
+      setArchivedCollections([])
+      setSnapshots([])
+      setSelectedCollection(null)
+      setCollectionInput("")
     }
+    // Don't clear data when user is undefined (loading state)
   }, [user, selectedCollection])
 
   // Reset snapshot success state after 3 seconds
