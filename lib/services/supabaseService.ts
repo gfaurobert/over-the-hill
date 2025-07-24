@@ -421,6 +421,6 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
     return collections
   } catch (error) {
     handleServiceError(error, 'import data')
-    return []
+    return [] // Unreachable but satisfies linter
   }
 } 
