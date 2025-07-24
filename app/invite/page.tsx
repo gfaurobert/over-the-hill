@@ -5,6 +5,12 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../components/AuthProvider';
 import SetPasswordForm from '../../components/SetPasswordForm';
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { 
+  extractAndValidateToken, 
+  processTokenSecurely, 
+  logTokenOperation,
+  TokenValidationResult 
+} from '../../lib/tokenSecurity';
 
 function InvitePageContent() {
   const { user, loading, supabase } = useAuth();
@@ -14,92 +20,126 @@ function InvitePageContent() {
   const [error, setError] = useState<string | null>(null);
   const [isValidating, setIsValidating] = useState(true);
   const [sessionEstablished, setSessionEstablished] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string[]>([]);
-
-  const addDebugInfo = (message: string) => {
-    console.log(message);
-    setDebugInfo(prev => [...prev, message]);
-  };
+  const [tokenValidation, setTokenValidation] = useState<TokenValidationResult | null>(null);
 
   useEffect(() => {
-    const token = searchParams.get('token');
-    const email = searchParams.get('email');
-    
-    addDebugInfo(`Token: ${token}`);
-    addDebugInfo(`Email: ${email}`);
-    
-    if (!token || !email) {
-      setError('Invalid invitation link. Missing token or email.');
-      setIsValidating(false);
-      return;
-    }
-
-    setInvitationEmail(email);
-
-    // Handle the invitation flow
     const handleInvitation = async () => {
       try {
-        addDebugInfo('Starting invitation processing...');
+        logTokenOperation('invitation_start', true, { url: window.location.href });
         
-        // First, check if we already have a session
+        // Step 1: Extract and validate token securely
+        const tokenResult = extractAndValidateToken(searchParams);
+        setTokenValidation(tokenResult);
+        
+        if (!tokenResult.isValid) {
+          setError(`Invalid invitation link: ${tokenResult.errors.join(', ')}`);
+          setIsValidating(false);
+          return;
+        }
+        
+        // Validate that we have an email for invitations
+        if (!tokenResult.email) {
+          setError('Invalid invitation link: Email is required for invitations.');
+          setIsValidating(false);
+          return;
+        }
+        
+        setInvitationEmail(tokenResult.email);
+        
+        logTokenOperation('invitation_token_validation', true, { 
+          source: tokenResult.source,
+          hasEmail: !!tokenResult.email,
+          type: tokenResult.type 
+        });
+        
+        // Step 2: Check if user is already authenticated
         const { data: { session } } = await supabase.auth.getSession();
         
         if (session?.user) {
-          addDebugInfo('User already authenticated, redirecting');
+          logTokenOperation('user_already_authenticated', true);
           router.push('/');
           return;
         }
 
-        addDebugInfo('No existing session found, processing invitation...');
-
-        // For Supabase Auth invitations, we need to verify the token first
-        // The token might be a confirmation token that needs to be verified
-        try {
-          addDebugInfo('Attempting to verify invitation token...');
-          
-          // Try to verify the token as a confirmation token
-          const { data, error } = await supabase.auth.verifyOtp({
-            email: email,
-            token: token,
-            type: 'signup' // Try signup type for invitation confirmation
-          });
-          
-          if (!error && data.session) {
-            addDebugInfo('✅ Successfully verified invitation token');
-            setSessionEstablished(true);
-            setIsValidating(false);
-            return;
-          } else {
-            addDebugInfo(`❌ Signup verification failed: ${error?.message || 'Unknown error'}`);
+        // Step 3: Process the invitation token securely
+        const invitationResult = await processTokenSecurely(
+          'invitation_processing',
+          tokenResult,
+          async (token, email, type) => {
+            // Try multiple invitation verification methods
+            const methods = [
+              {
+                name: 'verifyOtp_signup',
+                handler: async () => {
+                  if (!email) {
+                    throw new Error('Email required for signup verification');
+                  }
+                  return await supabase.auth.verifyOtp({
+                    email,
+                    token,
+                    type: 'signup'
+                  });
+                }
+              },
+              {
+                name: 'verifyOtp_invite',
+                handler: async () => {
+                  if (!email) {
+                    throw new Error('Email required for invite verification');
+                  }
+                  return await supabase.auth.verifyOtp({
+                    email,
+                    token,
+                    type: 'invite'
+                  });
+                }
+              },
+              {
+                name: 'exchangeCodeForSession',
+                handler: async () => {
+                  return await supabase.auth.exchangeCodeForSession(token);
+                }
+              }
+            ];
+            
+            for (const method of methods) {
+              try {
+                logTokenOperation(`attempting_${method.name}`, true);
+                const result = await method.handler();
+                
+                if (!result.error && result.data?.session) {
+                  logTokenOperation(`${method.name}_success`, true);
+                  return result;
+                }
+                
+                logTokenOperation(`${method.name}_failed`, false, { 
+                  error: result.error?.message 
+                });
+              } catch (methodError) {
+                logTokenOperation(`${method.name}_error`, false, { 
+                  error: methodError instanceof Error ? methodError.message : 'Unknown error' 
+                });
+              }
+            }
+            
+            throw new Error('All invitation verification methods failed');
           }
-        } catch (verifyError) {
-          addDebugInfo(`❌ Token verification error: ${verifyError}`);
+        );
+        
+        if (!invitationResult.success) {
+          setError(invitationResult.error || 'Failed to process invitation. The link may be invalid or expired.');
+          setIsValidating(false);
+          return;
         }
-
-        // If verification failed, try to exchange the token for a session
-        try {
-          addDebugInfo('Trying to exchange token for session...');
-          const { data, error } = await supabase.auth.exchangeCodeForSession(token);
-          
-          if (!error && data.session) {
-            addDebugInfo('✅ Successfully exchanged token for session');
-            setSessionEstablished(true);
-            setIsValidating(false);
-            return;
-          } else {
-            addDebugInfo(`❌ Token exchange failed: ${error?.message || 'Unknown error'}`);
-          }
-        } catch (exchangeError) {
-          addDebugInfo(`❌ Token exchange error: ${exchangeError}`);
-        }
-
-        // If all methods fail, the token might be invalid or expired
-        addDebugInfo('❌ All authentication methods failed');
-        setError('Invalid or expired invitation link. Please request a new invitation.');
+        
+        logTokenOperation('invitation_session_established', true);
+        setSessionEstablished(true);
         setIsValidating(false);
         
       } catch (err) {
-        addDebugInfo(`❌ Invitation processing error: ${err}`);
+        logTokenOperation('invitation_processing_error', false, { 
+          error: err instanceof Error ? err.message : 'Unknown error' 
+        });
         setError('Failed to process invitation. Please try again.');
         setIsValidating(false);
       }
@@ -114,20 +154,29 @@ function InvitePageContent() {
       return;
     }
 
+    if (!tokenValidation?.isValid) {
+      setError('Invalid session. Please request a new invitation.');
+      return;
+    }
+
     try {
-      addDebugInfo('Attempting to update password...');
+      logTokenOperation('invitation_password_set_start', true);
+      
       const { error } = await supabase.auth.updateUser({ password });
       
       if (error) {
-        addDebugInfo(`Password update error: ${error.message}`);
+        logTokenOperation('invitation_password_set_failed', false, { error: error.message });
         setError(error.message);
         return;
       }
 
-      addDebugInfo('✅ Password updated successfully');
+      logTokenOperation('invitation_password_set_success', true);
       router.push('/');
+      
     } catch (err) {
-      addDebugInfo(`Password update error: ${err}`);
+      logTokenOperation('invitation_password_set_error', false, { 
+        error: err instanceof Error ? err.message : 'Unknown error' 
+      });
       setError('Failed to set password. Please try again.');
     }
   };
@@ -138,12 +187,12 @@ function InvitePageContent() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
           <p className="mt-2">Processing invitation...</p>
-          {debugInfo.length > 0 && (
+          {tokenValidation && (
             <div className="mt-4 text-xs text-gray-500 max-w-md mx-auto text-left">
-              <p className="font-semibold">Debug Info:</p>
-              {debugInfo.map((info, index) => (
-                <p key={index} className="mt-1">{info}</p>
-              ))}
+              <p className="font-semibold">Validation Status:</p>
+              <p className="mt-1">Token Source: {tokenValidation.source}</p>
+              <p className="mt-1">Has Email: {tokenValidation.email ? 'Yes' : 'No'}</p>
+              <p className="mt-1">Token Type: {tokenValidation.type || 'Not specified'}</p>
             </div>
           )}
         </div>
@@ -160,12 +209,12 @@ function InvitePageContent() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">{error}</p>
-            {debugInfo.length > 0 && (
-              <div className="mb-4 p-3 bg-gray-100 rounded text-xs">
-                <p className="font-semibold">Debug Info:</p>
-                {debugInfo.map((info, index) => (
-                  <p key={index} className="mt-1">{info}</p>
-                ))}
+            {tokenValidation && (
+              <div className="mb-4 p-3 bg-red-50 rounded text-xs border border-red-200">
+                <p className="font-semibold">Token Validation Details:</p>
+                <p className="mt-1">Valid: {tokenValidation.isValid ? 'Yes' : 'No'}</p>
+                <p className="mt-1">Source: {tokenValidation.source || 'None'}</p>
+                <p className="mt-1">Errors: {tokenValidation.errors.join(', ')}</p>
               </div>
             )}
             <button
