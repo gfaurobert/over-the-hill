@@ -38,6 +38,9 @@ import {
   fetchCollections,
   addCollection,
   updateCollection,
+  archiveCollection,
+  unarchiveCollection,
+  deleteCollection,
   addDot as addDotService,
   updateDot as updateDotService,
   deleteDot as deleteDotService,
@@ -60,6 +63,9 @@ export interface Dot {
 export interface Collection {
   id: string
   name: string
+  status: 'active' | 'archived' | 'deleted'
+  archived_at?: string
+  deleted_at?: string
   dots: Dot[]
 }
 
@@ -325,6 +331,17 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [originalCollections, setOriginalCollections] = useState<Collection[]>([])
   const [snapshotSuccess, setSnapshotSuccess] = useState(false)
 
+  // Archive management state
+  const [archivedCollections, setArchivedCollections] = useState<Collection[]>([])
+  const [archiveConfirm, setArchiveConfirm] = useState<{ collectionId: string; collectionName: string } | null>(null)
+  const [deleteCollectionConfirm, setDeleteCollectionConfirm] = useState<{ collectionId: string; collectionName: string } | null>(null)
+  const [collectionNameConflict, setCollectionNameConflict] = useState<{ 
+    name: string; 
+    type: 'active' | 'archived'; 
+    archivedCollectionId?: string 
+  } | null>(null)
+  const [showArchivedCollectionsModal, setShowArchivedCollectionsModal] = useState(false)
+
   // Collection editing state
   const [isEditingCollection, setIsEditingCollection] = useState(false)
   const [editingCollectionName, setEditingCollectionName] = useState("")
@@ -343,13 +360,20 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   useEffect(() => {
     if (user) {
-      fetchCollections(user.id).then((fetched) => {
-        setCollections(fetched)
-        setOriginalCollections(fetched)
-        if (fetched.length > 0 && !selectedCollection) {
-          setSelectedCollection(fetched[0].id)
-          setCollectionInput(fetched[0].name)
+      // Fetch active collections
+      fetchCollections(user.id, false).then((activeCollections) => {
+        setCollections(activeCollections)
+        setOriginalCollections(activeCollections)
+        if (activeCollections.length > 0 && !selectedCollection) {
+          setSelectedCollection(activeCollections[0].id)
+          setCollectionInput(activeCollections[0].name)
         }
+      })
+      
+      // Fetch archived collections
+      fetchCollections(user.id, true).then((allCollections) => {
+        const archived = allCollections.filter(c => c.status === 'archived')
+        setArchivedCollections(archived)
       })
       
       // Fetch snapshots
@@ -494,17 +518,159 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
   }
 
+  // Archive operation handlers
+  const handleArchiveCollection = async (collectionId: string) => {
+    if (!user) return
+    
+    const success = await archiveCollection(collectionId, user.id)
+    if (success) {
+      // Move collection from active to archived
+      const collectionToArchive = collections.find(c => c.id === collectionId)
+      if (collectionToArchive) {
+        const archivedCollection = { 
+          ...collectionToArchive, 
+          status: 'archived' as const,
+          archived_at: new Date().toISOString()
+        }
+        setCollections(prev => prev.filter(c => c.id !== collectionId))
+        setArchivedCollections(prev => [...prev, archivedCollection])
+        
+        // If this was the selected collection, select another one
+        if (selectedCollection === collectionId) {
+          // Filter out the deleted collection first
+          const filteredCollections = collections.filter(c => c.id !== collectionId)
+          if (filteredCollections.length > 0) {
+            const remainingCollection = filteredCollections[0]
+            setSelectedCollection(remainingCollection.id)
+            setCollectionInput(remainingCollection.name)
+          } else {
+            setSelectedCollection(null)
+            setCollectionInput("")
+          }
+        }
+      }
+    }
+    setArchiveConfirm(null)
+  }
+
+  const handleUnarchiveCollection = async (collectionId: string) => {
+    if (!user) return
+    
+    const success = await unarchiveCollection(collectionId, user.id)
+    if (success) {
+      // Move collection from archived to active
+      const collectionToUnarchive = archivedCollections.find(c => c.id === collectionId)
+      if (collectionToUnarchive) {
+        const activeCollection = { 
+          ...collectionToUnarchive, 
+          status: 'active' as const,
+          archived_at: undefined
+        }
+        setArchivedCollections(prev => prev.filter(c => c.id !== collectionId))
+        setCollections(prev => [...prev, activeCollection])
+      }
+    }
+  }
+
+  const handleDeleteCollection = async (collectionId: string) => {
+    if (!user) return
+    
+    const success = await deleteCollection(collectionId, user.id)
+    if (success) {
+      // Remove collection from both active and archived lists
+      setCollections(prev => prev.filter(c => c.id !== collectionId))
+      setArchivedCollections(prev => prev.filter(c => c.id !== collectionId))
+      
+      // If this was the selected collection, select another one
+      if (selectedCollection === collectionId) {
+        // Filter out the deleted collection first
+        const filteredCollections = collections.filter(c => c.id !== collectionId)
+        if (filteredCollections.length > 0) {
+          const remainingCollection = filteredCollections[0]
+          setSelectedCollection(remainingCollection.id)
+          setCollectionInput(remainingCollection.name)
+        } else {
+          setSelectedCollection(null)
+          setCollectionInput("")
+        }
+      }
+    }
+    setDeleteCollectionConfirm(null)
+  }
+
+  const confirmArchiveCollection = () => {
+    if (archiveConfirm) {
+      handleArchiveCollection(archiveConfirm.collectionId)
+    }
+  }
+
+  const confirmDeleteCollection = () => {
+    if (deleteCollectionConfirm) {
+      handleDeleteCollection(deleteCollectionConfirm.collectionId)
+    }
+  }
+
+  const handleUnarchiveFromConflict = () => {
+    if (collectionNameConflict?.archivedCollectionId) {
+      handleUnarchiveCollection(collectionNameConflict.archivedCollectionId)
+      setCollectionNameConflict(null)
+      // Set the unarchived collection as selected
+      const archivedCollection = archivedCollections.find(c => c.id === collectionNameConflict.archivedCollectionId)
+      if (archivedCollection) {
+        setSelectedCollection(archivedCollection.id)
+        setCollectionInput(archivedCollection.name)
+      }
+    }
+  }
+
   const handleCollectionInputKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && collectionInput.trim() && user) {
       e.preventDefault()
-      if (!collections.some((c) => c.name.toLowerCase() === collectionInput.trim().toLowerCase())) {
-        const newCollection = { id: Date.now().toString(), name: collectionInput.trim(), dots: [] }
-        const added = await addCollection(newCollection, user.id)
-        if (added) {
-          setCollections((prev) => [...prev, added])
-          setSelectedCollection(added.id)
+      
+      const trimmedName = collectionInput.trim()
+      const nameExists = collections.some((c) => c.name.toLowerCase() === trimmedName.toLowerCase())
+      const archivedExists = archivedCollections.find((c) => c.name.toLowerCase() === trimmedName.toLowerCase())
+      
+      if (nameExists) {
+        // Active collection with this name already exists
+        setCollectionNameConflict({
+          name: trimmedName,
+          type: 'active'
+        })
+      } else if (archivedExists) {
+        // Archived collection with this name exists
+        setCollectionNameConflict({
+          name: trimmedName,
+          type: 'archived',
+          archivedCollectionId: archivedExists.id
+        })
+      } else {
+        // Name is available, create new collection
+        const newCollection = { 
+          id: Date.now().toString(), 
+          name: trimmedName, 
+          status: 'active' as const,
+          archived_at: undefined,
+          deleted_at: undefined,
+          dots: [] 
+        }
+        
+        try {
+          const added = await addCollection(newCollection, user.id)
+          if (added) {
+            setCollections((prev) => [...prev, added])
+            setSelectedCollection(added.id)
+          }
+        } catch (error) {
+          console.error("Failed to create collection:", error)
+          // Show a generic error if the API call fails
+          setCollectionNameConflict({
+            name: trimmedName,
+            type: 'active' // Assume it's a name conflict since that's the most likely cause
+          })
         }
       }
+      
       setShowDropdown(false)
       setIsTyping(false)
     }
@@ -988,6 +1154,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       const snapshotCollection: Collection = {
         id: snapshotForDate.collectionId,
         name: snapshotForDate.collectionName,
+        status: 'active' as const,
+        archived_at: undefined,
+        deleted_at: undefined,
         dots: snapshotForDate.dots
       }
       
@@ -1558,6 +1727,20 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         Collections
                       </div>
                       <button
+                        onClick={() => {
+                          setShowArchivedCollectionsModal(true)
+                          setShowEllipsisMenu(false)
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <ArchiveIcon className="w-4 h-4" /> Archived Collections
+                        {archivedCollections.length > 0 && (
+                          <span className="ml-auto text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                            {archivedCollections.length}
+                          </span>
+                        )}
+                      </button>
+                      <button
                         onClick={exportCollections}
                         className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
                       >
@@ -1654,20 +1837,56 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       />
                       <div className="absolute right-0 top-0 h-full flex items-center gap-1">
                         {selectedCollection && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-full px-2"
-                            onClick={() => {
-                              const collection = collections.find(c => c.id === selectedCollection)
-                              if (collection) {
-                                startEditCollection(collection)
-                              }
-                            }}
-                            title="Edit collection name"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </Button>
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-full px-2"
+                              onClick={() => {
+                                const collection = collections.find(c => c.id === selectedCollection)
+                                if (collection) {
+                                  startEditCollection(collection)
+                                }
+                              }}
+                              title="Edit collection name"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-full px-2"
+                              onClick={() => {
+                                const collection = collections.find(c => c.id === selectedCollection)
+                                if (collection) {
+                                  setArchiveConfirm({ 
+                                    collectionId: collection.id, 
+                                    collectionName: collection.name 
+                                  })
+                                }
+                              }}
+                              title="Archive collection"
+                            >
+                              <ArchiveIcon className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-full px-2 text-destructive"
+                              onClick={() => {
+                                const collection = collections.find(c => c.id === selectedCollection)
+                                if (collection) {
+                                  setDeleteCollectionConfirm({ 
+                                    collectionId: collection.id, 
+                                    collectionName: collection.name 
+                                  })
+                                }
+                              }}
+                              title="Delete collection"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </>
                         )}
                         <Button
                           variant="ghost"
@@ -1808,6 +2027,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                   ))}
                 </>
               )}
+
+
             </CardContent>
           </Card>
         </div>
@@ -1853,6 +2074,77 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                 Reset All
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+      {archiveConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Archive Collection</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              Archive "{archiveConfirm.collectionName}"? You can restore it later from the archived collections section.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setArchiveConfirm(null)}>
+                Cancel
+              </Button>
+              <Button onClick={confirmArchiveCollection}>
+                Archive Collection
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {deleteCollectionConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2 text-destructive">Delete Collection</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              <strong>This action cannot be undone.</strong> Delete "{deleteCollectionConfirm.collectionName}" and all its dots, snapshots, and data?
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setDeleteCollectionConfirm(null)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={confirmDeleteCollection}>
+                Delete Forever
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {collectionNameConflict && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Collection Name Already Exists</h3>
+            {collectionNameConflict.type === 'active' ? (
+              <div>
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  A collection named "<strong>{collectionNameConflict.name}</strong>" already exists and is currently active.
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setCollectionNameConflict(null)}>
+                    OK
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <p className="text-gray-600 dark:text-gray-300 mb-4">
+                  A collection named "<strong>{collectionNameConflict.name}</strong>" already exists but is currently archived. 
+                  Would you like to unarchive it instead?
+                </p>
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => setCollectionNameConflict(null)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleUnarchiveFromConflict}>
+                    <Undo2 className="w-4 h-4 mr-2" />
+                    Unarchive Collection
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1920,6 +2212,89 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                 Close
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+      {showArchivedCollectionsModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <ArchiveIcon className="w-5 h-5" />
+                Archived Collections
+              </h3>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowArchivedCollectionsModal(false)}
+                className="h-8 w-8 p-0"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            {archivedCollections.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <ArchiveIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                <p>No archived collections</p>
+                <p className="text-sm mt-1">Collections you archive will appear here</p>
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto space-y-3">
+                {archivedCollections.map((collection) => (
+                  <div 
+                    key={collection.id}
+                    className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border"
+                  >
+                    <div className="flex items-center gap-3 text-muted-foreground min-w-0 flex-1">
+                      <ArchiveIcon className="w-5 h-5 flex-shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium opacity-75 truncate">{collection.name}</p>
+                        <p className="text-xs opacity-50">
+                          {collection.dots.length} dot{collection.dots.length !== 1 ? 's' : ''}
+                          {collection.archived_at && (
+                            <span className="ml-2">
+                              Archived {new Date(collection.archived_at).toLocaleDateString()}
+                            </span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => {
+                          handleUnarchiveCollection(collection.id)
+                          setShowArchivedCollectionsModal(false)
+                        }}
+                        title="Unarchive collection"
+                        className="h-8"
+                      >
+                        <Undo2 className="w-4 h-4 mr-1" />
+                        Unarchive
+                      </Button>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => {
+                          setDeleteCollectionConfirm({ 
+                            collectionId: collection.id, 
+                            collectionName: collection.name 
+                          })
+                          setShowArchivedCollectionsModal(false)
+                        }}
+                        title="Delete collection permanently"
+                        className="h-8 text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
