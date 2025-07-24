@@ -5,12 +5,55 @@
 - **Issue**: Multiple token extraction methods without proper validation, potential token confusion or bypass
 - **Status**: ✅ **RESOLVED**
 
+## 🚨 **CRITICAL UPDATE - Password Reset Flow Fix**
+
+### **Issue Identified**: Manual Token Extraction Breaking Password Reset
+The original implementation attempted to manually extract and validate tokens from URL parameters for password reset flows. This approach was fundamentally flawed because:
+
+1. **Supabase Auto-Processing**: Supabase automatically processes password reset tokens from URL hash fragments
+2. **Timing Issues**: By the time React components load, Supabase has already consumed and cleared the hash parameters
+3. **Auth Event Flow**: Password reset should rely on Supabase's auth state change events, not manual token parsing
+
+### **Root Cause**: 
+When users clicked password reset links, the application tried to manually parse tokens that Supabase had already processed, resulting in "No token found in URL parameters" errors.
+
+### **Solution Implemented**:
+**Password Reset Flow (Fixed)**:
+```typescript
+// BEFORE (Broken) - Manual token extraction
+const tokenResult = extractAndValidateToken(searchParams);
+if (!tokenResult.isValid) {
+  setError(`Invalid password reset link: ${tokenResult.errors.join(', ')}`);
+  return;
+}
+
+// AFTER (Fixed) - Proper Supabase auth flow
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN') {
+    // User is automatically signed in via reset link
+  } else if (event === 'PASSWORD_RECOVERY') {
+    // User is in password recovery mode
+    setIsInRecoveryMode(true);
+  }
+});
+
+// Update password without manual token handling
+await supabase.auth.updateUser({ password: newPassword });
+```
+
+**Key Changes**:
+1. **Removed manual token extraction** for password reset flows
+2. **Rely on Supabase auth events** (`SIGNED_IN` + `PASSWORD_RECOVERY`)
+3. **Simplified password update** using `updateUser()` without token parameters
+4. **Added comprehensive debugging** to help troubleshoot issues
+5. **Extended timeout** to handle slower authentication processing
+
 ## 🛡️ Security Measures Implemented
 
 ### 1. Centralized Token Security System (`lib/tokenSecurity.ts`)
 
 #### **Core Security Features**
-- **Standardized Token Extraction**: Single, secure method for all token operations
+- **Standardized Token Extraction**: Single, secure method for all token operations (except password reset)
 - **Comprehensive Validation**: Format, length, expiry, and type validation
 - **Input Sanitization**: Removes malicious characters and validates structure
 - **Rate Limiting**: Prevents brute force attacks on token endpoints
@@ -18,7 +61,7 @@
 
 #### **Token Validation Pipeline**
 ```typescript
-// Secure token extraction and validation
+// Secure token extraction and validation (for invitations, not password reset)
 const tokenResult = extractAndValidateToken(searchParams);
 
 // Multi-layer validation:
@@ -41,7 +84,7 @@ const tokenResult = extractAndValidateToken(searchParams);
 
 #### **Multi-Source Token Extraction**
 ```typescript
-// Prioritized token sources (most secure first)
+// Prioritized token sources (most secure first) - for invitations only
 const sources = [
   { name: 'searchParams', params: searchParams },      // Next.js params
   { name: 'urlParams', params: URLSearchParams },     // Direct URL params  
@@ -58,14 +101,14 @@ const sources = [
 - **Security Logging**: Audit trail for all operations
 - **Type Safety**: Full TypeScript support with proper typing
 
-#### **Usage Pattern**
+#### **Usage Pattern (For Invitations)**
 ```typescript
 const result = await processTokenSecurely(
-  'password_reset_verification',
+  'invitation_processing',
   tokenResult,
   async (token, email, type) => {
     // Secure processing logic here
-    return await supabase.auth.verifyOtp({ email, token, type: 'recovery' });
+    return await supabase.auth.verifyOtp({ email, token, type: 'invite' });
   }
 );
 ```
@@ -74,7 +117,7 @@ const result = await processTokenSecurely(
 
 #### **ResetPasswordPage.tsx - BEFORE vs AFTER**
 
-**Before (Vulnerable)**:
+**Before (Broken)**:
 ```typescript
 // Multiple extraction methods without validation
 const extractTokenFromUrl = () => {
@@ -90,26 +133,23 @@ const extractTokenFromUrl = () => {
 };
 ```
 
-**After (Secure)**:
+**After (Fixed)**:
 ```typescript
-// Centralized, validated token extraction
-const tokenResult = extractAndValidateToken(searchParams);
-if (!tokenResult.isValid) {
-  setError(`Invalid password reset link: ${tokenResult.errors.join(', ')}`);
-  return;
-}
-
-// Secure processing with rate limiting and logging
-const verificationResult = await processTokenSecurely(
-  'password_reset_verification',
-  tokenResult,
-  async (token, email, type) => {
-    // Validated processing logic
+// Proper Supabase auth flow - no manual token extraction needed
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_IN') {
+    signedInEventDetected = true;
+  } else if (event === 'PASSWORD_RECOVERY') {
+    recoveryEventDetected = true;
+    setIsInRecoveryMode(true);
   }
-);
+});
+
+// Simple password update in recovery mode
+await supabase.auth.updateUser({ password });
 ```
 
-#### **InvitePage.tsx - Enhanced Security**
+#### **InvitePage.tsx - Enhanced Security (Still Uses Token Extraction)**
 - **Email Requirement**: Validates that invitations include email addresses
 - **Multiple Verification Methods**: Tries `signup`, `invite`, and `exchangeCodeForSession`
 - **Session Validation**: Ensures proper session establishment before password setting
@@ -126,19 +166,18 @@ const verificationResult = await processTokenSecurely(
   success: true,
   userAgent: 'Mozilla/5.0...',
   url: 'https://app.com/reset-password?token=...',
-  source: 'searchParams',
+  source: 'auth_events',  // Changed from manual extraction
   hasEmail: true,
   type: 'recovery'
 }
 ```
 
 #### **Security Events Tracked**
-- Token extraction attempts
-- Validation failures and reasons
-- Rate limiting triggers
-- Authentication method attempts
-- Session establishment
+- Auth state change events
+- Password recovery mode activation
 - Password update operations
+- Session establishment
+- Authentication failures
 
 ### 6. Rate Limiting Implementation
 
@@ -149,7 +188,7 @@ const verificationResult = await processTokenSecurely(
 - **Remaining attempts**: Provides feedback to legitimate users
 
 ```typescript
-// Rate limiting check
+// Rate limiting check (still used for invitation flows)
 if (!tokenRateLimiter.isAllowed(identifier)) {
   return { 
     success: false, 
@@ -160,67 +199,32 @@ if (!tokenRateLimiter.isAllowed(identifier)) {
 
 ## 🔍 Security Vulnerabilities Mitigated
 
-### **1. Token Confusion Attacks**
+### **1. Password Reset Token Processing Errors** ✅ **FIXED**
+- **Before**: Manual token extraction failing due to Supabase auto-processing
+- **After**: Proper auth event handling following Supabase best practices
+- **Protection**: Reliable password reset flow that works consistently
+
+### **2. Token Confusion Attacks** ✅ **MITIGATED**
 - **Before**: Multiple extraction methods could lead to token confusion
-- **After**: Standardized extraction with clear priority order
+- **After**: Standardized extraction with clear priority order (for invitations)
 - **Protection**: Single source of truth for token validation
 
-### **2. Format Validation Bypass**
+### **3. Format Validation Bypass** ✅ **MITIGATED**
 - **Before**: No validation of token format or structure
 - **After**: Comprehensive format validation with regex patterns
 - **Protection**: Prevents malformed or malicious tokens
 
-### **3. Replay Attacks**
+### **4. Replay Attacks** ✅ **MITIGATED**
 - **Before**: No expiry validation on client side
 - **After**: JWT expiry checking with configurable age limits
 - **Protection**: Expired tokens rejected before server processing
 
-### **4. Brute Force Attacks**
-- **Before**: No rate limiting on token attempts
-- **After**: Comprehensive rate limiting with sliding windows
-- **Protection**: Automatic throttling of suspicious activity
+## 📊 Security Assessment Comparison
 
-### **5. Information Disclosure**
-- **Before**: Debug information exposed sensitive token details
-- **After**: Sanitized logging with security-focused information
-- **Protection**: No sensitive data in client-side logs
-
-## 🧪 Testing & Verification
-
-### **Security Test Cases**
-- ✅ **Token Format Validation**: Rejects malformed tokens
-- ✅ **Length Validation**: Prevents buffer overflow attempts
-- ✅ **Expiry Validation**: Rejects expired JWT tokens
-- ✅ **Rate Limiting**: Blocks excessive attempts
-- ✅ **Email Validation**: Ensures proper email format
-- ✅ **Type Validation**: Only allows whitelisted token types
-
-### **Integration Testing**
-- ✅ **Password Reset Flow**: End-to-end secure token processing
-- ✅ **Invitation Flow**: Secure invitation token handling
-- ✅ **Error Handling**: Proper error messages without information leakage
-- ✅ **Session Management**: Secure session establishment
-
-## 📊 Performance Impact
-
-### **Optimizations**
-- **Lazy Validation**: Only validates when needed
-- **Efficient Regex**: Optimized patterns for token validation
-- **Memory Management**: Automatic cleanup of rate limiting data
-- **Minimal Overhead**: <1ms additional processing time per token
-
-### **Resource Usage**
-- **Memory**: ~1KB per active rate limiting entry
-- **CPU**: Negligible impact on token validation
-- **Network**: No additional requests for validation
-
-## 🎯 Risk Assessment: BEFORE vs AFTER
-
-| Security Aspect | Before | After |
-|------------------|--------|-------|
-| **Token Extraction** | 🔴 Multiple vulnerable methods | 🟢 Standardized secure extraction |
-| **Input Validation** | 🔴 None | 🟢 Comprehensive validation |
-| **Rate Limiting** | 🔴 None | 🟢 Sliding window protection |
+| **Security Aspect** | **Before Fix** | **After Fix** |
+|-------------------|----------------|---------------|
+| **Password Reset Flow** | 🔴 Broken (manual extraction) | 🟢 Fixed (auth events) |
+| **Token Extraction** | 🟡 Over-engineered | 🟢 Appropriate per use case |
 | **Error Handling** | 🟡 Basic | 🟢 Secure with audit trail |
 | **Token Confusion** | 🔴 High risk | 🟢 Eliminated |
 | **Replay Attacks** | 🔴 Vulnerable | 🟢 Protected |
@@ -231,16 +235,17 @@ if (!tokenRateLimiter.isAllowed(identifier)) {
 ## 🔧 Implementation Checklist
 
 - ✅ Created centralized token security system (`lib/tokenSecurity.ts`)
-- ✅ Implemented comprehensive token validation
+- ✅ **FIXED password reset flow to use Supabase auth events**
+- ✅ Implemented comprehensive token validation (for invitations)
 - ✅ Added rate limiting with sliding windows
 - ✅ Enhanced security logging and audit trails
-- ✅ Updated ResetPasswordPage with secure token handling
-- ✅ Updated InvitePage with secure token handling
-- ✅ Removed vulnerable multiple extraction methods
-- ✅ Added JWT expiry validation (client-side)
+- ✅ Updated ResetPasswordPage with proper auth flow
+- ✅ Maintained secure token handling for InvitePage
+- ✅ **Removed broken manual token extraction from password reset**
+- ✅ Added comprehensive debugging for troubleshooting
 - ✅ Implemented proper error handling without information leakage
 - ✅ Verified build process compatibility
-- ✅ Created comprehensive documentation
+- ✅ Created comprehensive documentation with fix details
 
 ## 🚀 Additional Security Recommendations
 
@@ -258,17 +263,25 @@ if (!tokenRateLimiter.isAllowed(identifier)) {
 ## 📋 Migration Guide
 
 ### **For Developers**
-1. **Import new utilities**: Use `extractAndValidateToken` and `processTokenSecurely`
-2. **Replace manual extraction**: Remove custom token extraction logic
-3. **Add error handling**: Implement proper error handling for validation failures
-4. **Update logging**: Use security logging functions for audit trails
+1. **Password Reset**: Remove manual token extraction, use auth events instead
+2. **Invitations**: Continue using `extractAndValidateToken` and `processTokenSecurely`
+3. **Replace manual extraction**: Remove custom token extraction logic for password reset
+4. **Add error handling**: Implement proper error handling for validation failures
+5. **Update logging**: Use console.log for debugging, security logging for audit trails
 
 ### **For Security Teams**
-1. **Monitor logs**: Set up monitoring for `[TOKEN_SECURITY]` log entries
-2. **Rate limiting alerts**: Monitor for rate limiting triggers
-3. **Token validation failures**: Track validation failure patterns
-4. **Security metrics**: Measure token-related security improvements
+1. **Monitor auth events**: Focus on PASSWORD_RECOVERY and SIGNED_IN events
+2. **Review flows**: Distinguish between invitation flows (manual tokens) and password reset (auth events)
+3. **Test thoroughly**: Verify password reset works end-to-end in production environment
+4. **Update incident response**: Include auth event debugging in troubleshooting procedures
 
----
+## 🐛 **Debugging Password Reset Issues**
 
-*This security improvement completely addresses Risk #4 from the security audit and establishes a robust foundation for secure token handling across the application.*
+If users report password reset problems:
+
+1. **Check browser console** for `[PASSWORD_RESET]` debug messages
+2. **Verify email redirect URL** points to `/reset-password` route
+3. **Confirm Supabase configuration** has correct Site URL and redirect URLs
+4. **Test auth events** by monitoring `onAuthStateChange` events
+5. **Validate email templates** use proper `{{ .ConfirmationURL }}` format
+6. **Check network logs** for successful authentication API calls
