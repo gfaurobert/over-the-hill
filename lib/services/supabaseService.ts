@@ -421,6 +421,6 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
     return collections
   } catch (error) {
     handleServiceError(error, 'import data')
-    throw error // Re-throw to let caller handle
+    return []
   }
 } 
