@@ -17,7 +17,7 @@ export const ClearCacheButton: React.FC<ClearCacheButtonProps> = ({
   size = 'sm',
   className 
 }) => {
-  const handleClearCache = () => {
+  const handleClearCache = async () => {
     try {
       console.log('[CLEAR_CACHE] Manually clearing all cached data');
       
@@ -26,18 +26,18 @@ export const ClearCacheButton: React.FC<ClearCacheButtonProps> = ({
       
       // Clear service worker caches if available
       if ('serviceWorker' in navigator && 'caches' in window) {
-        caches.keys().then((cacheNames) => {
-          return Promise.all(
-            cacheNames.map((cacheName) => {
+        try {
+          const cacheNames = await caches.keys();
+          await Promise.all(
+            cacheNames.map(async (cacheName) => {
               console.log('[CLEAR_CACHE] Deleting cache:', cacheName);
-              return caches.delete(cacheName);
+              return await caches.delete(cacheName);
             })
           );
-        }).then(() => {
           console.log('[CLEAR_CACHE] All service worker caches cleared');
-        }).catch((error) => {
+        } catch (error) {
           console.error('[CLEAR_CACHE] Error clearing service worker caches:', error);
-        });
+        }
       }
       
       // Clear any other localStorage items that might be causing issues
