@@ -27,11 +27,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [isInRecoveryMode, setIsInRecoveryMode] = useState(false);
     const [isSessionValid, setIsSessionValid] = useState(false);
     const [lastValidation, setLastValidation] = useState<ValidationResponse | null>(null);
+    const [loadingTimeout, setLoadingTimeout] = useState<NodeJS.Timeout | null>(null);
     
     // Refs for intervals and timeouts
     const validationIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
     const isValidatingRef = useRef(false);
+
+    // Clear stuck loading state after timeout
+    useEffect(() => {
+        if (loading) {
+            const timeout = setTimeout(() => {
+                console.warn('[AUTH_PROVIDER] Loading timeout reached, clearing authentication state');
+                // Clear all authentication-related localStorage
+                try {
+                    const keysToRemove = [];
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const key = localStorage.key(i);
+                        if (key && (key.includes('sb-') || key.includes('supabase'))) {
+                            keysToRemove.push(key);
+                        }
+                    }
+                    keysToRemove.forEach(key => localStorage.removeItem(key));
+                    
+                    // Clear validation cache
+                    sessionValidationService.clearValidationCache();
+                    
+                    // Force loading to false
+                    setLoading(false);
+                    setUser(null);
+                    setSession(null);
+                    setIsSessionValid(false);
+                    setLastValidation(null);
+                } catch (error) {
+                    console.error('[AUTH_PROVIDER] Error clearing stuck state:', error);
+                    setLoading(false);
+                }
+            }, 10000); // 10 second timeout
+            
+            setLoadingTimeout(timeout);
+            
+            return () => {
+                clearTimeout(timeout);
+                setLoadingTimeout(null);
+            };
+        } else {
+            if (loadingTimeout) {
+                clearTimeout(loadingTimeout);
+                setLoadingTimeout(null);
+            }
+        }
+    }, [loading]);
 
     // Validate session server-side
     const validateSession = useCallback(async (): Promise<ValidationResponse> => {
