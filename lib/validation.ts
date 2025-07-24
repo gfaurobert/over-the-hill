@@ -124,25 +124,86 @@ export const validateDot = (dot: Partial<Dot>): Dot => {
 
 export const validateCollection = (collection: Partial<Collection>): Omit<Collection, 'dots'> => {
   const errors: string[] = []
-  
+
   try {
+    // Validate status field
+    const validStatuses: Array<'active' | 'archived' | 'deleted'> = ['active', 'archived', 'deleted']
+    const status = collection.status || 'active'
+
+    if (!validStatuses.includes(status as any)) {
+      errors.push('Invalid collection status. Must be active, archived, or deleted')
+    }
+
+    // Validate timestamp fields if present
+    let archived_at: string | undefined = undefined
+    let deleted_at: string | undefined = undefined
+
+    if (collection.archived_at) {
+      if (typeof collection.archived_at !== 'string') {
+        errors.push('archived_at must be a string')
+      } else {
+        const date = new Date(collection.archived_at)
+        if (isNaN(date.getTime())) {
+          errors.push('archived_at must be a valid date string')
+        } else {
+          archived_at = collection.archived_at
+        }
+      }
+    }
+
+    if (collection.deleted_at) {
+      if (typeof collection.deleted_at !== 'string') {
+        errors.push('deleted_at must be a string')
+      } else {
+        const date = new Date(collection.deleted_at)
+        if (isNaN(date.getTime())) {
+          errors.push('deleted_at must be a valid date string')
+        } else {
+          deleted_at = collection.deleted_at
+        }
+      }
+    }
+
+    // Cross-field validation for business rules
+    if (archived_at && deleted_at) {
+      errors.push('Collection cannot have both archived_at and deleted_at set simultaneously')
+    }
+    if (status === 'archived' && !archived_at) {
+      errors.push('Archived collections must have archived_at timestamp')
+    }
+    if (status === 'deleted' && !deleted_at) {
+      errors.push('Deleted collections must have deleted_at timestamp')
+    }
+    if (status === 'active' && (archived_at || deleted_at)) {
+      errors.push('Active collections cannot have archived_at or deleted_at timestamps')
+    }
+    if (status === 'archived' && deleted_at) {
+      errors.push('Archived collections cannot have deleted_at timestamp')
+    }
+    if (status === 'deleted' && archived_at) {
+      errors.push('Deleted collections cannot have archived_at timestamp')
+    }
+
     const validatedCollection = {
       id: collection.id ? sanitizeId(collection.id) : '',
-      name: collection.name ? sanitizeString(collection.name, 100) : ''
+      name: collection.name ? sanitizeString(collection.name, 100) : '',
+      status: status as 'active' | 'archived' | 'deleted',
+      archived_at,
+      deleted_at
     }
-    
+
     if (!validatedCollection.id) {
       errors.push('Collection ID is required')
     }
-    
+
     if (!validatedCollection.name) {
       errors.push('Collection name is required')
     }
-    
+
     if (errors.length > 0) {
       throw new ValidationError(errors.join(', '))
     }
-    
+
     return validatedCollection
   } catch (error) {
     if (error instanceof ValidationError) {
@@ -179,6 +240,32 @@ export const validateSnapshotId = (snapshotId: string): string => {
   return sanitizeId(snapshotId)
 }
 
+// Archive operation validation
+export const validateArchiveOperation = (collectionId: string, userId: string, currentStatus?: string): void => {
+  validateCollectionId(collectionId)
+  validateUserId(userId)
+  
+  if (currentStatus && currentStatus !== 'active') {
+    throw new ValidationError('Only active collections can be archived')
+  }
+}
+
+export const validateUnarchiveOperation = (collectionId: string, userId: string, currentStatus?: string): void => {
+  validateCollectionId(collectionId)
+  validateUserId(userId)
+  
+  if (currentStatus && currentStatus !== 'archived') {
+    throw new ValidationError('Only archived collections can be unarchived')
+  }
+}
+
+export const validateDeleteOperation = (collectionId: string, userId: string): void => {
+  validateCollectionId(collectionId)
+  validateUserId(userId)
+  
+  // Delete operation can be performed on any status (active or archived)
+}
+
 export const validateImportData = (data: any): ExportData => {
   if (!data || typeof data !== 'object') {
     throw new ValidationError('Import data must be an object')
@@ -192,25 +279,35 @@ export const validateImportData = (data: any): ExportData => {
     throw new ValidationError('Too many collections. Maximum 100 allowed')
   }
   
-  // Validate each collection
-  const validatedCollections: Collection[] = data.collections.map((collection: any, index: number) => {
-    try {
-      const validatedCollection = validateCollection(collection)
-      
-      if (!Array.isArray(collection.dots)) {
-        throw new ValidationError(`Collection ${index} must have a dots array`)
+  // Validate each collection and filter out deleted ones
+  const validatedCollections: Collection[] = data.collections
+    .filter((collection: any, index: number) => {
+      // Never import deleted collections
+      const status = collection.status || 'active'
+      if (status === 'deleted') {
+        console.warn(`Skipping deleted collection at index ${index} during import`)
+        return false
       }
-      
-      if (collection.dots.length > 1000) {
-        throw new ValidationError(`Collection ${index} has too many dots. Maximum 1000 allowed`)
-      }
-      
-      const validatedDots = collection.dots.map((dot: any) => validateDot(dot))
-      
-      return {
-        ...validatedCollection,
-        dots: validatedDots
-      }
+      return true
+    })
+    .map((collection: any, index: number) => {
+      try {
+        const validatedCollection = validateCollection(collection)
+        
+        if (!Array.isArray(collection.dots)) {
+          throw new ValidationError(`Collection ${index} must have a dots array`)
+        }
+        
+        if (collection.dots.length > 1000) {
+          throw new ValidationError(`Collection ${index} has too many dots. Maximum 1000 allowed`)
+        }
+        
+        const validatedDots = collection.dots.map((dot: any) => validateDot(dot))
+        
+        return {
+          ...validatedCollection,
+          dots: validatedDots
+        }
     } catch (error) {
       throw new ValidationError(`Invalid collection at index ${index}: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }

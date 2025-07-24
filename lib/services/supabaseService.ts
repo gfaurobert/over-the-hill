@@ -7,6 +7,9 @@ import {
   validateCollectionId, 
   validateDotId, 
   validateImportData,
+  validateArchiveOperation,
+  validateUnarchiveOperation,
+  validateDeleteOperation,
   ValidationError,
   sanitizeString,
   validateSnapshotId
@@ -59,14 +62,23 @@ const handleServiceError = (error: any, operation: string): void => {
 }
 
 // Fetch all collections and their dots for the current user
-export const fetchCollections = async (userId: string): Promise<Collection[]> => {
+export const fetchCollections = async (
+  userId: string, 
+  includeArchived: boolean = false
+): Promise<Collection[]> => {
   try {
     const validatedUserId = validateUserId(userId)
 
+    // Status filter: active + archived if requested, otherwise just active
+    const statusFilter = includeArchived ? ['active', 'archived'] : ['active']
+
     const { data: collectionsData, error: collectionsError } = await supabase
       .from("collections")
-      .select("id, name")
+      .select("id, name, status, archived_at, deleted_at")
       .eq("user_id", validatedUserId)
+      .in("status", statusFilter)
+      .order("status", { ascending: true }) // Active first, then archived
+      .order("name", { ascending: true })
 
     if (collectionsError) {
       throw collectionsError
@@ -141,6 +153,81 @@ export const updateCollection = async (collectionId: string, newName: string, us
     return true
   } catch (error) {
     handleServiceError(error, 'update collection')
+    return false
+  }
+}
+
+// Archive a collection (soft delete)
+export const archiveCollection = async (collectionId: string, userId: string): Promise<boolean> => {
+  try {
+    validateArchiveOperation(collectionId, userId)
+    
+    const { error } = await supabase
+      .from("collections")
+      .update({ 
+        status: 'archived',
+        archived_at: new Date().toISOString()
+      })
+      .eq("id", collectionId)
+      .eq("user_id", userId)
+      .eq("status", 'active') // Only archive active collections
+
+    if (error) {
+      throw error
+    }
+    
+    return true
+  } catch (error) {
+    handleServiceError(error, 'archive collection')
+    return false
+  }
+}
+
+// Unarchive a collection (restore from archived)
+export const unarchiveCollection = async (collectionId: string, userId: string): Promise<boolean> => {
+  try {
+    validateUnarchiveOperation(collectionId, userId)
+
+    const { error } = await supabase
+      .from("collections")
+      .update({ 
+        status: 'active',
+        archived_at: null
+      })
+      .eq("id", collectionId)
+      .eq("user_id", userId)
+      .eq("status", 'archived') // Only unarchive archived collections
+
+    if (error) {
+      throw error
+    }
+    
+    return true
+  } catch (error) {
+    handleServiceError(error, 'unarchive collection')
+    return false
+  }
+}
+
+// Delete a collection permanently (hard delete)
+export const deleteCollection = async (collectionId: string, userId: string): Promise<boolean> => {
+  try {
+    validateDeleteOperation(collectionId, userId)
+
+    // Delete the collection (cascading will handle dots, snapshots, user_preferences)
+    const { error } = await supabase
+      .from("collections")
+      .delete()
+      .eq("id", collectionId)
+      .eq("user_id", userId)
+
+    if (error) {
+      throw error
+    }
+    
+    return true
+  } catch (error) {
+    handleServiceError(error, 'delete collection')
     return false
   }
 }
@@ -369,11 +456,14 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
 
     const { collections, snapshots } = validatedData
 
-    // Prepare collection rows
-    const collectionRows: CollectionRow[] = collections.map(({ id, name }) => ({
-      id,
-      name,
+    // Prepare collection rows with archived status support
+    const collectionRows: CollectionRow[] = collections.map((collection) => ({
+      id: collection.id,
+      name: collection.name,
       user_id: validatedUserId,
+      status: (collection as any).status || 'active', // Default to active for backward compatibility
+      archived_at: (collection as any).archived_at || null,
+      deleted_at: null // Never import deleted collections
     }))
 
     const { error: collectionError } = await supabase.from("collections").upsert(collectionRows)
