@@ -192,7 +192,6 @@ export async function middleware(request: NextRequest) {
   // Add user context to headers if authenticated (for debugging)
   if (isAuthenticated && user) {
     response.headers.set('X-User-Authenticated', 'true');
-    response.headers.set('X-User-ID', user.id);
   } else {
     response.headers.set('X-User-Authenticated', 'false');
   }
