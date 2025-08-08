@@ -321,9 +321,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         setShowEllipsisMenu(false)
       }
     }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
+    if (showEllipsisMenu) {
+      document.addEventListener('mousedown', handleClick)
+      return () => document.removeEventListener('mousedown', handleClick)
+    }
+  }, [showEllipsisMenu])
   const svgRef = useRef<SVGSVGElement>(null)
   const [copyStatus, setCopyStatus] = useState<"idle" | "copying" | "success" | "error">("idle")
   const [copyFormat, setCopyFormat] = useState<"PNG" | "SVG">("PNG")
