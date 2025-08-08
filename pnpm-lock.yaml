@@ -1,7 +1,7 @@
 lockfileVersion: '9.0'
 
 settings:
-  autoInstallPeers: true
+  autoInstallPeers: false
   excludeLinksFromLockfile: false
 
 overrides:
@@ -180,12 +180,6 @@ importers:
       '@playwright/test':
         specifier: ^1.45.0
         version: 1.54.1
-      '@stagewise-plugins/react':
-        specifier: ^0.6.2
-        version: 0.6.2(@stagewise/toolbar@0.6.2)
-      '@stagewise/toolbar-next':
-        specifier: ^0.6.2
-        version: 0.6.2(@types/react@19.1.8)(next@15.2.4(@playwright/test@1.54.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)
       '@types/node':
         specifier: ^22.16.2
         version: 22.16.2
@@ -1305,27 +1299,6 @@ packages:
 
   '@radix-ui/rect@1.1.1':
     resolution: {integrity: sha512-HPwpGIzkl28mWyZqG52jiqDJ12waP11Pa1lGoiyUkIEuMLBP0oeK/C89esbXrxsky5we7dfd8U58nm0SgAWpVw==}
-
-  '@stagewise-plugins/react@0.6.2':
-    resolution: {integrity: sha512-IZVWgxeO2GFQj8wTFacIkmlF7YlZn4T5MN3cyrYo5wdYo2RATGIX4+pugPmPYQUjq2Gm+OSLR2hxKfBq32Y2Qg==}
-    peerDependencies:
-      '@stagewise/toolbar': 0.6.2
-
-  '@stagewise/toolbar-next@0.6.2':
-    resolution: {integrity: sha512-0rLMYSQucYcgtD6UbX/4IY5CnYYImt279tAAw5h+BgEeLmZE3iB7z0M6mOrN4lvrt6+PrBYdAEvrAL5CKwXydw==}
-    peerDependencies:
-      '@types/react': '>=18.0.0'
-      next: '>=14.0.0'
-      react: '>=18.0.0'
-
-  '@stagewise/toolbar-react@0.6.2':
-    resolution: {integrity: sha512-fKgINBKCgUWzeSdP8Nfs5cSchCS4yf9bMOROnVqAgMbT77yGhZ4nYWGNL/nkaCAkE7uyrpSvtbHT4ut2PDoJLw==}
-    peerDependencies:
-      '@types/react': '>=18.0.0'
-      react: '>=18.0.0'
-
-  '@stagewise/toolbar@0.6.2':
-    resolution: {integrity: sha512-WN7PWaOT6YQKjJYL4/85V5UU0eZEws+/UBT/J4wJOEbFxoluLuchqh7xVTmUZTtw0q0xpzlgX8Vb0kAZf/pjmw==}
 
   '@supabase/auth-js@2.70.0':
     resolution: {integrity: sha512-BaAK/tOAZFJtzF1sE3gJ2FwTjLf4ky3PSvcvLGEgEmO4BSBkwWKu8l67rLLIBZPDnCyV7Owk2uPyKHa0kj5QGg==}
@@ -3576,25 +3549,6 @@ snapshots:
   '@radix-ui/rect@1.1.0': {}
 
   '@radix-ui/rect@1.1.1': {}
-
-  '@stagewise-plugins/react@0.6.2(@stagewise/toolbar@0.6.2)':
-    dependencies:
-      '@stagewise/toolbar': 0.6.2
-
-  '@stagewise/toolbar-next@0.6.2(@types/react@19.1.8)(next@15.2.4(@playwright/test@1.54.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)':
-    dependencies:
-      '@stagewise/toolbar-react': 0.6.2(@types/react@19.1.8)(react@19.1.0)
-      '@types/react': 19.1.8
-      next: 15.2.4(@playwright/test@1.54.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
-      react: 19.1.0
-
-  '@stagewise/toolbar-react@0.6.2(@types/react@19.1.8)(react@19.1.0)':
-    dependencies:
-      '@stagewise/toolbar': 0.6.2
-      '@types/react': 19.1.8
-      react: 19.1.0
-
-  '@stagewise/toolbar@0.6.2': {}
 
   '@supabase/auth-js@2.70.0':
     dependencies:

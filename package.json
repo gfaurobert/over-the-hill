@@ -73,8 +73,6 @@
     "@playwright/browser-firefox": "^1.45.0",
     "@playwright/browser-webkit": "^1.45.0",
     "@playwright/test": "^1.45.0",
-    "@stagewise-plugins/react": "^0.6.2",
-    "@stagewise/toolbar-next": "^0.6.2",
     "@types/node": "^22.16.2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
