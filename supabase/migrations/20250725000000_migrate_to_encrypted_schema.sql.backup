@@ -1,55 +1,30 @@
--- Create Hill Chart Database Schema with Row-Level Security and Encryption
--- Migration: 20250710091059_create_hill_chart_schema.sql
+-- Migration to encrypted schema
+-- This migration handles the transition from plain text to encrypted data storage
 
--- Drop existing objects to ensure a clean migration
+-- First, create temporary tables to store the old data
+CREATE TEMP TABLE temp_collections AS 
+SELECT id, name, user_id, created_at, updated_at, 
+       COALESCE(status, 'active') as status,
+       archived_at, deleted_at
+FROM collections;
+
+CREATE TEMP TABLE temp_dots AS 
+SELECT id, label, x, y, color, size, user_id, collection_id, created_at, updated_at,
+       COALESCE(archived, false) as archived
+FROM dots;
+
+CREATE TEMP TABLE temp_snapshots AS 
+SELECT id, user_id, collection_id, collection_name, created_at, dots_data
+FROM snapshots;
+
+-- Drop the old tables
 DROP TABLE IF EXISTS access_requests CASCADE;
 DROP TABLE IF EXISTS user_preferences CASCADE;
 DROP TABLE IF EXISTS snapshots CASCADE;
 DROP TABLE IF EXISTS dots CASCADE;
 DROP TABLE IF EXISTS collections CASCADE;
 
--- Drop the trigger function if it exists
-DROP FUNCTION IF EXISTS update_updated_at_column CASCADE;
-
--- Drop encryption functions if they exist
-DROP FUNCTION IF EXISTS encrypt_sensitive_data CASCADE;
-DROP FUNCTION IF EXISTS decrypt_sensitive_data CASCADE;
-
--- Create encryption functions for sensitive data
-CREATE OR REPLACE FUNCTION encrypt_sensitive_data(data TEXT, user_key TEXT)
-RETURNS TEXT AS $$
-BEGIN
-  -- Use pgcrypto for encryption with user-specific key
-  RETURN encode(encrypt_iv(
-    data::bytea,
-    user_key::bytea,
-    decode('000102030405060708090A0B0C0D0E0F', 'hex'),
-    'aes-cbc'
-  ), 'base64');
-EXCEPTION
-  WHEN OTHERS THEN
-    -- Fallback to simple encoding if encryption fails
-    RETURN encode(data::bytea, 'base64');
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE OR REPLACE FUNCTION decrypt_sensitive_data(encrypted_data TEXT, user_key TEXT)
-RETURNS TEXT AS $$
-BEGIN
-  -- Decrypt using pgcrypto
-  RETURN convert_from(decrypt_iv(
-    decode(encrypted_data, 'base64'),
-    user_key::bytea,
-    decode('000102030405060708090A0B0C0D0E0F', 'hex'),
-    'aes-cbc'
-  ), 'utf8');
-EXCEPTION
-  WHEN OTHERS THEN
-    -- Fallback to simple decoding if decryption fails
-    RETURN convert_from(decode(encrypted_data, 'base64'), 'utf8');
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
+-- Recreate tables with encrypted schema (this should match the main migration)
 -- Create collections table with encrypted name field
 CREATE TABLE collections (
     id TEXT PRIMARY KEY,
@@ -116,7 +91,7 @@ CREATE TABLE access_requests (
     UNIQUE(email)
 );
 
--- Create indexes for performance (excluding encrypted fields)
+-- Create indexes
 CREATE INDEX IF NOT EXISTS idx_collections_user_id ON collections(user_id);
 CREATE INDEX IF NOT EXISTS idx_collections_status ON collections(status);
 CREATE INDEX IF NOT EXISTS idx_dots_collection_id ON dots(collection_id);
@@ -128,7 +103,7 @@ CREATE INDEX IF NOT EXISTS idx_access_requests_email ON access_requests(email);
 CREATE INDEX IF NOT EXISTS idx_access_requests_status ON access_requests(status);
 CREATE INDEX IF NOT EXISTS idx_access_requests_created_at ON access_requests(created_at);
 
--- Create updated_at trigger function
+-- Create triggers
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -137,7 +112,6 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Create triggers for updated_at
 CREATE TRIGGER update_collections_updated_at BEFORE UPDATE ON collections
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -150,33 +124,51 @@ CREATE TRIGGER update_user_preferences_updated_at BEFORE UPDATE ON user_preferen
 CREATE TRIGGER update_access_requests_updated_at BEFORE UPDATE ON access_requests
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Row Level Security Policies
+-- Migrate collections data with encryption
+-- Note: This will use simple base64 encoding as a fallback since we can't encrypt without user keys
+INSERT INTO collections (id, user_id, name_encrypted, name_hash, created_at, updated_at, status, archived_at, deleted_at)
+SELECT 
+    id,
+    user_id,
+    encode(name::bytea, 'base64') as name_encrypted,
+    encode(digest(lower(trim(name)), 'sha256'), 'hex') as name_hash,
+    created_at,
+    updated_at,
+    status,
+    archived_at,
+    deleted_at
+FROM temp_collections;
 
--- Drop existing policies before creating new ones to ensure idempotency.
-DROP POLICY IF EXISTS "Users can view their own collections" ON collections;
-DROP POLICY IF EXISTS "Users can insert their own collections" ON collections;
-DROP POLICY IF EXISTS "Users can update their own collections" ON collections;
-DROP POLICY IF EXISTS "Users can delete their own collections" ON collections;
+-- Migrate dots data with encryption
+INSERT INTO dots (id, collection_id, user_id, label_encrypted, label_hash, x, y, color, size, archived, created_at, updated_at)
+SELECT 
+    id,
+    collection_id,
+    user_id,
+    encode(label::bytea, 'base64') as label_encrypted,
+    encode(digest(lower(trim(label)), 'sha256'), 'hex') as label_hash,
+    x,
+    y,
+    color,
+    size,
+    archived,
+    created_at,
+    updated_at
+FROM temp_dots;
 
-DROP POLICY IF EXISTS "Users can view dots from their collections" ON dots;
-DROP POLICY IF EXISTS "Users can insert dots in their collections" ON dots;
-DROP POLICY IF EXISTS "Users can update dots in their collections" ON dots;
-DROP POLICY IF EXISTS "Users can delete dots in their collections" ON dots;
+-- Migrate snapshots data with encryption
+INSERT INTO snapshots (id, user_id, collection_id, collection_name_encrypted, created_at, snapshot_date, dots_data_encrypted)
+SELECT 
+    id,
+    user_id,
+    collection_id,
+    encode(collection_name::bytea, 'base64') as collection_name_encrypted,
+    created_at,
+    to_char(created_at, 'YYYY-MM-DD') as snapshot_date,
+    encode(dots_data::text::bytea, 'base64') as dots_data_encrypted
+FROM temp_snapshots;
 
-DROP POLICY IF EXISTS "Users can view their own snapshots" ON snapshots;
-DROP POLICY IF EXISTS "Users can insert their own snapshots" ON snapshots;
-DROP POLICY IF EXISTS "Users can update their own snapshots" ON snapshots;
-DROP POLICY IF EXISTS "Users can delete their own snapshots" ON snapshots;
-
-DROP POLICY IF EXISTS "Users can view their own preferences" ON user_preferences;
-DROP POLICY IF EXISTS "Users can insert their own preferences" ON user_preferences;
-DROP POLICY IF EXISTS "Users can update their own preferences" ON user_preferences;
-DROP POLICY IF EXISTS "Users can delete their own preferences" ON user_preferences;
-
-DROP POLICY IF EXISTS "Anyone can submit access requests" ON access_requests;
-DROP POLICY IF EXISTS "Only service role can manage access requests" ON access_requests;
-
--- Collections RLS Policies
+-- Set up RLS policies
 CREATE POLICY "Users can view their own collections" ON collections
     FOR SELECT USING (auth.uid() = user_id);
 
@@ -189,7 +181,6 @@ CREATE POLICY "Users can update their own collections" ON collections
 CREATE POLICY "Users can delete their own collections" ON collections
     FOR DELETE USING (auth.uid() = user_id);
 
--- Dots RLS Policies
 CREATE POLICY "Users can view dots from their collections" ON dots
     FOR SELECT USING (auth.uid() = user_id);
 
@@ -202,7 +193,6 @@ CREATE POLICY "Users can update dots in their collections" ON dots
 CREATE POLICY "Users can delete dots in their collections" ON dots
     FOR DELETE USING (auth.uid() = user_id);
 
--- Snapshots RLS Policies
 CREATE POLICY "Users can view their own snapshots" ON snapshots
     FOR SELECT USING (auth.uid() = user_id);
 
@@ -215,7 +205,6 @@ CREATE POLICY "Users can update their own snapshots" ON snapshots
 CREATE POLICY "Users can delete their own snapshots" ON snapshots
     FOR DELETE USING (auth.uid() = user_id);
 
--- User Preferences RLS Policies
 CREATE POLICY "Users can view their own preferences" ON user_preferences
     FOR SELECT USING (auth.uid() = user_id);
 
@@ -228,18 +217,20 @@ CREATE POLICY "Users can update their own preferences" ON user_preferences
 CREATE POLICY "Users can delete their own user_preferences" ON user_preferences
     FOR DELETE USING (auth.uid() = user_id);
 
--- Access Requests RLS Policies
--- Allow anyone to submit access requests (public form)
 CREATE POLICY "Anyone can submit access requests" ON access_requests
     FOR INSERT WITH CHECK (true);
 
--- Only allow service role to view/manage access requests (admin functionality)
 CREATE POLICY "Only service role can manage access requests" ON access_requests
     FOR ALL USING (auth.jwt() ->> 'role' = 'service_role');
 
--- Enable RLS on all tables
+-- Enable RLS
 ALTER TABLE collections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_preferences ENABLE ROW LEVEL SECURITY;
 ALTER TABLE access_requests ENABLE ROW LEVEL SECURITY;
+
+-- Clean up temporary tables
+DROP TABLE temp_collections;
+DROP TABLE temp_dots;
+DROP TABLE temp_snapshots;

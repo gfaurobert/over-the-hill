@@ -29,11 +29,13 @@ import {
   X,
   Archive as ArchiveIcon,
   Undo2,
+  Shield,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { useTheme } from "next-themes"
 import SignOutButton from "./SignOutButton"
 import { useAuth } from "./AuthProvider"
+import { PrivacySettings } from "./PrivacySettings"
 import {
   fetchCollections,
   addCollection,
@@ -357,6 +359,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     archivedCollectionId?: string 
   } | null>(null)
   const [showArchivedCollectionsModal, setShowArchivedCollectionsModal] = useState(false)
+  const [showPrivacySettings, setShowPrivacySettings] = useState(false)
 
   // Collection editing state
   const [isEditingCollection, setIsEditingCollection] = useState(false)
@@ -956,17 +959,44 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   }
 
   const exportCollections = () => {
-    // Ensure every dot has an explicit archived property
-    const collectionsWithArchived = collections.map((collection) => ({
-      ...collection,
+    // Create clean export data with decrypted, user-readable content
+    const cleanCollections = collections.map((collection) => ({
+      id: collection.id,
+      name: collection.name, // This is already decrypted
+      status: collection.status,
+      archived_at: collection.archived_at,
+      deleted_at: collection.deleted_at,
       dots: collection.dots.map(dot => ({
-        ...dot,
-        archived: dot.archived // force boolean
+        id: dot.id,
+        label: dot.label, // This is already decrypted
+        x: dot.x,
+        y: dot.y,
+        color: dot.color,
+        size: dot.size,
+        archived: Boolean(dot.archived) // Ensure it's a boolean
       }))
     }))
+
+    // Clean snapshots data
+    const cleanSnapshots = snapshots.map(snapshot => ({
+      date: snapshot.date,
+      collectionId: snapshot.collectionId,
+      collectionName: snapshot.collectionName, // Already decrypted
+      dots: snapshot.dots.map(dot => ({
+        id: dot.id,
+        label: dot.label, // Already decrypted
+        x: dot.x,
+        y: dot.y,
+        color: dot.color,
+        size: dot.size,
+        archived: Boolean(dot.archived)
+      })),
+      timestamp: snapshot.timestamp
+    }))
+
     const exportData: ExportData = {
-      collections: collectionsWithArchived,
-      snapshots,
+      collections: cleanCollections,
+      snapshots: cleanSnapshots,
       exportDate: new Date().toISOString(),
       version: "1.0.0",
     }
@@ -1814,6 +1844,20 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       </button>
                       <SignOutButton className="w-full px-3 py-2 text-sm text-left text-red-600 dark:text-red-500 hover:bg-accent hover:text-accent-foreground flex items-center gap-2" />
 
+                      {/* Privacy Section */}
+                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                        Privacy
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowPrivacySettings(true)
+                          setShowEllipsisMenu(false)
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <Shield className="w-4 h-4" /> Privacy Settings
+                      </button>
+
                       {/* Support Section */}
                       <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
                         Support
@@ -2336,6 +2380,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             )}
           </div>
         </div>
+      )}
+      
+      {/* Privacy Settings Modal */}
+      {showPrivacySettings && (
+        <PrivacySettings onClose={() => setShowPrivacySettings(false)} />
       )}
     </div>
   )

@@ -1,5 +1,6 @@
 import { supabase } from "@/lib/supabaseClient"
 import { Collection, Dot, Snapshot, ExportData } from "@/components/HillChartApp"
+import { privacyService } from "./privacyService"
 import { 
   validateDot, 
   validateCollection, 
@@ -23,20 +24,26 @@ const getLocalDateString = (date: Date): string => {
   return `${year}-${month}-${day}`
 }
 
-// Types for Supabase table rows
+// Types for Supabase table rows with encrypted fields
 interface CollectionRow {
   id: string
-  name: string
+  name_encrypted: string
+  name_hash: string
   user_id: string
+  status: string
+  archived_at?: string
+  deleted_at?: string
 }
 
 interface DotRow {
   id: string
-  label: string
+  label_encrypted: string
+  label_hash: string
   x: number
   y: number
   color: string
   size: number
+  archived: boolean
   user_id: string
   collection_id: string
 }
@@ -45,10 +52,10 @@ interface SnapshotRow {
   id: string
   user_id: string
   collection_id: string
-  collection_name: string
+  collection_name_encrypted: string
   created_at: string
   snapshot_date: string
-  dots_data: Dot[]
+  dots_data_encrypted: string
 }
 
 // Enhanced error handling wrapper
@@ -74,11 +81,11 @@ export const fetchCollections = async (
 
     const { data: collectionsData, error: collectionsError } = await supabase
       .from("collections")
-      .select("id, name, status, archived_at, deleted_at")
+      .select("id, name_encrypted, name_hash, status, archived_at, deleted_at")
       .eq("user_id", validatedUserId)
       .in("status", statusFilter)
       .order("status", { ascending: true }) // Active first, then archived
-      .order("name", { ascending: true })
+      .order("name_hash", { ascending: true })
 
     if (collectionsError) {
       throw collectionsError
@@ -93,10 +100,46 @@ export const fetchCollections = async (
       throw dotsError
     }
 
-    return collectionsData.map((collection) => ({
-      ...collection,
-      dots: dotsData.filter((dot) => dot.collection_id === collection.id),
-    }))
+    // Decrypt collections and dots
+    const decryptedCollections = await Promise.all(
+      collectionsData.map(async (collection) => {
+        const decryptedCollection = await privacyService.decryptCollection({
+          id: collection.id,
+          name_encrypted: collection.name_encrypted,
+          name_hash: collection.name_hash,
+          userId: validatedUserId
+        })
+
+        const collectionDots = dotsData.filter((dot) => dot.collection_id === collection.id)
+        const decryptedDots = await Promise.all(
+          collectionDots.map(async (dot) => {
+            const decryptedDot = await privacyService.decryptDot({
+              id: dot.id,
+              label_encrypted: dot.label_encrypted,
+              label_hash: dot.label_hash,
+              userId: validatedUserId
+            })
+
+            return {
+              ...dot,
+              label: decryptedDot.label,
+              archived: dot.archived
+            }
+          })
+        )
+
+        return {
+          id: decryptedCollection.id,
+          name: decryptedCollection.name,
+          status: collection.status as 'active' | 'archived' | 'deleted',
+          archived_at: collection.archived_at,
+          deleted_at: collection.deleted_at,
+          dots: decryptedDots
+        }
+      })
+    )
+
+    return decryptedCollections
   } catch (error) {
     handleServiceError(error, 'fetch collections')
     throw error
@@ -109,12 +152,21 @@ export const addCollection = async (collection: Collection, userId: string): Pro
     const validatedUserId = validateUserId(userId)
     const validatedCollection = validateCollection(collection)
 
+    // Encrypt collection data
+    const encryptedCollection = await privacyService.encryptCollection({
+      id: validatedCollection.id,
+      name: validatedCollection.name,
+      userId: validatedUserId
+    })
+
     const { data, error } = await supabase
       .from("collections")
       .insert([{ 
-        id: validatedCollection.id, 
-        name: validatedCollection.name, 
-        user_id: validatedUserId 
+        id: encryptedCollection.id, 
+        name_encrypted: encryptedCollection.name_encrypted,
+        name_hash: encryptedCollection.name_hash,
+        user_id: validatedUserId,
+        status: 'active'
       }])
       .select()
 
@@ -122,7 +174,7 @@ export const addCollection = async (collection: Collection, userId: string): Pro
       throw error
     }
     
-    return data ? { ...data[0], dots: [] } : null
+    return data ? { ...validatedCollection, dots: [] } : null
   } catch (error) {
     handleServiceError(error, 'add collection')
     return null
@@ -140,9 +192,15 @@ export const updateCollection = async (collectionId: string, newName: string, us
       throw new ValidationError('Collection name cannot be empty')
     }
 
+    // Encrypt the new name
+    const { encrypted, hash } = await privacyService.encryptData(validatedName, validatedUserId)
+
     const { error } = await supabase
       .from("collections")
-      .update({ name: validatedName })
+      .update({ 
+        name_encrypted: encrypted,
+        name_hash: hash
+      })
       .eq("id", validatedCollectionId)
       .eq("user_id", validatedUserId)
 
@@ -250,10 +308,24 @@ export const addDot = async (dot: Dot, collectionId: string, userId: string): Pr
       throw new Error('Collection not found or not owned by user')
     }
 
+    // Encrypt dot data
+    const encryptedDot = await privacyService.encryptDot({
+      id: validatedDot.id,
+      label: validatedDot.label,
+      userId: validatedUserId
+    })
+
     const { data, error } = await supabase
       .from("dots")
       .insert([{ 
-        ...validatedDot, 
+        id: encryptedDot.id,
+        label_encrypted: encryptedDot.label_encrypted,
+        label_hash: encryptedDot.label_hash,
+        x: validatedDot.x,
+        y: validatedDot.y,
+        color: validatedDot.color,
+        size: validatedDot.size,
+        archived: validatedDot.archived,
         collection_id: validatedCollectionId, 
         user_id: validatedUserId 
       }])
@@ -263,7 +335,7 @@ export const addDot = async (dot: Dot, collectionId: string, userId: string): Pr
       throw error
     }
     
-    return data ? data[0] : null
+    return data ? { ...validatedDot, archived: validatedDot.archived } : null
   } catch (error) {
     handleServiceError(error, 'add dot')
     return null
@@ -276,10 +348,18 @@ export const updateDot = async (dot: Dot, userId: string): Promise<Dot | null> =
     const validatedUserId = validateUserId(userId)
     const validatedDot = validateDot(dot)
 
+    // Encrypt the updated label if it changed
+    const encryptedDot = await privacyService.encryptDot({
+      id: validatedDot.id,
+      label: validatedDot.label,
+      userId: validatedUserId
+    })
+
     const { data, error } = await supabase
       .from("dots")
       .update({
-        label: validatedDot.label,
+        label_encrypted: encryptedDot.label_encrypted,
+        label_hash: encryptedDot.label_hash,
         x: validatedDot.x,
         y: validatedDot.y,
         color: validatedDot.color,
@@ -294,7 +374,7 @@ export const updateDot = async (dot: Dot, userId: string): Promise<Dot | null> =
       throw error
     }
     
-    return data ? data[0] : null
+    return data ? { ...validatedDot, archived: validatedDot.archived } : null
   } catch (error) {
     handleServiceError(error, 'update dot')
     return null
@@ -342,16 +422,20 @@ export const createSnapshot = async (userId: string, collectionId: string, colle
       throw new ValidationError('Too many dots in snapshot. Maximum 1000 allowed')
     }
 
+    // Encrypt collection name and dots data
+    const { encrypted: encryptedName } = await privacyService.encryptData(validatedCollectionName, validatedUserId)
+    const { encrypted: encryptedDotsData } = await privacyService.encryptData(JSON.stringify(validatedDots), validatedUserId)
+
     const now = new Date()
     const { error } = await supabase
       .from("snapshots")
       .insert([{
         user_id: validatedUserId,
         collection_id: validatedCollectionId,
-        collection_name: validatedCollectionName,
+        collection_name_encrypted: encryptedName,
         created_at: now.toISOString(),
         snapshot_date: getLocalDateString(now),
-        dots_data: validatedDots
+        dots_data_encrypted: encryptedDotsData
       }])
 
     if (error) {
@@ -380,13 +464,23 @@ export const fetchSnapshots = async (userId: string): Promise<Snapshot[]> => {
       throw error
     }
 
-    return data.map((row: SnapshotRow) => ({
-      date: row.snapshot_date,
-      collectionId: row.collection_id,
-      collectionName: row.collection_name,
-      dots: row.dots_data,
-      timestamp: new Date(row.created_at).getTime()
-    }))
+    // Decrypt snapshots
+    const decryptedSnapshots = await Promise.all(
+      data.map(async (row: SnapshotRow) => {
+        const decryptedCollectionName = await privacyService.decryptData(row.collection_name_encrypted, validatedUserId)
+        const decryptedDotsData = await privacyService.decryptData(row.dots_data_encrypted, validatedUserId)
+        
+        return {
+          date: row.snapshot_date,
+          collectionId: row.collection_id,
+          collectionName: decryptedCollectionName,
+          dots: JSON.parse(decryptedDotsData),
+          timestamp: new Date(row.created_at).getTime()
+        }
+      })
+    )
+
+    return decryptedSnapshots
   } catch (error) {
     handleServiceError(error, 'fetch snapshots')
     return []
@@ -412,11 +506,15 @@ export const loadSnapshot = async (userId: string, snapshotId: string): Promise<
 
     if (!data) return null
 
+    // Decrypt snapshot data
+    const decryptedCollectionName = await privacyService.decryptData(data.collection_name_encrypted, validatedUserId)
+    const decryptedDotsData = await privacyService.decryptData(data.dots_data_encrypted, validatedUserId)
+
     return {
       date: data.snapshot_date,
       collectionId: data.collection_id,
-      collectionName: data.collection_name,
-      dots: data.dots_data,
+      collectionName: decryptedCollectionName,
+      dots: JSON.parse(decryptedDotsData),
       timestamp: new Date(data.created_at).getTime()
     }
   } catch (error) {
@@ -448,7 +546,7 @@ export const deleteSnapshot = async (userId: string, snapshotId: string): Promis
   }
 }
 
-// Import data with comprehensive validation
+// Import data with comprehensive validation and encryption
 export const importData = async (data: ExportData, userId: string): Promise<Collection[]> => {
   try {
     const validatedUserId = validateUserId(userId)
@@ -456,50 +554,93 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
 
     const { collections, snapshots } = validatedData
 
-    // Prepare collection rows with archived status support
-    const collectionRows: CollectionRow[] = collections.map((collection) => ({
-      id: collection.id,
-      name: collection.name,
-      user_id: validatedUserId,
-      status: (collection as any).status || 'active', // Default to active for backward compatibility
-      archived_at: (collection as any).archived_at || null,
-      deleted_at: null // Never import deleted collections
-    }))
+    // Prepare and encrypt collection rows
+    const collectionRows = await Promise.all(
+      collections.map(async (collection) => {
+        const encryptedCollection = await privacyService.encryptCollection({
+          id: collection.id,
+          name: collection.name,
+          userId: validatedUserId
+        })
+
+        return {
+          id: collection.id,
+          name_encrypted: encryptedCollection.name_encrypted,
+          name_hash: encryptedCollection.name_hash,
+          user_id: validatedUserId,
+          status: (collection as any).status || 'active',
+          archived_at: (collection as any).archived_at || null,
+          deleted_at: null
+        }
+      })
+    )
 
     const { error: collectionError } = await supabase.from("collections").upsert(collectionRows)
     if (collectionError) {
       throw collectionError
     }
 
-    // Prepare dot rows with batch processing
-    const dotRows: DotRow[] = collections.flatMap((collection) =>
-      collection.dots.map((dot) => ({
-        ...dot,
-        archived: dot.archived === true, // force boolean, default to false if missing
-        user_id: validatedUserId,
-        collection_id: collection.id,
-      })),
+    // Prepare and encrypt dot rows
+    const allDotPromises = collections.flatMap(async (collection) =>
+      await Promise.all(
+        collection.dots.map(async (dot) => {
+          const encryptedDot = await privacyService.encryptDot({
+            id: dot.id,
+            label: dot.label,
+            userId: validatedUserId
+          })
+
+          return {
+            id: dot.id,
+            label_encrypted: encryptedDot.label_encrypted,
+            label_hash: encryptedDot.label_hash,
+            x: dot.x,
+            y: dot.y,
+            color: dot.color,
+            size: dot.size,
+            archived: dot.archived === true,
+            user_id: validatedUserId,
+            collection_id: collection.id,
+          }
+        })
+      )
     )
+    
+    const dotRows = (await Promise.all(allDotPromises)).flat()
 
     // Process dots in batches to avoid overwhelming the database
     const batchSize = 100
+    console.log(`Processing ${dotRows.length} dots in batches of ${batchSize}`)
+    
     for (let i = 0; i < dotRows.length; i += batchSize) {
       const batch = dotRows.slice(i, i + batchSize)
+      console.log(`Processing batch ${Math.floor(i/batchSize) + 1}, dots:`, batch.length)
+      
       const { error: dotError } = await supabase.from("dots").upsert(batch)
       if (dotError) {
+        console.error('Dot batch error:', dotError)
+        console.error('Batch data sample:', batch[0])
         throw dotError
       }
     }
 
     // Process snapshots if present
     if (snapshots?.length) {
-      const snapshotRows = snapshots.map((snapshot) => ({
-        user_id: validatedUserId,
-        collection_id: snapshot.collectionId,
-        collection_name: snapshot.collectionName,
-        created_at: new Date(snapshot.timestamp).toISOString(),
-        dots_data: snapshot.dots,
-      }))
+      const snapshotRows = await Promise.all(
+        snapshots.map(async (snapshot) => {
+          const { encrypted: encryptedCollectionName } = await privacyService.encryptData(snapshot.collectionName, validatedUserId)
+          const { encrypted: encryptedDotsData } = await privacyService.encryptData(JSON.stringify(snapshot.dots), validatedUserId)
+
+          return {
+            user_id: validatedUserId,
+            collection_id: snapshot.collectionId,
+            collection_name_encrypted: encryptedCollectionName,
+            created_at: new Date(snapshot.timestamp).toISOString(),
+            snapshot_date: snapshot.date,
+            dots_data_encrypted: encryptedDotsData,
+          }
+        })
+      )
 
       const { error: snapshotError } = await supabase.from("snapshots").upsert(snapshotRows)
       if (snapshotError) {
