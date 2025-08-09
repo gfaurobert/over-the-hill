@@ -4,7 +4,7 @@ import { createHash, randomBytes } from "crypto"
 // Privacy service for handling encrypted data
 export class PrivacyService {
   private static instance: PrivacyService
-  private userKey: string | null = null
+  private userKeys: Map<string, string> = new Map()
 
   private constructor() {}
 
@@ -24,31 +24,165 @@ export class PrivacyService {
         throw new Error('No active session')
       }
 
-      // Create a deterministic but secure key from user ID and a fixed secret
-      // This ensures the key remains consistent across sessions
-      const keyMaterial = `${userId}:fixed-app-secret-for-hill-chart-encryption-long-enough-secret`
+      // Check if we're running on the server-side (Node.js environment)
+      const isServerSide = typeof window === 'undefined'
       
-      // Use SHA-256 to create a consistent 32-byte key
-      const hash = createHash('sha256')
-      hash.update(keyMaterial)
-      return hash.digest('hex').substring(0, 64) // Use first 64 chars for AES-256 (32 bytes)
+      if (isServerSide) {
+        // Server-side: Access environment variable directly
+        const keyMaterial = process.env.KEY_MATERIAL
+        if (!keyMaterial) {
+          throw new Error('KEY_MATERIAL environment variable is not configured. Please set this environment variable with a secure random string.')
+        }
+
+        // Validate key material length for security
+        if (keyMaterial.length < 32) {
+          throw new Error('KEY_MATERIAL must be at least 32 characters long for adequate security')
+        }
+
+        // Create a deterministic but secure key from user ID and the environment secret
+        const combinedKeyMaterial = `${userId}:${keyMaterial}`
+        
+        // Use SHA-256 to create a consistent 32-byte key
+        const hash = createHash('sha256')
+        hash.update(combinedKeyMaterial)
+        return hash.digest('hex').substring(0, 64) // Use first 64 chars for AES-256 (32 bytes)
+      } else {
+        // Client-side: Call API endpoint to generate key securely
+        const response = await fetch('/api/auth/generate-key', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            accessToken: session.access_token,
+            userId: userId,
+            keyType: 'primary'
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(`Key generation failed: ${errorData.error || 'Unknown error'}`)
+        }
+
+        const data = await response.json()
+        return data.encryptionKey
+      }
     } catch (error) {
       console.error('Failed to generate user key:', error)
-      // For migration/fallback scenarios, use a deterministic key based on user ID
-      const hash = createHash('sha256')
-      hash.update(`fallback-key-${userId}-long-enough-secret`)
-      return hash.digest('hex').substring(0, 64) // Use first 64 chars for AES-256 (32 bytes)
+      
+      // For migration/fallback scenarios, try fallback key generation
+      return await this.generateFallbackUserKey(userId)
+    }
+  }
+
+  // Generate fallback user key (for backwards compatibility)
+  private async generateFallbackUserKey(userId: string): Promise<string> {
+    try {
+      // Get user session
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('No active session for fallback key generation')
+      }
+
+      // Check if we're running on the server-side
+      const isServerSide = typeof window === 'undefined'
+      
+      if (isServerSide) {
+        // Server-side fallback
+        const fallbackKeyMaterial = process.env.KEY_MATERIAL
+        if (!fallbackKeyMaterial) {
+          throw new Error('KEY_MATERIAL environment variable is required for fallback key generation')
+        }
+        
+        const hash = createHash('sha256')
+        hash.update(`fallback-key-${userId}-${fallbackKeyMaterial}`)
+        return hash.digest('hex').substring(0, 64) // Use first 64 chars for AES-256 (32 bytes)
+      } else {
+        // Client-side fallback: Call API endpoint
+        const response = await fetch('/api/auth/generate-key', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            accessToken: session.access_token,
+            userId: userId,
+            keyType: 'fallback'
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(`Fallback key generation failed: ${errorData.error || 'Unknown error'}`)
+        }
+
+        const data = await response.json()
+        return data.encryptionKey
+      }
+    } catch (error) {
+      console.error('Fallback key generation failed:', error)
+      throw new Error('All key generation methods failed - cannot generate encryption key')
+    }
+  }
+
+  // Generate legacy key using the old hard-coded secret (for backward compatibility)
+  private async generateLegacyKey(userId: string): Promise<string> {
+    try {
+      // Get user session
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        throw new Error('No active session for legacy key generation')
+      }
+
+      // Check if we're running on the server-side
+      const isServerSide = typeof window === 'undefined'
+      
+      if (isServerSide) {
+        // Server-side: Generate key using the old hard-coded secret
+        const legacySecret = 'fixed-app-secret-for-hill-chart-encryption-long-enough-secret'
+        const combinedKeyMaterial = `${userId}:${legacySecret}`
+        
+        const hash = createHash('sha256')
+        hash.update(combinedKeyMaterial)
+        return hash.digest('hex').substring(0, 64) // Use first 64 chars for AES-256 (32 bytes)
+      } else {
+        // Client-side: Call API endpoint to generate legacy key
+        const response = await fetch('/api/auth/generate-key', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            accessToken: session.access_token,
+            userId: userId,
+            keyType: 'legacy'
+          }),
+        })
+
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(`Legacy key generation failed: ${errorData.error || 'Unknown error'}`)
+        }
+
+        const data = await response.json()
+        return data.encryptionKey
+      }
+    } catch (error) {
+      console.error('Legacy key generation failed:', error)
+      throw new Error('Legacy key generation failed - cannot decrypt old data')
     }
   }
 
   // Get or generate user key
   private async getUserKey(userId: string): Promise<string> {
-    if (!this.userKey) {
+    if (!this.userKeys.has(userId)) {
       console.log('Generating new user key for user:', userId)
-      this.userKey = await this.generateUserKey(userId)
-      console.log('Generated user key length:', this.userKey.length)
+      const userKey = await this.generateUserKey(userId)
+      this.userKeys.set(userId, userKey)
+      console.log('Generated user key length:', userKey.length)
     }
-    return this.userKey
+    return this.userKeys.get(userId)!
   }
 
   // Create a hash for searching without decryption
@@ -56,6 +190,45 @@ export class PrivacyService {
     const hash = createHash('sha256')
     hash.update(text.toLowerCase().trim())
     return hash.digest('hex')
+  }
+
+  // Client-side encryption fallback using Web Crypto API
+  private async encryptClientSide(data: string, userKey: string): Promise<string> {
+    try {
+      // Convert hex key to ArrayBuffer
+      const keyBuffer = new Uint8Array(userKey.match(/.{2}/g)?.map(byte => parseInt(byte, 16)) || [])
+      
+      // Import the key for AES-GCM
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        keyBuffer.slice(0, 32), // Use first 32 bytes for AES-256
+        { name: 'AES-GCM' },
+        false,
+        ['encrypt']
+      )
+
+      // Generate a random IV
+      const iv = crypto.getRandomValues(new Uint8Array(12))
+      
+      // Encrypt the data
+      const encodedData = new TextEncoder().encode(data)
+      const encryptedBuffer = await crypto.subtle.encrypt(
+        { name: 'AES-GCM', iv },
+        cryptoKey,
+        encodedData
+      )
+
+      // Combine IV and encrypted data
+      const combined = new Uint8Array(iv.length + encryptedBuffer.byteLength)
+      combined.set(iv)
+      combined.set(new Uint8Array(encryptedBuffer), iv.length)
+
+      // Return as base64 with client-side prefix
+      return 'client:' + Buffer.from(combined).toString('base64')
+    } catch (error) {
+      console.error('Client-side encryption failed:', error)
+      throw new Error('Client-side encryption failed - cannot store data unencrypted')
+    }
   }
 
   // Encrypt sensitive data
@@ -94,14 +267,60 @@ export class PrivacyService {
         hash: this.createSearchHash(data)
       }
     } catch (error) {
-      console.error('Encryption failed:', error)
-      // Fallback to simple encoding if encryption fails
-      const encoded = Buffer.from(data).toString('base64')
-      console.log('Using fallback base64 encoding for:', data)
-      return {
-        encrypted: encoded,
-        hash: this.createSearchHash(data)
+      console.error('Database encryption failed, attempting client-side encryption:', error)
+      
+      try {
+        // Secure fallback: use client-side encryption
+        const userKey = await this.getUserKey(userId)
+        const clientEncrypted = await this.encryptClientSide(data, userKey)
+        console.log('Successfully encrypted data using client-side fallback')
+        
+        return {
+          encrypted: clientEncrypted,
+          hash: this.createSearchHash(data)
+        }
+      } catch (clientError) {
+        console.error('Client-side encryption also failed:', clientError)
+        // Fail hard - do not store unencrypted data
+        throw new Error('All encryption methods failed - cannot store sensitive data unencrypted')
       }
+    }
+  }
+
+  // Client-side decryption using Web Crypto API
+  private async decryptClientSide(encryptedData: string, userKey: string): Promise<string> {
+    try {
+      // Remove client-side prefix and decode base64
+      const base64Data = encryptedData.replace('client:', '')
+      const combined = new Uint8Array(Buffer.from(base64Data, 'base64'))
+      
+      // Extract IV and encrypted data
+      const iv = combined.slice(0, 12)
+      const encryptedBuffer = combined.slice(12)
+      
+      // Convert hex key to ArrayBuffer
+      const keyBuffer = new Uint8Array(userKey.match(/.{2}/g)?.map(byte => parseInt(byte, 16)) || [])
+      
+      // Import the key for AES-GCM
+      const cryptoKey = await crypto.subtle.importKey(
+        'raw',
+        keyBuffer.slice(0, 32), // Use first 32 bytes for AES-256
+        { name: 'AES-GCM' },
+        false,
+        ['decrypt']
+      )
+
+      // Decrypt the data
+      const decryptedBuffer = await crypto.subtle.decrypt(
+        { name: 'AES-GCM', iv },
+        cryptoKey,
+        encryptedBuffer
+      )
+
+      return new TextDecoder().decode(decryptedBuffer)
+    } catch (error) {
+      console.error('Client-side decryption failed:', error)
+      throw new Error('Client-side decryption failed')
     }
   }
 
@@ -111,6 +330,13 @@ export class PrivacyService {
       // Handle empty or null encrypted data
       if (!encryptedData) {
         return ''
+      }
+
+      // Check if this is client-side encrypted data
+      if (encryptedData.startsWith('client:')) {
+        console.log('Detected client-side encrypted data, using client-side decryption')
+        const userKey = await this.getUserKey(userId)
+        return await this.decryptClientSide(encryptedData, userKey)
       }
 
       const userKey = await this.getUserKey(userId)
@@ -137,42 +363,64 @@ export class PrivacyService {
     } catch (error) {
       console.error('Decryption failed, trying fallbacks:', error)
       
-      // Try with old 32-character key format for backwards compatibility
-      try {
-        const oldKey = await this.generateOldFormatKey(userId)
-        console.log('Trying decryption with old key format, length:', oldKey.length)
-        
-        const { data: result, error } = await supabase.rpc('decrypt_sensitive_data', {
-          encrypted_data: encryptedData,
-          user_key: oldKey
-        })
+      // Only try backwards compatibility fallbacks for non-client-side encrypted data
+      if (!encryptedData.startsWith('client:')) {
+        // Try with legacy key (original hard-coded secret) for backwards compatibility
+        try {
+          const legacyKey = await this.generateLegacyKey(userId)
+          console.log('Trying decryption with legacy key format, length:', legacyKey.length)
+          
+          const { data: result, error } = await supabase.rpc('decrypt_sensitive_data', {
+            encrypted_data: encryptedData,
+            user_key: legacyKey
+          })
 
-        if (!error && result) {
-          console.log('Successfully decrypted with old key format')
-          return result
+          if (!error && result) {
+            console.log('Successfully decrypted with legacy key format')
+            return result
+          }
+        } catch (legacyKeyError) {
+          console.log('Legacy key format also failed:', legacyKeyError)
         }
-      } catch (oldKeyError) {
-        console.log('Old key format also failed:', oldKeyError)
+
+        // Try with fallback key format for backwards compatibility
+        try {
+          const fallbackKey = await this.generateFallbackUserKey(userId)
+          console.log('Trying decryption with fallback key format, length:', fallbackKey.length)
+          
+          const { data: result, error } = await supabase.rpc('decrypt_sensitive_data', {
+            encrypted_data: encryptedData,
+            user_key: fallbackKey
+          })
+
+          if (!error && result) {
+            console.log('Successfully decrypted with fallback key format')
+            return result
+          }
+        } catch (fallbackKeyError) {
+          console.log('Fallback key format also failed:', fallbackKeyError)
+        }
+
+        // Check if this might be legacy base64 encoded data (from migration)
+        try {
+          const decoded = Buffer.from(encryptedData, 'base64').toString('utf8')
+          // Check if it's valid UTF-8 and not binary data by looking for null bytes or excessive control chars
+          const hasNullBytes = decoded.includes('\0')
+          const controlCharCount = (decoded.match(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g) || []).length
+          const isLikelyText = !hasNullBytes && controlCharCount / decoded.length < 0.1 // Less than 10% control chars
+          
+          if (isLikelyText && decoded.length > 0) {
+            console.warn('WARNING: Found legacy base64-encoded data from migration - this should be re-encrypted')
+            return decoded
+          }
+        } catch (decodeError) {
+          console.log('Base64 decode attempt failed:', decodeError)
+        }
       }
 
-      // Fallback to simple decoding if decryption fails
-      try {
-        const decoded = Buffer.from(encryptedData, 'base64').toString('utf8')
-        console.log('Successfully decoded with base64 fallback')
-        return decoded
-      } catch (decodeError) {
-        console.error('Base64 decode fallback failed:', decodeError)
-        // Last resort: return the original data if it's readable
-        return encryptedData
-      }
+      // Fail hard - do not return potentially corrupted data
+      throw new Error('Decryption failed - data may be corrupted or key is invalid')
     }
-  }
-
-  // Generate old format key for backwards compatibility
-  private async generateOldFormatKey(userId: string): Promise<string> {
-    const hash = createHash('sha256')
-    hash.update(`fallback-key-${userId}`)
-    return hash.digest('hex').substring(0, 32) // Old 32-character format
   }
 
   // Encrypt collection data
@@ -237,8 +485,14 @@ export class PrivacyService {
   }
 
   // Clear user key (for logout)
-  clearUserKey(): void {
-    this.userKey = null
+  clearUserKey(userId?: string): void {
+    if (userId) {
+      // Clear specific user's key
+      this.userKeys.delete(userId)
+    } else {
+      // Clear all user keys (for complete logout/cleanup)
+      this.userKeys.clear()
+    }
   }
 
   // Validate encryption is working
