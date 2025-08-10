@@ -121,8 +121,12 @@ export const fetchCollections = async (
             })
 
             return {
-              ...dot,
+              id: dot.id,
               label: decryptedDot.label,
+              x: dot.x,
+              y: dot.y,
+              color: dot.color,
+              size: dot.size,
               archived: dot.archived
             }
           })
@@ -470,11 +474,19 @@ export const fetchSnapshots = async (userId: string): Promise<Snapshot[]> => {
         const decryptedCollectionName = await privacyService.decryptData(row.collection_name_encrypted, validatedUserId)
         const decryptedDotsData = await privacyService.decryptData(row.dots_data_encrypted, validatedUserId)
         
+        let dots = []
+        try {
+          dots = JSON.parse(decryptedDotsData)
+        } catch (error) {
+          console.error('Failed to parse decrypted dots data:', error)
+          dots = []
+        }
+        
         return {
           date: row.snapshot_date,
           collectionId: row.collection_id,
           collectionName: decryptedCollectionName,
-          dots: JSON.parse(decryptedDotsData),
+          dots: dots,
           timestamp: new Date(row.created_at).getTime()
         }
       })
@@ -510,11 +522,19 @@ export const loadSnapshot = async (userId: string, snapshotId: string): Promise<
     const decryptedCollectionName = await privacyService.decryptData(data.collection_name_encrypted, validatedUserId)
     const decryptedDotsData = await privacyService.decryptData(data.dots_data_encrypted, validatedUserId)
 
+    let dots = []
+    try {
+      dots = JSON.parse(decryptedDotsData)
+    } catch (error) {
+      console.error('Failed to parse decrypted dots data:', error)
+      dots = []
+    }
+
     return {
       date: data.snapshot_date,
       collectionId: data.collection_id,
       collectionName: decryptedCollectionName,
-      dots: JSON.parse(decryptedDotsData),
+      dots: dots,
       timestamp: new Date(data.created_at).getTime()
     }
   } catch (error) {

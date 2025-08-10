@@ -15,38 +15,48 @@ DROP FUNCTION IF EXISTS update_updated_at_column CASCADE;
 DROP FUNCTION IF EXISTS encrypt_sensitive_data CASCADE;
 DROP FUNCTION IF EXISTS decrypt_sensitive_data CASCADE;
 
+-- Enable pgcrypto extension for encryption functions
+CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA public;
+
 -- Create encryption functions for sensitive data
 CREATE OR REPLACE FUNCTION encrypt_sensitive_data(data TEXT, user_key TEXT)
 RETURNS TEXT AS $$
 BEGIN
-  -- Use pgcrypto for encryption with user-specific key
-  RETURN encode(encrypt_iv(
-    data::bytea,
-    user_key::bytea,
-    decode('000102030405060708090A0B0C0D0E0F', 'hex'),
-    'aes-cbc'
-  ), 'base64');
+  -- Use pgp_sym_encrypt for secure encryption with random IV and authentication
+  -- This function automatically generates a random IV and includes integrity protection
+  IF data IS NULL OR data = '' THEN
+    RETURN NULL;
+  END IF;
+  
+  IF user_key IS NULL OR user_key = '' THEN
+    RAISE EXCEPTION 'User key cannot be null or empty for encryption';
+  END IF;
+  
+  RETURN encode(pgp_sym_encrypt(data, user_key), 'base64');
 EXCEPTION
   WHEN OTHERS THEN
-    -- Fallback to simple encoding if encryption fails
-    RETURN encode(data::bytea, 'base64');
+    -- Fail securely - do not store unencrypted data
+    RAISE EXCEPTION 'Encryption failed: %', SQLERRM;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION decrypt_sensitive_data(encrypted_data TEXT, user_key TEXT)
 RETURNS TEXT AS $$
 BEGIN
-  -- Decrypt using pgcrypto
-  RETURN convert_from(decrypt_iv(
-    decode(encrypted_data, 'base64'),
-    user_key::bytea,
-    decode('000102030405060708090A0B0C0D0E0F', 'hex'),
-    'aes-cbc'
-  ), 'utf8');
+  -- Use pgp_sym_decrypt for secure decryption with integrity verification
+  IF encrypted_data IS NULL OR encrypted_data = '' THEN
+    RETURN NULL;
+  END IF;
+  
+  IF user_key IS NULL OR user_key = '' THEN
+    RAISE EXCEPTION 'User key cannot be null or empty for decryption';
+  END IF;
+  
+  RETURN pgp_sym_decrypt(decode(encrypted_data, 'base64'), user_key);
 EXCEPTION
   WHEN OTHERS THEN
-    -- Fallback to simple decoding if decryption fails
-    RETURN convert_from(decode(encrypted_data, 'base64'), 'utf8');
+    -- Fail securely - do not return potentially corrupted or unencrypted data
+    RAISE EXCEPTION 'Decryption failed: %', SQLERRM;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
