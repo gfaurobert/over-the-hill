@@ -1,4 +1,16 @@
--- Migration to encrypted schema
+-- TEMPORARY Migration to encrypted schema - SECURITY WARNING
+-- This migration is marked as TEMPORARY and should NOT be deployed to production
+-- 
+-- SECURITY ISSUE: This migration uses base64 encoding instead of proper encryption
+-- Base64 encoding is reversible and does NOT protect data confidentiality
+-- 
+-- RECOMMENDED ACTION: 
+-- 1. Mark this migration as temporary/development only
+-- 2. Create a follow-up migration that implements proper cryptographic encryption
+-- 3. Use pgp_sym_encrypt or pgp_pub_encrypt from pgcrypto extension
+-- 4. Handle IV/nonce values properly alongside encrypted data
+-- 5. Only deploy to production after implementing true encryption
+--
 -- This migration handles the transition from plain text to encrypted data storage
 
 -- First, create temporary tables to store the old data
@@ -124,7 +136,14 @@ CREATE TRIGGER update_user_preferences_updated_at BEFORE UPDATE ON user_preferen
 CREATE TRIGGER update_access_requests_updated_at BEFORE UPDATE ON access_requests
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Migrate collections data with encryption
+-- TEMPORARY DATA MIGRATION - SECURITY WARNING
+-- WARNING: This section uses base64 encoding which is NOT encryption
+-- Base64 encoding is reversible and provides NO data confidentiality protection
+-- 
+-- This is a temporary solution for development/testing only
+-- For production, implement proper cryptographic encryption using pgcrypto functions
+-- 
+-- Migrate collections data with TEMPORARY base64 encoding (NOT encryption)
 -- Note: This will use simple base64 encoding as a fallback since we can't encrypt without user keys
 INSERT INTO collections (id, user_id, name_encrypted, name_hash, created_at, updated_at, status, archived_at, deleted_at)
 SELECT 
@@ -139,7 +158,7 @@ SELECT
     deleted_at
 FROM temp_collections;
 
--- Migrate dots data with encryption
+-- Migrate dots data with TEMPORARY base64 encoding (NOT encryption)
 INSERT INTO dots (id, collection_id, user_id, label_encrypted, label_hash, x, y, color, size, archived, created_at, updated_at)
 SELECT 
     id,
@@ -156,7 +175,7 @@ SELECT
     updated_at
 FROM temp_dots;
 
--- Migrate snapshots data with encryption
+-- Migrate snapshots data with TEMPORARY base64 encoding (NOT encryption)
 INSERT INTO snapshots (id, user_id, collection_id, collection_name_encrypted, created_at, snapshot_date, dots_data_encrypted)
 SELECT 
     id,
@@ -234,3 +253,38 @@ ALTER TABLE access_requests ENABLE ROW LEVEL SECURITY;
 DROP TABLE temp_collections;
 DROP TABLE temp_dots;
 DROP TABLE temp_snapshots;
+
+-- ============================================================================
+-- CRITICAL SECURITY WARNING - PRODUCTION DEPLOYMENT BLOCKED
+-- ============================================================================
+--
+-- This migration has been marked as TEMPORARY and should NOT be deployed to production
+-- due to critical security vulnerabilities:
+--
+-- 1. BASE64 ENCODING IS NOT ENCRYPTION
+--    - All sensitive data (names, labels, messages) are stored using base64 encoding
+--    - Base64 encoding is easily reversible and provides ZERO data confidentiality
+--    - Anyone with database access can decode and read the "encrypted" data
+--
+-- 2. REQUIRED FOLLOW-UP ACTIONS BEFORE PRODUCTION:
+--    a) Create a new migration that implements proper cryptographic encryption
+--    b) Use pgp_sym_encrypt or pgp_pub_encrypt from pgcrypto extension
+--    c) Handle IV/nonce values properly alongside encrypted data
+--    d) Implement proper key management for user-specific encryption keys
+--    e) Re-encrypt all existing base64-encoded data with proper encryption
+--
+-- 3. RECOMMENDED ENCRYPTION APPROACH:
+--    - Use pgp_sym_encrypt for symmetric encryption with user-specific keys
+--    - Store encrypted data as base64-encoded text (as done in main schema)
+--    - Implement proper key derivation and management
+--    - Ensure all sensitive fields are properly encrypted before production
+--
+-- 4. IMMEDIATE ACTIONS:
+--    - Mark this migration as development/testing only
+--    - Create follow-up migration: 20250725000001_implement_proper_encryption.sql
+--    - Test encryption/decryption functions thoroughly
+--    - Validate data integrity after re-encryption
+--
+-- ============================================================================
+-- END OF TEMPORARY MIGRATION - DO NOT DEPLOY TO PRODUCTION
+-- ============================================================================

@@ -646,26 +646,43 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
 
     // Process snapshots if present
     if (snapshots?.length) {
-      const snapshotRows = await Promise.all(
-        snapshots.map(async (snapshot) => {
-          const { encrypted: encryptedCollectionName } = await privacyService.encryptData(snapshot.collectionName, validatedUserId)
-          const { encrypted: encryptedDotsData } = await privacyService.encryptData(JSON.stringify(snapshot.dots), validatedUserId)
-
-          return {
-            user_id: validatedUserId,
-            collection_id: snapshot.collectionId,
-            collection_name_encrypted: encryptedCollectionName,
-            created_at: new Date(snapshot.timestamp).toISOString(),
-            snapshot_date: snapshot.date,
-            dots_data_encrypted: encryptedDotsData,
-          }
-        })
+      // Filter snapshots to only include those that reference imported collections
+      const importedCollectionIds = new Set(collections.map(c => c.id))
+      const validSnapshots = snapshots.filter(snapshot => 
+        importedCollectionIds.has(snapshot.collectionId)
       )
+      
+      // Log if any snapshots were skipped
+      if (validSnapshots.length < snapshots.length) {
+        const skippedCount = snapshots.length - validSnapshots.length
+        console.log(`Skipping ${skippedCount} snapshot${skippedCount > 1 ? 's' : ''} for non-existent or renamed collections`)
+      }
+      
+      // Only process valid snapshots
+      if (validSnapshots.length > 0) {
+        const snapshotRows = await Promise.all(
+          validSnapshots.map(async (snapshot) => {
+            const { encrypted: encryptedCollectionName } = await privacyService.encryptData(snapshot.collectionName, validatedUserId)
+            const { encrypted: encryptedDotsData } = await privacyService.encryptData(JSON.stringify(snapshot.dots), validatedUserId)
 
-      const { error: snapshotError } = await supabase.from("snapshots").upsert(snapshotRows)
-      if (snapshotError) {
-        console.error("Error importing snapshots:", snapshotError)
-        // Don't throw here as snapshots are optional
+            return {
+              user_id: validatedUserId,
+              collection_id: snapshot.collectionId,
+              collection_name_encrypted: encryptedCollectionName,
+              created_at: new Date(snapshot.timestamp).toISOString(),
+              snapshot_date: snapshot.date,
+              dots_data_encrypted: encryptedDotsData,
+            }
+          })
+        )
+
+        const { error: snapshotError } = await supabase.from("snapshots").upsert(snapshotRows)
+        if (snapshotError) {
+          // This should be rare now since we've filtered invalid snapshots
+          console.warn("Warning: Some snapshots could not be imported:", snapshotError.message)
+        } else if (validSnapshots.length > 0) {
+          console.log(`Successfully imported ${validSnapshots.length} snapshot${validSnapshots.length > 1 ? 's' : ''}`)
+        }
       }
     }
 
