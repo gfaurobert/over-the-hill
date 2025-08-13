@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createHash } from 'crypto'
+import { createHmac, randomBytes } from 'crypto'
 import { supabase } from '@/lib/supabaseClient'
+
+// Helper function to derive a 32-byte key using HMAC-SHA256 KDF
+function deriveKey(keyMaterial: string, userId: string, context: string): string {
+  // Use HMAC-SHA256 with the environment secret as the key
+  const hmac = createHmac('sha256', keyMaterial)
+  
+  // Include userId and context for domain separation
+  hmac.update(userId)
+  hmac.update(':')
+  hmac.update(context)
+  
+  // Get the full 32-byte digest and return as hex
+  return hmac.digest('hex')
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,32 +66,24 @@ export async function POST(request: NextRequest) {
 
     let encryptionKey: string
 
-    // Generate key based on type
+    // Generate key based on type using proper KDF with domain separation
     switch (keyType) {
       case 'primary': {
-        // Create a deterministic but secure key from user ID and the environment secret
-        const combinedKeyMaterial = `${userId}:${keyMaterial}`
-        const hash = createHash('sha256')
-        hash.update(combinedKeyMaterial)
-        encryptionKey = hash.digest('hex').substring(0, 64) // Use first 64 chars for AES-256 (32 bytes)
+        // Derive primary key using HMAC-SHA256 KDF with "auth:primary" context
+        encryptionKey = deriveKey(keyMaterial, userId, 'auth:primary')
         break
       }
       
       case 'fallback': {
-        // Generate fallback key for backwards compatibility
-        const hash = createHash('sha256')
-        hash.update(`fallback-key-${userId}-${keyMaterial}`)
-        encryptionKey = hash.digest('hex').substring(0, 64)
+        // Derive fallback key using HMAC-SHA256 KDF with "auth:fallback" context
+        encryptionKey = deriveKey(keyMaterial, userId, 'auth:fallback')
         break
       }
       
       case 'legacy': {
-        // Generate legacy key using the old hard-coded secret for backwards compatibility
+        // Derive legacy key using HMAC-SHA256 KDF with "auth:legacy" context
         const legacySecret = 'fixed-app-secret-for-hill-chart-encryption-long-enough-secret'
-        const combinedKeyMaterial = `${userId}:${legacySecret}`
-        const hash = createHash('sha256')
-        hash.update(combinedKeyMaterial)
-        encryptionKey = hash.digest('hex').substring(0, 64)
+        encryptionKey = deriveKey(legacySecret, userId, 'auth:legacy')
         break
       }
       
