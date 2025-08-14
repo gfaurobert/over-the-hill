@@ -17,7 +17,7 @@ export const sanitizeString = (input: string, maxLength: number = 255): string =
   // Remove null bytes and control characters except newlines and tabs
   const sanitized = input
     .replace(/\0/g, '') // Remove null bytes
-    .replace(/[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars
+    .replace(new RegExp('[\\x01-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]', 'g'), '') // Remove control chars
     .trim()
   
   if (sanitized.length > maxLength) {

@@ -1,5 +1,8 @@
 -- Fix decryption function to use pgp_sym_decrypt matching the encryption method
 -- Migration: 20250809103000_fix_pgp_decryption.sql
+-- 
+-- SECURITY NOTE: This migration validates user_key and raises exceptions for null/empty keys
+-- to maintain consistency with other migrations and prevent silent security failures.
 
 -- Drop the existing incorrect function
 DROP FUNCTION IF EXISTS decrypt_sensitive_data CASCADE;

@@ -1,5 +1,8 @@
 -- Script to apply the encryption fix migration
 -- This should be run against your Supabase database
+-- 
+-- SECURITY NOTE: This script validates user_key and raises exceptions for null/empty keys
+-- to maintain consistency with other migrations and prevent silent security failures.
 
 -- First, check if the pgcrypto extension is enabled
 CREATE EXTENSION IF NOT EXISTS pgcrypto;

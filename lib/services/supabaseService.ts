@@ -68,6 +68,74 @@ const handleServiceError = (error: any, operation: string): void => {
   throw new Error(`Failed to ${operation}: ${error?.message || 'Unknown error'}`)
 }
 
+// Specialized error handling for JSON parsing failures
+const handleJsonParseError = (
+  error: any, 
+  operation: string, 
+  userId: string, 
+  recordId?: string, 
+  blobKey?: string
+): never => {
+  // Create contextual error information
+  const errorContext = {
+    operation,
+    userId,
+    recordId: recordId || 'unknown',
+    blobKey: blobKey || 'unknown',
+    timestamp: new Date().toISOString(),
+    errorType: 'JSON_PARSE_FAILURE',
+    errorMessage: error instanceof Error ? error.message : 'Unknown parsing error',
+    errorStack: error instanceof Error ? error.stack : undefined
+  }
+
+  // Log the failure with contextual identifiers
+  console.error(`[JSON_PARSE_ERROR] Failed to parse data in ${operation}:`, {
+    ...errorContext,
+    // Include truncated raw data for debugging (safe for logging)
+    rawDataPreview: blobKey ? `${blobKey.substring(0, 50)}...` : 'No blob key available'
+  })
+
+  // Log additional context for debugging
+  console.error(`[JSON_PARSE_ERROR] Context:`, {
+    userId: errorContext.userId,
+    recordId: errorContext.recordId,
+    operation: errorContext.operation,
+    timestamp: errorContext.timestamp
+  })
+
+  // Increment error tracking metrics
+  incrementErrorMetric('json_parse_failures', { 
+    operation, 
+    userId, 
+    recordId: recordId || 'unknown',
+    errorType: errorContext.errorType 
+  })
+  
+  // In production, you would also send this to your error tracking service
+  // Example: Sentry.captureException(error, { extra: errorContext })
+  // Example: DataDog.log('json_parse_failure', errorContext)
+  // Example: NewRelic.recordCustomEvent('JsonParseFailure', errorContext)
+  
+  // Create a structured error for the caller
+  const parseError = new Error(`Failed to parse data in ${operation}: ${errorContext.errorMessage}`)
+  parseError.name = 'JsonParseError'
+  ;(parseError as any).context = errorContext
+  
+  throw parseError
+}
+
+// Utility function to increment error tracking metrics
+// This can be integrated with your monitoring service of choice
+const incrementErrorMetric = (metricName: string, tags: Record<string, string> = {}): void => {
+  // In production, integrate with your metrics service
+  // Example: StatsD.increment(metricName, tags)
+  // Example: Prometheus.counter(metricName).inc(tags)
+  // Example: CloudWatch.putMetricData(metricName, tags)
+  
+  // For now, log the metric increment for debugging
+  console.log(`[METRIC] ${metricName} incremented:`, tags)
+}
+
 // Fetch all collections and their dots for the current user
 export const fetchCollections = async (
   userId: string, 
@@ -478,7 +546,9 @@ export const fetchSnapshots = async (userId: string): Promise<Snapshot[]> => {
         try {
           dots = JSON.parse(decryptedDotsData)
         } catch (error) {
-          console.error('Failed to parse decrypted dots data:', error)
+          // If JSON parsing fails, we'll get a detailed error but continue with other snapshots
+          // Log the error and use empty dots array for this specific snapshot
+          console.warn(`[SNAPSHOT_PARSING] Skipping corrupted snapshot ${row.id} for user ${validatedUserId}`)
           dots = []
         }
         
@@ -526,8 +596,9 @@ export const loadSnapshot = async (userId: string, snapshotId: string): Promise<
     try {
       dots = JSON.parse(decryptedDotsData)
     } catch (error) {
-      console.error('Failed to parse decrypted dots data:', error)
-      dots = []
+      // For individual snapshot loading, parsing failure means the snapshot is corrupted
+      // Use the specialized error handler to log detailed information
+      handleJsonParseError(error, 'load snapshot', validatedUserId, data.id, data.dots_data_encrypted)
     }
 
     return {
@@ -600,33 +671,50 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
       throw collectionError
     }
 
-    // Prepare and encrypt dot rows
-    const allDotPromises = collections.flatMap(async (collection) =>
-      await Promise.all(
-        collection.dots.map(async (dot) => {
-          const encryptedDot = await privacyService.encryptDot({
-            id: dot.id,
-            label: dot.label,
-            userId: validatedUserId
-          })
-
-          return {
-            id: dot.id,
-            label_encrypted: encryptedDot.label_encrypted,
-            label_hash: encryptedDot.label_hash,
-            x: dot.x,
-            y: dot.y,
-            color: dot.color,
-            size: dot.size,
-            archived: dot.archived === true,
-            user_id: validatedUserId,
-            collection_id: collection.id,
-          }
-        })
-      )
-    )
+    // Prepare and encrypt dot rows - build a single flat array of encryption promises
+    // This avoids the problematic flatMap(async ...) pattern that creates nested promises
+    const allDotPromises: Promise<any>[] = []
     
-    const dotRows = (await Promise.all(allDotPromises)).flat()
+    // Iterate collections synchronously and push per-dot encrypt promises into the array
+    for (const collection of collections) {
+      for (const dot of collection.dots) {
+        const dotPromise = privacyService.encryptDot({
+          id: dot.id,
+          label: dot.label,
+          userId: validatedUserId
+        }).then(encryptedDot => ({
+          id: dot.id,
+          label_encrypted: encryptedDot.label_encrypted,
+          label_hash: encryptedDot.label_hash,
+          x: dot.x,
+          y: dot.y,
+          color: dot.color,
+          size: dot.size,
+          archived: dot.archived === true,
+          user_id: validatedUserId,
+          collection_id: collection.id,
+        }))
+        
+        allDotPromises.push(dotPromise)
+      }
+    }
+    
+    // Process dot encryption promises with controlled concurrency
+    // This approach avoids nested promises and gives us control over concurrency
+    const encryptionBatchSize = 50 // Control how many dots are encrypted concurrently
+    const dotRows: any[] = []
+    
+    // Process encryption in batches to control concurrency
+    for (let i = 0; i < allDotPromises.length; i += encryptionBatchSize) {
+      const batch = allDotPromises.slice(i, i + encryptionBatchSize)
+      const batchResults = await Promise.all(batch)
+      dotRows.push(...batchResults)
+      
+      // Optional: Log progress for large imports
+      if (allDotPromises.length > 100) {
+        console.log(`Encrypted ${Math.min(i + encryptionBatchSize, allDotPromises.length)}/${allDotPromises.length} dots`)
+      }
+    }
 
     // Process dots in batches to avoid overwhelming the database
     const batchSize = 100

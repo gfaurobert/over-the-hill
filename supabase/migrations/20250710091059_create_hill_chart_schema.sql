@@ -19,6 +19,9 @@ DROP FUNCTION IF EXISTS decrypt_sensitive_data CASCADE;
 CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA public;
 
 -- Create encryption functions for sensitive data
+-- 
+-- SECURITY NOTE: These functions validate user_key and raise exceptions for null/empty keys
+-- to prevent silent security failures and maintain consistent error handling.
 CREATE OR REPLACE FUNCTION encrypt_sensitive_data(data TEXT, user_key TEXT)
 RETURNS TEXT AS $$
 BEGIN
@@ -137,6 +140,22 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_created_at ON snapshots(created_at);
 CREATE INDEX IF NOT EXISTS idx_access_requests_email ON access_requests(email);
 CREATE INDEX IF NOT EXISTS idx_access_requests_status ON access_requests(status);
 CREATE INDEX IF NOT EXISTS idx_access_requests_created_at ON access_requests(created_at);
+
+-- Create indexes for hash columns used in encrypted field searches
+-- These indexes are crucial for performant searches without decryption
+-- 
+-- Hash-based search indexes enable fast lookups for encrypted data:
+-- - name_hash: Allows searching collections by name without decrypting
+-- - label_hash: Allows searching dots by label without decrypting  
+-- - Composite indexes: Optimize queries that filter by user_id + hash
+-- - Performance: Hash lookups are O(1) vs O(n) for encrypted field scans
+-- 
+-- Note: Snapshots table encrypted fields (collection_name_encrypted, dots_data_encrypted)
+-- are not indexed as they are not used for searching - only for data retrieval and decryption
+CREATE INDEX IF NOT EXISTS idx_collections_name_hash ON collections(name_hash);
+CREATE INDEX IF NOT EXISTS idx_collections_user_id_name_hash ON collections(user_id, name_hash);
+CREATE INDEX IF NOT EXISTS idx_dots_label_hash ON dots(label_hash);
+CREATE INDEX IF NOT EXISTS idx_dots_collection_id_label_hash ON dots(collection_id, label_hash);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
