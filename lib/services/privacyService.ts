@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabaseClient"
-import { createHash, randomBytes } from "crypto"
+import { createHash, randomBytes, createHmac } from "crypto"
 
 // Privacy service for handling encrypted data
 export class PrivacyService {
@@ -13,6 +13,30 @@ export class PrivacyService {
       PrivacyService.instance = new PrivacyService()
     }
     return PrivacyService.instance
+  }
+
+  // Environment-aware base64 encoding helper
+  private base64Encode(data: Uint8Array): string {
+    if (typeof Buffer !== 'undefined') {
+      // Node.js environment - use Buffer
+      return Buffer.from(data).toString('base64')
+    } else {
+      // Browser environment - use btoa with proper UTF-8 handling
+      const binaryString = Array.from(data, byte => String.fromCharCode(byte)).join('')
+      return globalThis.btoa(binaryString)
+    }
+  }
+
+  // Environment-aware base64 decoding helper
+  private base64Decode(base64String: string): Uint8Array {
+    if (typeof Buffer !== 'undefined') {
+      // Node.js environment - use Buffer
+      return new Uint8Array(Buffer.from(base64String, 'base64'))
+    } else {
+      // Browser environment - use atob
+      const binaryString = globalThis.atob(base64String)
+      return new Uint8Array(Array.from(binaryString, char => char.charCodeAt(0)))
+    }
   }
 
   // Generate a user-specific encryption key from user ID and session
@@ -39,13 +63,10 @@ export class PrivacyService {
           throw new Error('KEY_MATERIAL must be at least 32 characters long for adequate security')
         }
 
-        // Create a deterministic but secure key from user ID and the environment secret
-        const combinedKeyMaterial = `${userId}:${keyMaterial}`
-        
-        // Use SHA-256 to create a consistent 32-byte key
-        const hash = createHash('sha256')
-        hash.update(combinedKeyMaterial)
-        return hash.digest('hex').substring(0, 64) // Use first 64 chars for AES-256 (32 bytes)
+        // Use HMAC-SHA256 with domain separation for primary key generation
+        const hmac = createHmac('sha256', keyMaterial)
+        hmac.update(`primary-key|${userId}`) // Domain-separated message format
+        return hmac.digest('hex').substring(0, 64) // Use first 64 chars for AES-256 (32 bytes)
       } else {
         // Client-side: Call API endpoint to generate key securely
         const response = await fetch('/api/auth/generate-key', {
@@ -95,9 +116,10 @@ export class PrivacyService {
           throw new Error('KEY_MATERIAL environment variable is required for fallback key generation')
         }
         
-        const hash = createHash('sha256')
-        hash.update(`fallback-key-${userId}-${fallbackKeyMaterial}`)
-        return hash.digest('hex').substring(0, 64) // Use first 64 chars for AES-256 (32 bytes)
+        // Use HMAC-SHA256 with domain separation for fallback key generation
+        const hmac = createHmac('sha256', fallbackKeyMaterial)
+        hmac.update(`fallback-key|${userId}`) // Domain-separated message format
+        return hmac.digest('hex').substring(0, 64) // Use first 64 chars for AES-256 (32 bytes)
       } else {
         // Client-side fallback: Call API endpoint
         const response = await fetch('/api/auth/generate-key', {
@@ -178,7 +200,7 @@ export class PrivacyService {
       combined.set(new Uint8Array(encryptedBuffer), iv.length)
 
       // Return as base64 with client-side prefix
-      return 'client:' + Buffer.from(combined).toString('base64')
+      return 'client:' + this.base64Encode(combined)
     } catch (error) {
       console.error('Client-side encryption failed:', error)
       throw new Error('Client-side encryption failed - cannot store data unencrypted')
@@ -246,7 +268,7 @@ export class PrivacyService {
     try {
       // Remove client-side prefix and decode base64
       const base64Data = encryptedData.replace('client:', '')
-      const combined = new Uint8Array(Buffer.from(base64Data, 'base64'))
+      const combined = new Uint8Array(this.base64Decode(base64Data))
       
       // Extract IV and encrypted data
       const iv = combined.slice(0, 12)
@@ -389,6 +411,8 @@ export class PrivacyService {
   }
 
   // Search collections by name hash (privacy-preserving search)
+  // Note: This performs exact hash matching. If substring/fuzzy search is needed,
+  // implement a tokenization scheme that hashes normalized tokens and searches across token hashes.
   async searchCollectionsByName(userId: string, searchTerm: string): Promise<string[]> {
     const searchHash = this.createSearchHash(searchTerm)
     
@@ -396,7 +420,7 @@ export class PrivacyService {
       .from('collections')
       .select('id')
       .eq('user_id', userId)
-      .ilike('name_hash', `%${searchHash}%`)
+      .eq('name_hash', searchHash) // Exact hash match - changed from ilike for cryptographic correctness
       .eq('status', 'active')
 
     if (error) {
