@@ -22,9 +22,16 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA public;
 -- 
 -- SECURITY NOTE: These functions validate user_key and raise exceptions for null/empty keys
 -- to prevent silent security failures and maintain consistent error handling.
+-- 
+-- SECURITY NOTE: All SECURITY DEFINER functions set safe search_path to prevent
+-- search path hijacking attacks.
 CREATE OR REPLACE FUNCTION encrypt_sensitive_data(data TEXT, user_key TEXT)
 RETURNS TEXT AS $$
 BEGIN
+  -- SECURITY: Set safe search_path to prevent hijacking attacks
+  -- This ensures all function calls resolve to trusted schemas only
+  SET LOCAL search_path = pg_catalog, pg_temp;
+  
   -- Use pgp_sym_encrypt for secure encryption with random IV and authentication
   -- This function automatically generates a random IV and includes integrity protection
   IF data IS NULL OR data = '' THEN
@@ -46,6 +53,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION decrypt_sensitive_data(encrypted_data TEXT, user_key TEXT)
 RETURNS TEXT AS $$
 BEGIN
+  -- SECURITY: Set safe search_path to prevent hijacking attacks
+  -- This ensures all function calls resolve to trusted schemas only
+  SET LOCAL search_path = pg_catalog, pg_temp;
+  
   -- Use pgp_sym_decrypt for secure decryption with integrity verification
   IF encrypted_data IS NULL OR encrypted_data = '' THEN
     RETURN NULL;

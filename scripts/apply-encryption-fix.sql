@@ -3,6 +3,9 @@
 -- 
 -- SECURITY NOTE: This script validates user_key and raises exceptions for null/empty keys
 -- to maintain consistency with other migrations and prevent silent security failures.
+-- 
+-- SECURITY NOTE: This function uses SECURITY DEFINER and sets a safe search_path
+-- to prevent search path hijacking attacks.
 
 -- First, check if the pgcrypto extension is enabled
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
@@ -21,6 +24,10 @@ DECLARE
     result TEXT;
     decoded_data BYTEA;
 BEGIN
+    -- SECURITY: Set safe search_path to prevent hijacking attacks
+    -- This ensures all function calls resolve to trusted schemas only
+    SET LOCAL search_path = pg_catalog, pg_temp;
+    
     -- Handle empty or null data
     IF encrypted_data IS NULL OR encrypted_data = '' THEN
         RETURN '';
@@ -80,8 +87,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION decrypt_sensitive_data TO authenticated;
 GRANT EXECUTE ON FUNCTION decrypt_sensitive_data TO anon;
 
--- Add a comment documenting the function
-COMMENT ON FUNCTION decrypt_sensitive_data IS 'Decrypts data encrypted with pgp_sym_encrypt, with fallback for legacy base64-encoded data';
+-- Add a comment documenting the function and security measures
+COMMENT ON FUNCTION decrypt_sensitive_data IS 'Decrypts data encrypted with pgp_sym_encrypt, with fallback for legacy base64-encoded data. Uses SECURITY DEFINER with safe search_path to prevent hijacking attacks.';
 
 -- Verify the function exists
 SELECT 'Decryption function successfully updated' AS status;

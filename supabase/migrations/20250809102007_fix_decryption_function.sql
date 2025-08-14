@@ -4,6 +4,9 @@
 -- SECURITY NOTE: This migration validates user_key and raises exceptions for null/empty keys
 -- to maintain consistency with other migrations and prevent silent security failures.
 -- 
+-- SECURITY NOTE: This function uses SECURITY DEFINER and sets a safe search_path
+-- to prevent search path hijacking attacks.
+-- 
 -- SECURITY IMPROVEMENT: Fixed hard-coded IV vulnerability by extracting unique IV from ciphertext.
 -- Each encrypted value now uses its own unique IV stored in the first 16 bytes of the data.
 
@@ -17,6 +20,10 @@ DECLARE
     result TEXT;
     decoded_data BYTEA;
 BEGIN
+    -- SECURITY: Set safe search_path to prevent hijacking attacks
+    -- This ensures all function calls resolve to trusted schemas only
+    SET LOCAL search_path = pg_catalog, pg_temp;
+    
     -- Handle empty or null data
     IF encrypted_data IS NULL OR encrypted_data = '' THEN
         RETURN '';

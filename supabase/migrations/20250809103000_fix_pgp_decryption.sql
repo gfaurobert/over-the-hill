@@ -3,9 +3,12 @@
 -- 
 -- SECURITY NOTE: This migration validates user_key and raises exceptions for null/empty keys
 -- to maintain consistency with other migrations and prevent silent security failures.
-
--- Drop the existing incorrect function
-DROP FUNCTION IF EXISTS decrypt_sensitive_data CASCADE;
+-- 
+-- MIGRATION NOTE: Using CREATE OR REPLACE to preserve dependencies and permissions
+-- instead of DROP ... CASCADE which could remove dependent objects.
+-- 
+-- SECURITY NOTE: This function uses SECURITY DEFINER and sets a safe search_path
+-- to prevent search path hijacking attacks.
 
 -- Create corrected decryption function using pgp_sym_decrypt
 CREATE OR REPLACE FUNCTION decrypt_sensitive_data(encrypted_data TEXT, user_key TEXT)
@@ -14,6 +17,10 @@ DECLARE
     result TEXT;
     decoded_data BYTEA;
 BEGIN
+    -- SECURITY: Set safe search_path to prevent hijacking attacks
+    -- This ensures all function calls resolve to trusted schemas only
+    SET LOCAL search_path = pg_catalog, pg_temp;
+    
     -- Handle empty or null data
     IF encrypted_data IS NULL OR encrypted_data = '' THEN
         RETURN '';
@@ -73,5 +80,5 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION decrypt_sensitive_data TO authenticated;
 GRANT EXECUTE ON FUNCTION decrypt_sensitive_data TO anon;
 
--- Add a comment documenting the function
-COMMENT ON FUNCTION decrypt_sensitive_data IS 'Decrypts data encrypted with pgp_sym_encrypt, with fallback for legacy base64-encoded data';
+-- Add a comment documenting the function and security measures
+COMMENT ON FUNCTION decrypt_sensitive_data IS 'Decrypts data encrypted with pgp_sym_encrypt, with fallback for legacy base64-encoded data. Uses SECURITY DEFINER with safe search_path to prevent hijacking attacks.';

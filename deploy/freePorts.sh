@@ -91,7 +91,6 @@ if [ "$OVERWRITE" = true ]; then
   echo "API_PORT=${FREE_PORTS[3]}"
   echo "ANALYTICS_PORT=${FREE_PORTS[4]}"
   echo "INBUCKET_PORT=${FREE_PORTS[5]}"
-  echo "NEXTJS_APP_PORT=${FREE_PORTS[0]}"
 fi
 
 
