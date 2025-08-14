@@ -126,53 +126,7 @@ export class PrivacyService {
     }
   }
 
-  // Generate legacy key using the old hard-coded secret (for backward compatibility)
-  private async generateLegacyKey(userId: string): Promise<string> {
-    try {
-      // Get user session
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        throw new Error('No active session for legacy key generation')
-      }
 
-      // Check if we're running on the server-side
-      const isServerSide = typeof window === 'undefined'
-      
-      if (isServerSide) {
-        // Server-side: Generate key using the old hard-coded secret
-        const legacySecret = 'fixed-app-secret-for-hill-chart-encryption-long-enough-secret'
-        const combinedKeyMaterial = `${userId}:${legacySecret}`
-        
-        const hash = createHash('sha256')
-        hash.update(combinedKeyMaterial)
-        return hash.digest('hex').substring(0, 64) // Use first 64 chars for AES-256 (32 bytes)
-      } else {
-        // Client-side: Call API endpoint to generate legacy key
-        const response = await fetch('/api/auth/generate-key', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            accessToken: session.access_token,
-            userId: userId,
-            keyType: 'legacy'
-          }),
-        })
-
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(`Legacy key generation failed: ${errorData.error || 'Unknown error'}`)
-        }
-
-        const data = await response.json()
-        return data.encryptionKey
-      }
-    } catch (error) {
-      console.error('Legacy key generation failed:', error)
-      throw new Error('Legacy key generation failed - cannot decrypt old data')
-    }
-  }
 
   // Get or generate user key
   private async getUserKey(userId: string): Promise<string> {
@@ -365,23 +319,6 @@ export class PrivacyService {
       
       // Only try backwards compatibility fallbacks for non-client-side encrypted data
       if (!encryptedData.startsWith('client:')) {
-        // Try with legacy key (original hard-coded secret) for backwards compatibility
-        try {
-          const legacyKey = await this.generateLegacyKey(userId)
-          console.log('Trying decryption with legacy key format, length:', legacyKey.length)
-          
-          const { data: result, error } = await supabase.rpc('decrypt_sensitive_data', {
-            encrypted_data: encryptedData,
-            user_key: legacyKey
-          })
-
-          if (!error && result) {
-            console.log('Successfully decrypted with legacy key format')
-            return result
-          }
-        } catch (legacyKeyError) {
-          console.log('Legacy key format also failed:', legacyKeyError)
-        }
 
         // Try with fallback key format for backwards compatibility
         try {
@@ -401,21 +338,7 @@ export class PrivacyService {
           console.log('Fallback key format also failed:', fallbackKeyError)
         }
 
-        // Check if this might be legacy base64 encoded data (from migration)
-        try {
-          const decoded = Buffer.from(encryptedData, 'base64').toString('utf8')
-          // Check if it's valid UTF-8 and not binary data by looking for null bytes or excessive control chars
-          const hasNullBytes = decoded.includes('\0')
-          const controlCharCount = (decoded.match(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g) || []).length
-          const isLikelyText = !hasNullBytes && controlCharCount / decoded.length < 0.1 // Less than 10% control chars
-          
-          if (isLikelyText && decoded.length > 0) {
-            console.warn('WARNING: Found legacy base64-encoded data from migration - this should be re-encrypted')
-            return decoded
-          }
-        } catch (decodeError) {
-          console.log('Base64 decode attempt failed:', decodeError)
-        }
+
       }
 
       // Fail hard - do not return potentially corrupted data

@@ -80,16 +80,11 @@ export async function POST(request: NextRequest) {
         break
       }
       
-      case 'legacy': {
-        // Derive legacy key using HMAC-SHA256 KDF with "auth:legacy" context
-        const legacySecret = 'fixed-app-secret-for-hill-chart-encryption-long-enough-secret'
-        encryptionKey = deriveKey(legacySecret, userId, 'auth:legacy')
-        break
-      }
+
       
       default:
         return NextResponse.json(
-          { error: 'Invalid key type. Must be primary, fallback, or legacy' },
+          { error: 'Invalid key type. Must be primary or fallback' },
           { status: 400 }
         )
     }

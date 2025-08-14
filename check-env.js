@@ -29,7 +29,8 @@ const requiredEnvVars = [
     example: 'your-secure-random-string-at-least-32-chars-long',
     required: true,
     note: 'This is CRITICAL for encrypting user data - use a secure random string'
-  }
+  },
+
 ];
 
 console.log('🔍 Checking environment variables...\n');
