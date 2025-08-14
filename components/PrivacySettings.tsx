@@ -17,7 +17,8 @@ import {
   CheckCircle,
   Info,
   Trash2,
-  Download
+  Download,
+  Loader2
 } from "lucide-react"
 import { privacyService } from "@/lib/services/privacyService"
 import { useAuth } from "./AuthProvider"
@@ -27,7 +28,7 @@ interface PrivacySettingsProps {
 }
 
 export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => {
-  const { user } = useAuth()
+  const { user, session } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
   const [encryptionStatus, setEncryptionStatus] = useState<"testing" | "working" | "failed" | null>(null)
   const [privacyFeatures, setPrivacyFeatures] = useState({
@@ -37,8 +38,30 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
     automaticCleanup: false
   })
   
+  // New state for export and delete operations
+  const [isExporting, setIsExporting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  
   // Ref to store AbortController for cleanup
   const abortControllerRef = useRef<AbortController | null>(null)
+
+  // Helper function to show toast notifications
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    // Simple toast implementation - you can replace with your preferred toast library
+    const toast = document.createElement('div')
+    toast.className = `fixed top-4 right-4 z-50 px-4 py-2 rounded-md text-white text-sm font-medium ${
+      type === 'success' ? 'bg-green-600' : 
+      type === 'error' ? 'bg-red-600' : 
+      'bg-blue-600'
+    }`
+    toast.textContent = message
+    document.body.appendChild(toast)
+    
+    setTimeout(() => {
+      document.body.removeChild(toast)
+    }, 3000)
+  }
 
   // Helper function to create a timeout promise
   const createTimeout = (ms: number, abortController: AbortController): Promise<never> => {
@@ -138,6 +161,91 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
       if (abortControllerRef.current === abortController) {
         abortControllerRef.current = null
       }
+    }
+  }
+
+  // Export all user data
+  const handleExportData = async () => {
+    if (!user) return
+    
+    setIsExporting(true)
+    
+    try {
+      // Fetch user data from backend or gather client data
+      // This is a placeholder - implement based on your actual data structure
+      const userData = {
+        userId: user.id,
+        collections: [], // Fetch from your backend
+        dots: [], // Fetch from your backend
+        snapshots: [], // Fetch from your backend
+        preferences: privacyFeatures,
+        exportDate: new Date().toISOString()
+      }
+      
+      // Serialize to JSON
+      const jsonData = JSON.stringify(userData, null, 2)
+      
+      // Create blob and trigger download
+      const blob = new Blob([jsonData], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `over-the-hill-data-${user.id}-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      showToast('Data exported successfully!', 'success')
+    } catch (error) {
+      console.error('Export failed:', error)
+      showToast('Failed to export data. Please try again.', 'error')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  // Delete all user data
+  const handleDeleteData = async () => {
+    if (!user) return
+    
+    setIsDeleting(true)
+    
+    try {
+      // Call your delete-data API endpoint
+      // This is a placeholder - implement based on your actual API
+      const response = await fetch('/api/user/delete-data', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}` // Use session access token
+        },
+        body: JSON.stringify({ userId: user.id })
+      })
+      
+      if (!response.ok) {
+        throw new Error(`Delete failed: ${response.statusText}`)
+      }
+      
+      showToast('All data deleted successfully', 'success')
+      
+      // Clear client state and navigate/logout as appropriate
+      // You may want to redirect to a confirmation page or logout
+      setTimeout(() => {
+        // Clear local storage, cookies, etc.
+        localStorage.clear()
+        sessionStorage.clear()
+        
+        // Redirect to home or logout
+        window.location.href = '/'
+      }, 2000)
+      
+    } catch (error) {
+      console.error('Delete failed:', error)
+      showToast('Failed to delete data. Please try again.', 'error')
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteConfirm(false)
     }
   }
 
@@ -320,13 +428,27 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Button variant="outline" className="flex items-center gap-2">
-                  <Download className="w-4 h-4" />
-                  Export All Data
+                <Button 
+                  variant="outline" 
+                  className="flex items-center gap-2" 
+                  onClick={handleExportData} 
+                  disabled={isExporting}
+                  aria-label={isExporting ? 'Exporting data...' : 'Export all user data'}
+                  aria-busy={isExporting}
+                >
+                  {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  {isExporting ? 'Exporting...' : 'Export All Data'}
                 </Button>
-                <Button variant="outline" className="flex items-center gap-2 text-destructive">
-                  <Trash2 className="w-4 h-4" />
-                  Delete All Data
+                <Button 
+                  variant="outline" 
+                  className="flex items-center gap-2 text-destructive" 
+                  onClick={() => setShowDeleteConfirm(true)} 
+                  disabled={isDeleting}
+                  aria-label={isDeleting ? 'Deleting data...' : 'Delete all user data'}
+                  aria-busy={isDeleting}
+                >
+                  {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                  {isDeleting ? 'Deleting...' : 'Delete All Data'}
                 </Button>
               </div>
               
@@ -388,6 +510,43 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
           </Button>
         </div>
       </div>
+
+             {/* Delete Confirmation Dialog */}
+       {showDeleteConfirm && (
+         <div 
+           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+           role="dialog"
+           aria-modal="true"
+           aria-labelledby="delete-confirm-title"
+           aria-describedby="delete-confirm-description"
+         >
+           <div className="bg-background p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+             <h3 id="delete-confirm-title" className="text-lg font-semibold mb-4">Confirm Deletion</h3>
+             <p id="delete-confirm-description" className="text-sm text-muted-foreground mb-6">
+               Are you sure you want to delete all your data? This action cannot be undone.
+             </p>
+             <div className="flex justify-end gap-2">
+               <Button 
+                 variant="outline" 
+                 onClick={() => setShowDeleteConfirm(false)}
+                 aria-label="Cancel deletion"
+               >
+                 Cancel
+               </Button>
+               <Button 
+                 variant="destructive" 
+                 onClick={handleDeleteData} 
+                 disabled={isDeleting}
+                 aria-label={isDeleting ? 'Deleting data...' : 'Delete all user data'}
+                 aria-busy={isDeleting}
+               >
+                 {isDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                 {isDeleting ? 'Deleting...' : 'Delete Data'}
+               </Button>
+             </div>
+           </div>
+         </div>
+       )}
     </div>
   )
 }
