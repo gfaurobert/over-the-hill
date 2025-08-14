@@ -89,13 +89,23 @@ export async function POST(request: NextRequest) {
         )
     }
 
-    return NextResponse.json({ encryptionKey })
+    return NextResponse.json(
+      { encryptionKey },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'Surrogate-Control': 'no-store'
+        }
+      }
+    )
 
   } catch (error) {
     console.error('Key generation API error:', error)
     
     // Handle JSON parsing errors
-    if (error instanceof SyntaxError && error.message.includes('JSON')) {
+    if (error instanceof SyntaxError) {
       return NextResponse.json(
         { error: 'Invalid JSON in request body' },
         { status: 400 }

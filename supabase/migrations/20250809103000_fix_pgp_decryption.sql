@@ -1,4 +1,4 @@
--- Fix decryption function to use pgp_sym_decrypt matching the encryption method
+-- Fix encryption and decryption functions to use pgp_sym_encrypt/decrypt
 -- Migration: 20250809103000_fix_pgp_decryption.sql
 -- 
 -- SECURITY NOTE: This migration validates user_key and raises exceptions for null/empty keys
@@ -7,8 +7,34 @@
 -- MIGRATION NOTE: Using CREATE OR REPLACE to preserve dependencies and permissions
 -- instead of DROP ... CASCADE which could remove dependent objects.
 -- 
--- SECURITY NOTE: This function uses SECURITY DEFINER and sets a safe search_path
+-- SECURITY NOTE: These functions use SECURITY DEFINER and set safe search_path
 -- to prevent search path hijacking attacks.
+
+-- Create corrected encryption function using pgp_sym_encrypt
+CREATE OR REPLACE FUNCTION encrypt_sensitive_data(data TEXT, user_key TEXT)
+RETURNS TEXT AS $$
+BEGIN
+    -- SECURITY: Set safe search_path to prevent hijacking attacks
+    -- This ensures all function calls resolve to trusted schemas only
+    SET LOCAL search_path = pg_catalog, pg_temp;
+    
+    -- Use pgp_sym_encrypt for secure encryption with random IV and authentication
+    -- This function automatically generates a random IV and includes integrity protection
+    IF data IS NULL OR data = '' THEN
+        RETURN NULL;
+    END IF;
+    
+    IF user_key IS NULL OR user_key = '' THEN
+        RAISE EXCEPTION 'User key cannot be null or empty for encryption';
+    END IF;
+    
+    RETURN encode(pgp_sym_encrypt(data, user_key), 'base64');
+EXCEPTION
+    WHEN OTHERS THEN
+        -- Fail securely - do not store unencrypted data
+        RAISE EXCEPTION 'Encryption failed: %', SQLERRM;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Create corrected decryption function using pgp_sym_decrypt
 CREATE OR REPLACE FUNCTION decrypt_sensitive_data(encrypted_data TEXT, user_key TEXT)
@@ -77,8 +103,11 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Grant execute permissions
+GRANT EXECUTE ON FUNCTION encrypt_sensitive_data TO authenticated;
 GRANT EXECUTE ON FUNCTION decrypt_sensitive_data TO authenticated;
+GRANT EXECUTE ON FUNCTION encrypt_sensitive_data TO anon;
 GRANT EXECUTE ON FUNCTION decrypt_sensitive_data TO anon;
 
--- Add a comment documenting the function and security measures
+-- Add comments documenting the functions and security measures
+COMMENT ON FUNCTION encrypt_sensitive_data IS 'Encrypts data using pgp_sym_encrypt with secure random IV and authentication. Uses SECURITY DEFINER with safe search_path to prevent hijacking attacks.';
 COMMENT ON FUNCTION decrypt_sensitive_data IS 'Decrypts data encrypted with pgp_sym_encrypt, with fallback for legacy base64-encoded data. Uses SECURITY DEFINER with safe search_path to prevent hijacking attacks.';
