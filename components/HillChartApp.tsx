@@ -50,6 +50,7 @@ import {
   createSnapshot,
   fetchSnapshots,
   loadSnapshot,
+  resetAllCollections,
 } from "@/lib/services/supabaseService"
 
 export interface Dot {
@@ -2063,7 +2064,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             <div className="text-xs text-red-500 mt-1">Dot name cannot exceed 24 characters.</div>
           )}
 
-          <div className="space-y-2 max-h-96 overflow-y-auto">
+          <div className="space-y-2">
             {activeDots.map((dot: Dot) => (
               <DotRow
                 key={dot.id}
@@ -2149,9 +2150,23 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
               </Button>
               <Button
                 variant="destructive"
-                onClick={() => {
-                  /* Logic to reset collections in Supabase will go here */
-                  setShowResetConfirm(false)
+                onClick={async () => {
+                  if (user) {
+                    const success = await resetAllCollections(user.id)
+                    if (success) {
+                      // Clear all local state
+                      setCollections([])
+                      setSnapshotCollections([])
+                      setOriginalCollections([])
+                      setArchivedCollections([])
+                      setSelectedCollection(null)
+                      setShowResetConfirm(false)
+                      // Show success message or redirect
+                      console.log('All collections reset successfully')
+                    } else {
+                      console.error('Failed to reset collections')
+                    }
+                  }
                 }}
               >
                 Reset All

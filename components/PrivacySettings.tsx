@@ -22,6 +22,12 @@ import {
 } from "lucide-react"
 import { privacyService } from "@/lib/services/privacyService"
 import { useAuth } from "./AuthProvider"
+import {
+  fetchCollections,
+  fetchSnapshots,
+  fetchUserPreferences
+} from "@/lib/services/supabaseService"
+import { supabase } from "@/lib/supabaseClient"
 
 interface PrivacySettingsProps {
   onClose: () => void
@@ -171,32 +177,89 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
     setIsExporting(true)
     
     try {
-      // Fetch user data from backend or gather client data
-      // This is a placeholder - implement based on your actual data structure
-      const userData = {
+      // Fetch all user data from the database
+      const [collections, snapshots, userPreferences] = await Promise.all([
+        fetchCollections(user.id, true), // Include archived collections
+        fetchSnapshots(user.id),
+        fetchUserPreferences(user.id)
+      ])
+
+      // Create clean export data with decrypted, user-readable content
+      const cleanCollections = collections.map((collection) => ({
+        id: collection.id,
+        name: collection.name, // Already decrypted
+        status: collection.status,
+        archived_at: collection.archived_at,
+        deleted_at: collection.deleted_at,
+        dots: collection.dots.map(dot => ({
+          id: dot.id,
+          label: dot.label, // Already decrypted
+          x: dot.x,
+          y: dot.y,
+          color: dot.color,
+          size: dot.size,
+          archived: Boolean(dot.archived)
+        }))
+      }))
+
+      // Clean snapshots data
+      const cleanSnapshots = snapshots.map(snapshot => ({
+        date: snapshot.date,
+        collectionId: snapshot.collectionId,
+        collectionName: snapshot.collectionName, // Already decrypted
+        dots: snapshot.dots.map(dot => ({
+          id: dot.id,
+          label: dot.label, // Already decrypted
+          x: dot.x,
+          y: dot.y,
+          color: dot.color,
+          size: dot.size,
+          archived: Boolean(dot.archived)
+        })),
+        timestamp: snapshot.timestamp
+      }))
+
+      // Create comprehensive export data
+      const exportData = {
         userId: user.id,
-        collections: [], // Fetch from your backend
-        dots: [], // Fetch from your backend
-        snapshots: [], // Fetch from your backend
-        preferences: privacyFeatures,
-        exportDate: new Date().toISOString()
+        userEmail: user.email,
+        exportDate: new Date().toISOString(),
+        version: "1.0.0",
+        collections: cleanCollections,
+        snapshots: cleanSnapshots,
+        userPreferences: userPreferences || {
+          selectedCollectionId: null,
+          collectionInput: '',
+          hideCollectionName: false,
+          copyFormat: 'PNG',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        privacyFeatures: privacyFeatures,
+        metadata: {
+          totalCollections: collections.length,
+          totalDots: collections.reduce((sum, c) => sum + c.dots.length, 0),
+          totalSnapshots: snapshots.length,
+          activeCollections: collections.filter(c => c.status === 'active').length,
+          archivedCollections: collections.filter(c => c.status === 'archived').length
+        }
       }
       
       // Serialize to JSON
-      const jsonData = JSON.stringify(userData, null, 2)
+      const jsonData = JSON.stringify(exportData, null, 2)
       
       // Create blob and trigger download
       const blob = new Blob([jsonData], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `over-the-hill-data-${user.id}-${new Date().toISOString().split('T')[0]}.json`
+      a.download = `over-the-hill-complete-data-${user.id}-${new Date().toISOString().split('T')[0]}.json`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
       
-      showToast('Data exported successfully!', 'success')
+      showToast('Complete data exported successfully!', 'success')
     } catch (error) {
       console.error('Export failed:', error)
       showToast('Failed to export data. Please try again.', 'error')
@@ -212,37 +275,171 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
     setIsDeleting(true)
     
     try {
-      // Call your delete-data API endpoint
-      // This is a placeholder - implement based on your actual API
-      const response = await fetch('/api/user/delete-data', {
+      // Step 1: Export all data before deletion
+      showToast('Exporting your data before deletion...', 'info')
+      
+      const [collections, snapshots, userPreferences] = await Promise.all([
+        fetchCollections(user.id, true), // Include archived collections
+        fetchSnapshots(user.id),
+        fetchUserPreferences(user.id)
+      ])
+
+      // Create comprehensive export data
+      const exportData = {
+        userId: user.id,
+        userEmail: user.email,
+        exportDate: new Date().toISOString(),
+        version: "1.0.0",
+        collections: collections.map((collection) => ({
+          id: collection.id,
+          name: collection.name,
+          status: collection.status,
+          archived_at: collection.archived_at,
+          deleted_at: collection.deleted_at,
+          dots: collection.dots.map(dot => ({
+            id: dot.id,
+            label: dot.label,
+            x: dot.x,
+            y: dot.y,
+            color: dot.color,
+            size: dot.size,
+            archived: Boolean(dot.archived)
+          }))
+        })),
+        snapshots: snapshots.map(snapshot => ({
+          date: snapshot.date,
+          collectionId: snapshot.collectionId,
+          collectionName: snapshot.collectionName,
+          dots: snapshot.dots.map(dot => ({
+            id: dot.id,
+            label: dot.label,
+            x: dot.x,
+            y: dot.y,
+            color: dot.color,
+            size: dot.size,
+            archived: Boolean(dot.archived)
+          })),
+          timestamp: snapshot.timestamp
+        })),
+        userPreferences: userPreferences || {
+          selectedCollectionId: null,
+          collectionInput: '',
+          hideCollectionName: false,
+          copyFormat: 'PNG',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        privacyFeatures: privacyFeatures,
+        metadata: {
+          totalCollections: collections.length,
+          totalDots: collections.reduce((sum, c) => sum + c.dots.length, 0),
+          totalSnapshots: snapshots.length,
+          activeCollections: collections.filter(c => c.status === 'active').length,
+          archivedCollections: collections.filter(c => c.status === 'archived').length
+        }
+      }
+
+      // Download the complete data export
+      const jsonData = JSON.stringify(exportData, null, 2)
+      const blob = new Blob([jsonData], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `over-the-hill-complete-data-backup-${user.id}-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      // Step 2: Export collections as separate JSON (for compatibility)
+      const collectionsExport = {
+        collections: collections.map((collection) => ({
+          id: collection.id,
+          name: collection.name,
+          status: collection.status,
+          archived_at: collection.archived_at,
+          deleted_at: collection.deleted_at,
+          dots: collection.dots.map(dot => ({
+            id: dot.id,
+            label: dot.label,
+            x: dot.x,
+            y: dot.y,
+            color: dot.color,
+            size: dot.size,
+            archived: Boolean(dot.archived)
+          }))
+        })),
+        snapshots: snapshots.map(snapshot => ({
+          date: snapshot.date,
+          collectionId: snapshot.collectionId,
+          collectionName: snapshot.collectionName,
+          dots: snapshot.dots.map(dot => ({
+            id: dot.id,
+            label: dot.label,
+            x: dot.x,
+            y: dot.y,
+            color: dot.color,
+            size: dot.size,
+            archived: Boolean(dot.archived)
+          })),
+          timestamp: snapshot.timestamp
+        })),
+        exportDate: new Date().toISOString(),
+        version: "1.0.0",
+      }
+
+      const collectionsJsonData = JSON.stringify(collectionsExport, null, 2)
+      const collectionsBlob = new Blob([collectionsJsonData], { type: 'application/json' })
+      const collectionsUrl = URL.createObjectURL(collectionsBlob)
+      const collectionsA = document.createElement('a')
+      collectionsA.href = collectionsUrl
+      collectionsA.download = `hill-chart-collections-${user.id}-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(collectionsA)
+      collectionsA.click()
+      document.body.removeChild(collectionsA)
+      URL.revokeObjectURL(collectionsUrl)
+
+      showToast('Data backup completed. Proceeding with deletion...', 'info')
+
+      // Step 3: Delete all user data from database
+      const { error: deleteDataError } = await supabase
+        .from("collections")
+        .delete()
+        .eq("user_id", user.id)
+
+      if (deleteDataError) {
+        throw new Error(`Failed to delete user data: ${deleteDataError.message}`)
+      }
+
+      // Step 4: Delete user account
+      const response = await fetch('/api/user/delete-account', {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}` // Use session access token
+          'Authorization': `Bearer ${session?.access_token}`
         },
         body: JSON.stringify({ userId: user.id })
       })
-      
+
       if (!response.ok) {
-        throw new Error(`Delete failed: ${response.statusText}`)
+        throw new Error(`Failed to delete user account: ${response.statusText}`)
       }
+
+      showToast('All data deleted successfully. Logging out...', 'success')
       
-      showToast('All data deleted successfully', 'success')
-      
-      // Clear client state and navigate/logout as appropriate
-      // You may want to redirect to a confirmation page or logout
+      // Step 5: Clear client state and logout
       setTimeout(() => {
         // Clear local storage, cookies, etc.
         localStorage.clear()
         sessionStorage.clear()
         
-        // Redirect to home or logout
+        // Redirect to home page
         window.location.href = '/'
       }, 2000)
       
     } catch (error) {
       console.error('Delete failed:', error)
-      showToast('Failed to delete data. Please try again.', 'error')
+      showToast(`Failed to delete data: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
     } finally {
       setIsDeleting(false)
       setShowDeleteConfirm(false)
@@ -521,10 +718,18 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
            aria-describedby="delete-confirm-description"
          >
            <div className="bg-background p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
-             <h3 id="delete-confirm-title" className="text-lg font-semibold mb-4">Confirm Deletion</h3>
-             <p id="delete-confirm-description" className="text-sm text-muted-foreground mb-6">
-               Are you sure you want to delete all your data? This action cannot be undone.
-             </p>
+             <h3 id="delete-confirm-title" className="text-lg font-semibold mb-4 text-destructive">⚠️ Confirm Complete Data Deletion</h3>
+             <div id="delete-confirm-description" className="text-sm text-muted-foreground mb-6 space-y-3">
+               <p className="font-medium">This action will:</p>
+               <div className="space-y-2">
+                 <p>• <span className="text-green-600 font-medium">Automatically download a complete backup</span> of all your data (collections, dots, snapshots, preferences)</p>
+                 <p>• <span className="text-green-600 font-medium">Download a collections-compatible JSON file</span> for easy re-import</p>
+                 <p>• <span className="text-red-600 font-medium">Permanently delete ALL your data</span> from our servers</p>
+                 <p>• <span className="text-red-600 font-medium">Delete your user account</span> completely</p>
+                 <p>• <span className="text-red-600 font-medium">Log you out</span> and redirect to home page</p>
+               </div>
+               <p className="text-red-600 font-semibold mt-3">⚠️ This action is NOT RECOVERABLE and will permanently remove all your data!</p>
+             </div>
              <div className="flex justify-end gap-2">
                <Button 
                  variant="outline" 

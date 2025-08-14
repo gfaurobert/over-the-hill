@@ -780,3 +780,121 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
     return [] // Unreachable but satisfies linter
   }
 } 
+
+// Reset all collections, dots, and snapshots for a user
+export const resetAllCollections = async (userId: string): Promise<boolean> => {
+  try {
+    const validatedUserId = validateUserId(userId)
+
+    // Delete all collections for the user
+    // Due to CASCADE constraints, this will automatically delete:
+    // - All dots in those collections
+    // - All snapshots for those collections
+    // - All user preferences referencing those collections
+    const { error } = await supabase
+      .from("collections")
+      .delete()
+      .eq("user_id", validatedUserId)
+
+    if (error) {
+      throw error
+    }
+    
+    return true
+  } catch (error) {
+    handleServiceError(error, 'reset all collections')
+    return false
+  }
+} 
+
+// Fetch user preferences for a user
+export const fetchUserPreferences = async (userId: string): Promise<{
+  selectedCollectionId: string | null
+  collectionInput: string
+  hideCollectionName: boolean
+  copyFormat: 'PNG' | 'SVG'
+  createdAt: string
+  updatedAt: string
+} | null> => {
+  try {
+    const validatedUserId = validateUserId(userId)
+
+    const { data, error } = await supabase
+      .from("user_preferences")
+      .select("*")
+      .eq("user_id", validatedUserId)
+      .single()
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No preferences found, return default values
+        return {
+          selectedCollectionId: null,
+          collectionInput: '',
+          hideCollectionName: false,
+          copyFormat: 'PNG',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }
+      }
+      throw error
+    }
+
+    // Decrypt the collection input if it exists
+    let decryptedCollectionInput = ''
+    if (data.collection_input_encrypted) {
+      try {
+        decryptedCollectionInput = await privacyService.decryptData(
+          data.collection_input_encrypted, 
+          validatedUserId
+        )
+      } catch (decryptError) {
+        console.warn('Failed to decrypt collection input, using empty string:', decryptError)
+        decryptedCollectionInput = ''
+      }
+    }
+
+    return {
+      selectedCollectionId: data.selected_collection_id,
+      collectionInput: decryptedCollectionInput,
+      hideCollectionName: data.hide_collection_name,
+      copyFormat: data.copy_format as 'PNG' | 'SVG',
+      createdAt: data.created_at,
+      updatedAt: data.updated_at
+    }
+  } catch (error) {
+    handleServiceError(error, 'fetch user preferences')
+    return null
+  }
+} 
+
+// Delete all user data and the user account
+export const deleteAllUserData = async (userId: string): Promise<boolean> => {
+  try {
+    const validatedUserId = validateUserId(userId)
+
+    // First, delete all collections for the user
+    // Due to CASCADE constraints, this will automatically delete:
+    // - All dots in those collections
+    // - All snapshots for those collections
+    // - All user preferences referencing those collections
+    const { error: collectionsError } = await supabase
+      .from("collections")
+      .delete()
+      .eq("user_id", validatedUserId)
+
+    if (collectionsError) {
+      throw collectionsError
+    }
+
+    // Delete the user account from auth.users
+    // This requires admin privileges, so we'll need to handle this differently
+    // For now, we'll delete all the data and let the user manually delete their account
+    // or implement this through a serverless function with admin privileges
+    
+    return true
+  } catch (error) {
+    handleServiceError(error, 'delete all user data')
+    return false
+  }
+} 
