@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useState, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import { Button } from "./ui/button"
 import { Switch } from "./ui/switch"
@@ -36,21 +36,108 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
     metadataMinimization: true,
     automaticCleanup: false
   })
+  
+  // Ref to store AbortController for cleanup
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  // Helper function to create a timeout promise
+  const createTimeout = (ms: number, abortController: AbortController): Promise<never> => {
+    return new Promise((_, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error(`Operation timed out after ${ms}ms`))
+      }, ms)
+      
+      // Clean up timeout if aborted
+      abortController.signal.addEventListener('abort', () => {
+        clearTimeout(timeoutId)
+        reject(new Error('Operation was aborted'))
+      })
+    })
+  }
+
+  // Helper function to retry with exponential backoff
+  const retryWithBackoff = async (
+    operation: () => Promise<boolean>,
+    maxAttempts: number = 3,
+    abortController: AbortController
+  ): Promise<boolean> => {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        // Race the operation against timeout
+        const result = await Promise.race([
+          operation(),
+          createTimeout(5000, abortController) // 5 second timeout
+        ])
+        
+        if (result) {
+          console.log(`Encryption test succeeded on attempt ${attempt}`)
+          return true
+        } else {
+          throw new Error('Encryption test returned false')
+        }
+      } catch (error) {
+        console.error(`Encryption test attempt ${attempt} failed:`, error)
+        
+        // If this is the last attempt or operation was aborted, throw the error
+        if (attempt === maxAttempts || abortController.signal.aborted) {
+          throw error
+        }
+        
+        // Calculate delay with exponential backoff: 500ms, 1000ms
+        const delay = 500 * Math.pow(2, attempt - 1)
+        console.log(`Retrying in ${delay}ms... (attempt ${attempt}/${maxAttempts})`)
+        
+        // Wait before retry, but check for abort
+        await new Promise(resolve => {
+          const timeoutId = setTimeout(resolve, delay)
+          abortController.signal.addEventListener('abort', () => {
+            clearTimeout(timeoutId)
+            resolve(undefined)
+          })
+        })
+        
+        // Check if aborted during delay
+        if (abortController.signal.aborted) {
+          throw new Error('Operation was aborted during retry delay')
+        }
+      }
+    }
+    
+    throw new Error(`All ${maxAttempts} attempts failed`)
+  }
 
   const testEncryption = async () => {
     if (!user) return
+    
+    // Cancel any previous operation
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    
+    // Create new AbortController for this operation
+    abortControllerRef.current = new AbortController()
+    const abortController = abortControllerRef.current
     
     setIsLoading(true)
     setEncryptionStatus("testing")
     
     try {
-      const isWorking = await privacyService.testEncryption(user.id)
+      const isWorking = await retryWithBackoff(
+        () => privacyService.testEncryption(user.id),
+        3, // 3 attempts
+        abortController
+      )
+      
       setEncryptionStatus(isWorking ? "working" : "failed")
     } catch (error) {
-      console.error("Encryption test failed:", error)
+      console.error("Encryption test failed after all retries:", error)
       setEncryptionStatus("failed")
     } finally {
       setIsLoading(false)
+      // Clean up AbortController
+      if (abortControllerRef.current === abortController) {
+        abortControllerRef.current = null
+      }
     }
   }
 
