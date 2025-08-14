@@ -29,11 +29,13 @@ import {
   X,
   Archive as ArchiveIcon,
   Undo2,
+  Shield,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { useTheme } from "next-themes"
 import SignOutButton from "./SignOutButton"
 import { useAuth } from "./AuthProvider"
+import { PrivacySettings } from "./PrivacySettings"
 import {
   fetchCollections,
   addCollection,
@@ -310,6 +312,22 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false)
   const { theme, setTheme } = useTheme()
   const ellipsisMenuRef = useRef<HTMLDivElement>(null)
+  
+  // Add click-outside-to-close behavior for main ellipsis menu
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (
+        ellipsisMenuRef.current &&
+        !ellipsisMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowEllipsisMenu(false)
+      }
+    }
+    if (showEllipsisMenu) {
+      document.addEventListener('mousedown', handleClick)
+      return () => document.removeEventListener('mousedown', handleClick)
+    }
+  }, [showEllipsisMenu])
   const svgRef = useRef<SVGSVGElement>(null)
   const [copyStatus, setCopyStatus] = useState<"idle" | "copying" | "success" | "error">("idle")
   const [copyFormat, setCopyFormat] = useState<"PNG" | "SVG">("PNG")
@@ -341,6 +359,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     archivedCollectionId?: string 
   } | null>(null)
   const [showArchivedCollectionsModal, setShowArchivedCollectionsModal] = useState(false)
+  const [showPrivacySettings, setShowPrivacySettings] = useState(false)
 
   // Collection editing state
   const [isEditingCollection, setIsEditingCollection] = useState(false)
@@ -940,17 +959,44 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   }
 
   const exportCollections = () => {
-    // Ensure every dot has an explicit archived property
-    const collectionsWithArchived = collections.map((collection) => ({
-      ...collection,
+    // Create clean export data with decrypted, user-readable content
+    const cleanCollections = collections.map((collection) => ({
+      id: collection.id,
+      name: collection.name, // This is already decrypted
+      status: collection.status,
+      archived_at: collection.archived_at,
+      deleted_at: collection.deleted_at,
       dots: collection.dots.map(dot => ({
-        ...dot,
-        archived: dot.archived // force boolean
+        id: dot.id,
+        label: dot.label, // This is already decrypted
+        x: dot.x,
+        y: dot.y,
+        color: dot.color,
+        size: dot.size,
+        archived: Boolean(dot.archived) // Ensure it's a boolean
       }))
     }))
+
+    // Clean snapshots data
+    const cleanSnapshots = snapshots.map(snapshot => ({
+      date: snapshot.date,
+      collectionId: snapshot.collectionId,
+      collectionName: snapshot.collectionName, // Already decrypted
+      dots: snapshot.dots.map(dot => ({
+        id: dot.id,
+        label: dot.label, // Already decrypted
+        x: dot.x,
+        y: dot.y,
+        color: dot.color,
+        size: dot.size,
+        archived: Boolean(dot.archived)
+      })),
+      timestamp: snapshot.timestamp
+    }))
+
     const exportData: ExportData = {
-      collections: collectionsWithArchived,
-      snapshots,
+      collections: cleanCollections,
+      snapshots: cleanSnapshots,
       exportDate: new Date().toISOString(),
       version: "1.0.0",
     }
@@ -1314,10 +1360,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   return (
     <div className="min-h-screen p-4 bg-transparent" style={{ userSelect: isDragging ? "none" : "auto" }}>
-      <div className="max-w-screen-2xl mx-auto grid grid-cols-1 lg:grid-cols-[2.4fr_1.2fr] gap-6">
+      <div className="max-w-screen-2xl mx-auto space-y-6">
         {/* Main Chart Area */}
-        <div className="lg:col-span-1">
-          <Card className="h-full">
+        <div className="grid grid-cols-1 lg:grid-cols-[2.4fr_1.2fr] gap-6">
+          <div className="lg:col-span-1 space-y-6">
+            <Card className="h-[600px]">
             <CardHeader className="flex flex-row items-center justify-between">
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={downloadChartAsPNG}>
@@ -1346,12 +1393,12 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
               </div>
             </CardHeader>
             <CardContent className="p-2">
-              <div className="relative w-full h-96 bg-background -m-2 flex items-center justify-center">
+              <div className="relative w-full h-full bg-background -m-2 flex items-center justify-center">
                 <svg
                   ref={svgRef}
                   width="100%"
                   height="100%"
-                  viewBox="-50 0 700 180" // Adjusted viewBox for padding
+                  viewBox="-50 -100 700 180" // Moved chart down by using negative Y offset
                   className="overflow-visible max-w-full"
                   style={{ userSelect: isDragging ? "none" : "auto" }}
                 >
@@ -1621,7 +1668,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
         {/* Sidebar */}
         <div className="space-y-6">
-          <Card>
+          <Card className="h-[600px]">
             <CardHeader className="flex flex-row items-center justify-between">
               <div className="flex flex-col">
                 <CardTitle className="text-lg">Over The Hill</CardTitle>
@@ -1797,6 +1844,20 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       </button>
                       <SignOutButton className="w-full px-3 py-2 text-sm text-left text-red-600 dark:text-red-500 hover:bg-accent hover:text-accent-foreground flex items-center gap-2" />
 
+                      {/* Privacy Section */}
+                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                        Privacy
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowPrivacySettings(true)
+                          setShowEllipsisMenu(false)
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <Shield className="w-4 h-4" /> Privacy Settings
+                      </button>
+
                       {/* Support Section */}
                       <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
                         Support
@@ -1957,103 +2018,104 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
               </div>
             </CardContent>
           </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Dots</CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  setCollections((prev) =>
-                    prev.map((collection) =>
-                      collection.id === selectedCollection
-                        ? {
-                            ...collection,
-                            dots: [...collection.dots].sort((a, b) => b.x - a.x), // Sort by completion percentage (x position) descending
-                          }
-                        : collection,
-                    ),
-                  )
-                }}
-                className="h-8 w-8 p-0"
-              >
-                <ArrowUpDown className="w-4 h-4 text-gray-500" />
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Input
-                placeholder="Enter dot name and press Enter to add..."
-                value={newDotLabel}
-                onChange={(e) => {
-                  if (e.target.value.length <= 24) {
-                    setNewDotLabel(e.target.value)
-                  }
-                }}
-                onFocus={() => setEditingDotId(null)}
-                onKeyPress={(e) => e.key === "Enter" && addDot()}
-                maxLength={24}
-              />
-              {newDotLabel.length === 24 && editingDotId === null && (
-                <div className="text-xs text-red-500 mt-1">Dot name cannot exceed 24 characters.</div>
-              )}
-
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {activeDots.map((dot: Dot) => (
-                  <DotRow
-                    key={dot.id}
-                    dot={dot}
-                    dotMenuOpen={dotMenuOpen}
-                    setDotMenuOpen={setDotMenuOpen}
-                    setDeleteConfirm={setDeleteConfirm}
-                    updateDot={updateDot}
-                    editingDotId={editingDotId}
-                    setEditingDotId={setEditingDotId}
-                  />
-                ))}
-              </div>
-              {archivedDots.length > 0 && (
-                <>
-                  <div className="border-t border-border my-2" />
-                  <div className="text-xs text-muted-foreground mb-1">Archived</div>
-                  {archivedDots.map((dot: Dot) => (
-                    <div key={dot.id} className="p-3 bg-muted/50 rounded-lg space-y-3 opacity-60 italic">
-                      <div className="flex items-center gap-2">
-                        <Input value={dot.label} disabled className="text-sm flex-1 italic" />
-                        <div className="relative">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setDotMenuOpen(dotMenuOpen === dot.id ? null : dot.id)}
-                            className="h-8 w-8 p-0 border-muted hover:border-accent hover:bg-accent/20"
-                          >
-                            <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-                          </Button>
-                          {dotMenuOpen === dot.id && (
-                            <div className="absolute right-0 top-9 z-50 bg-background border border-border rounded shadow-lg min-w-[140px]">
-                              <button
-                                className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-accent hover:text-accent-foreground"
-                                onClick={async () => {
-                                  setDotMenuOpen(null)
-                                  await updateDot(dot.id, { archived: false })
-                                }}
-                              >
-                                <Undo2 className="w-4 h-4 text-muted-foreground" /> Unarchive
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-
-
-            </CardContent>
-          </Card>
         </div>
       </div>
+      </div>
+
+      {/* Dots Section - Full width below both chart and sidebar */}
+      <Card className="max-w-[1540px] mx-auto mt-7">
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-lg">Dots</CardTitle>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              setCollections((prev) =>
+                prev.map((collection) =>
+                  collection.id === selectedCollection
+                    ? {
+                        ...collection,
+                        dots: [...collection.dots].sort((a, b) => b.x - a.x), // Sort by completion percentage (x position) descending
+                      }
+                    : collection,
+                ),
+              )
+            }}
+            className="h-8 w-8 p-0"
+          >
+            <ArrowUpDown className="w-4 h-4 text-gray-500" />
+          </Button>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Input
+            placeholder="Enter dot name and press Enter to add..."
+            value={newDotLabel}
+            onChange={(e) => {
+              if (e.target.value.length <= 24) {
+                setNewDotLabel(e.target.value)
+              }
+            }}
+            onFocus={() => setEditingDotId(null)}
+            onKeyPress={(e) => e.key === "Enter" && addDot()}
+            maxLength={24}
+          />
+          {newDotLabel.length === 24 && editingDotId === null && (
+            <div className="text-xs text-red-500 mt-1">Dot name cannot exceed 24 characters.</div>
+          )}
+
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {activeDots.map((dot: Dot) => (
+              <DotRow
+                key={dot.id}
+                dot={dot}
+                dotMenuOpen={dotMenuOpen}
+                setDotMenuOpen={setDotMenuOpen}
+                setDeleteConfirm={setDeleteConfirm}
+                updateDot={updateDot}
+                editingDotId={editingDotId}
+                setEditingDotId={setEditingDotId}
+              />
+            ))}
+          </div>
+          {archivedDots.length > 0 && (
+            <>
+              <div className="border-t border-border my-2" />
+              <div className="text-xs text-muted-foreground mb-1">Archived</div>
+              {archivedDots.map((dot: Dot) => (
+                <div key={dot.id} className="p-3 bg-muted/50 rounded-lg space-y-3 opacity-60 italic">
+                  <div className="flex items-center gap-2">
+                    <Input value={dot.label} disabled className="text-sm flex-1 italic" />
+                    <div className="relative">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setDotMenuOpen(dotMenuOpen === dot.id ? null : dot.id)}
+                        className="h-8 w-8 p-0 border-muted hover:border-accent hover:bg-accent/20"
+                      >
+                        <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                      {dotMenuOpen === dot.id && (
+                        <div className="absolute right-0 top-9 z-50 bg-background border border-border rounded shadow-lg min-w-[140px]">
+                          <button
+                            className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-accent hover:text-accent-foreground"
+                            onClick={async () => {
+                              setDotMenuOpen(null)
+                              await updateDot(dot.id, { archived: false })
+                            }}
+                          >
+                            <Undo2 className="w-4 h-4 text-muted-foreground" /> Unarchive
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Modals */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -2318,6 +2380,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             )}
           </div>
         </div>
+      )}
+      
+      {/* Privacy Settings Modal */}
+      {showPrivacySettings && (
+        <PrivacySettings onClose={() => setShowPrivacySettings(false)} />
       )}
     </div>
   )

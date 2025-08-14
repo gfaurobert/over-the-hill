@@ -2,18 +2,31 @@
 -- Migration: 20250724114639_add_collection_archive_support.sql
 
 -- Add status column and timestamp tracking to collections table
-ALTER TABLE collections 
-ADD COLUMN status TEXT NOT NULL DEFAULT 'active' 
-    CHECK (status IN ('active', 'archived', 'deleted')),
-ADD COLUMN archived_at TIMESTAMP WITH TIME ZONE,
-ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE;
+DO $$ 
+BEGIN
+    -- Add status column if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='collections' AND column_name='status') THEN
+        ALTER TABLE collections ADD COLUMN status TEXT NOT NULL DEFAULT 'active';
+        ALTER TABLE collections ADD CONSTRAINT collections_status_check CHECK (status IN ('active', 'archived', 'deleted'));
+    END IF;
+    
+    -- Add archived_at column if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='collections' AND column_name='archived_at') THEN
+        ALTER TABLE collections ADD COLUMN archived_at TIMESTAMP WITH TIME ZONE;
+    END IF;
+    
+    -- Add deleted_at column if it doesn't exist
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='collections' AND column_name='deleted_at') THEN
+        ALTER TABLE collections ADD COLUMN deleted_at TIMESTAMP WITH TIME ZONE;
+    END IF;
+END $$;
 
 -- Performance indexes for efficient status filtering
-CREATE INDEX idx_collections_status ON collections(status);
-CREATE INDEX idx_collections_user_status ON collections(user_id, status);
-CREATE INDEX idx_collections_archived_at ON collections(archived_at) 
+CREATE INDEX IF NOT EXISTS idx_collections_status ON collections(status);
+CREATE INDEX IF NOT EXISTS idx_collections_user_status ON collections(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_collections_archived_at ON collections(archived_at) 
     WHERE archived_at IS NOT NULL;
-CREATE INDEX idx_collections_deleted_at ON collections(deleted_at) 
+CREATE INDEX IF NOT EXISTS idx_collections_deleted_at ON collections(deleted_at) 
     WHERE deleted_at IS NOT NULL;
 
 -- Drop existing collection RLS policies to update them

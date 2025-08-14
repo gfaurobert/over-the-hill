@@ -1,4 +1,4 @@
--- Create Hill Chart Database Schema with Row-Level Security
+-- Create Hill Chart Database Schema with Row-Level Security and Encryption
 -- Migration: 20250710091059_create_hill_chart_schema.sql
 
 -- Drop existing objects to ensure a clean migration
@@ -11,54 +11,118 @@ DROP TABLE IF EXISTS collections CASCADE;
 -- Drop the trigger function if it exists
 DROP FUNCTION IF EXISTS update_updated_at_column CASCADE;
 
--- Create collections table
--- Uses TEXT for ID to match the string-based IDs from the JSON import (e.g., "project-a").
+-- Drop encryption functions if they exist
+DROP FUNCTION IF EXISTS encrypt_sensitive_data CASCADE;
+DROP FUNCTION IF EXISTS decrypt_sensitive_data CASCADE;
+
+-- Enable pgcrypto extension for encryption functions
+CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA public;
+
+-- Create encryption functions for sensitive data
+-- 
+-- SECURITY NOTE: These functions validate user_key and raise exceptions for null/empty keys
+-- to prevent silent security failures and maintain consistent error handling.
+-- 
+-- SECURITY NOTE: All SECURITY DEFINER functions set safe search_path to prevent
+-- search path hijacking attacks.
+CREATE OR REPLACE FUNCTION encrypt_sensitive_data(data TEXT, user_key TEXT)
+RETURNS TEXT AS $$
+BEGIN
+  -- SECURITY: Set safe search_path to prevent hijacking attacks
+  -- This ensures all function calls resolve to trusted schemas only
+  SET LOCAL search_path = pg_catalog, pg_temp;
+  
+  -- Use pgp_sym_encrypt for secure encryption with random IV and authentication
+  -- This function automatically generates a random IV and includes integrity protection
+  IF data IS NULL OR data = '' THEN
+    RETURN NULL;
+  END IF;
+  
+  IF user_key IS NULL OR user_key = '' THEN
+    RAISE EXCEPTION 'User key cannot be null or empty for encryption';
+  END IF;
+  
+  RETURN encode(pgp_sym_encrypt(data, user_key), 'base64');
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Fail securely - do not store unencrypted data
+    RAISE EXCEPTION 'Encryption failed: %', SQLERRM;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE OR REPLACE FUNCTION decrypt_sensitive_data(encrypted_data TEXT, user_key TEXT)
+RETURNS TEXT AS $$
+BEGIN
+  -- SECURITY: Set safe search_path to prevent hijacking attacks
+  -- This ensures all function calls resolve to trusted schemas only
+  SET LOCAL search_path = pg_catalog, pg_temp;
+  
+  -- Use pgp_sym_decrypt for secure decryption with integrity verification
+  IF encrypted_data IS NULL OR encrypted_data = '' THEN
+    RETURN NULL;
+  END IF;
+  
+  IF user_key IS NULL OR user_key = '' THEN
+    RAISE EXCEPTION 'User key cannot be null or empty for decryption';
+  END IF;
+  
+  RETURN pgp_sym_decrypt(decode(encrypted_data, 'base64'), user_key);
+EXCEPTION
+  WHEN OTHERS THEN
+    -- Fail securely - do not return potentially corrupted or unencrypted data
+    RAISE EXCEPTION 'Decryption failed: %', SQLERRM;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Create collections table with encrypted name field
 CREATE TABLE collections (
     id TEXT PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    name TEXT NOT NULL,
+    name_encrypted TEXT NOT NULL, -- Encrypted collection name
+    name_hash TEXT NOT NULL, -- Hash for searching without decryption
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-    UNIQUE(user_id, name)
+    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'archived', 'deleted')),
+    archived_at TIMESTAMP WITH TIME ZONE,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    UNIQUE(user_id, name_hash)
 );
 
--- Create dots table
--- Uses a composite primary key (id, collection_id) because dot IDs are unique within a collection.
--- Column names 'x' and 'y' now match the JSON structure.
+-- Create dots table with encrypted label field
 CREATE TABLE dots (
     id TEXT NOT NULL,
     collection_id TEXT REFERENCES collections(id) ON DELETE CASCADE NOT NULL,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-    label TEXT NOT NULL,
+    label_encrypted TEXT NOT NULL, -- Encrypted dot label
+    label_hash TEXT NOT NULL, -- Hash for searching without decryption
     x DECIMAL(10, 7) NOT NULL,
     y DECIMAL(10, 7) NOT NULL,
     color TEXT NOT NULL DEFAULT '#3b82f6',
     size INTEGER NOT NULL DEFAULT 3 CHECK (size >= 1 AND size <= 5),
+    archived BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
     PRIMARY KEY (id, collection_id)
 );
 
--- Create snapshots table
--- References collections via TEXT ID. Dots data is stored in a flexible JSONB column.
+-- Create snapshots table with encrypted data
 CREATE TABLE snapshots (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
     collection_id TEXT REFERENCES collections(id) ON DELETE CASCADE NOT NULL,
-    collection_name TEXT NOT NULL,
-    -- The 'timestamp' from JSON can be stored here, converted to a timestamptz
+    collection_name_encrypted TEXT NOT NULL, -- Encrypted collection name
     created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-    dots_data JSONB NOT NULL,
+    snapshot_date TEXT NOT NULL,
+    dots_data_encrypted TEXT NOT NULL, -- Encrypted dots data
     UNIQUE(user_id, collection_id, created_at)
 );
 
 -- Create user_preferences table
--- References collections via TEXT ID.
 CREATE TABLE user_preferences (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL UNIQUE,
     selected_collection_id TEXT REFERENCES collections(id) ON DELETE SET NULL,
-    collection_input TEXT DEFAULT '',
+    collection_input_encrypted TEXT DEFAULT '', -- Encrypted collection input
     hide_collection_name BOOLEAN DEFAULT FALSE,
     copy_format TEXT DEFAULT 'PNG' CHECK (copy_format IN ('PNG', 'SVG')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
@@ -66,19 +130,19 @@ CREATE TABLE user_preferences (
 );
 
 -- Create access_requests table
--- Stores access requests from new users (no user_id reference since they're not users yet)
 CREATE TABLE access_requests (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     email TEXT NOT NULL,
-    message TEXT DEFAULT '',
+    message_encrypted TEXT DEFAULT '', -- Encrypted message
     status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'denied')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
     UNIQUE(email)
 );
 
--- Create indexes for performance
+-- Create indexes for performance (excluding encrypted fields)
 CREATE INDEX IF NOT EXISTS idx_collections_user_id ON collections(user_id);
+CREATE INDEX IF NOT EXISTS idx_collections_status ON collections(status);
 CREATE INDEX IF NOT EXISTS idx_dots_collection_id ON dots(collection_id);
 CREATE INDEX IF NOT EXISTS idx_dots_user_id ON dots(user_id);
 CREATE INDEX IF NOT EXISTS idx_snapshots_user_id ON snapshots(user_id);
@@ -87,6 +151,22 @@ CREATE INDEX IF NOT EXISTS idx_snapshots_created_at ON snapshots(created_at);
 CREATE INDEX IF NOT EXISTS idx_access_requests_email ON access_requests(email);
 CREATE INDEX IF NOT EXISTS idx_access_requests_status ON access_requests(status);
 CREATE INDEX IF NOT EXISTS idx_access_requests_created_at ON access_requests(created_at);
+
+-- Create indexes for hash columns used in encrypted field searches
+-- These indexes are crucial for performant searches without decryption
+-- 
+-- Hash-based search indexes enable fast lookups for encrypted data:
+-- - name_hash: Allows searching collections by name without decrypting
+-- - label_hash: Allows searching dots by label without decrypting  
+-- - Composite indexes: Optimize queries that filter by user_id + hash
+-- - Performance: Hash lookups are O(1) vs O(n) for encrypted field scans
+-- 
+-- Note: Snapshots table encrypted fields (collection_name_encrypted, dots_data_encrypted)
+-- are not indexed as they are not used for searching - only for data retrieval and decryption
+CREATE INDEX IF NOT EXISTS idx_collections_name_hash ON collections(name_hash);
+CREATE INDEX IF NOT EXISTS idx_collections_user_id_name_hash ON collections(user_id, name_hash);
+CREATE INDEX IF NOT EXISTS idx_dots_label_hash ON dots(label_hash);
+CREATE INDEX IF NOT EXISTS idx_dots_collection_id_label_hash ON dots(collection_id, label_hash);
 
 -- Create updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()

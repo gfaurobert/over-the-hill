@@ -22,7 +22,15 @@ const requiredEnvVars = [
     example: 'eyJ...',
     required: true,
     note: 'This is CRITICAL for session validation on page refresh'
-  }
+  },
+  {
+    name: 'KEY_MATERIAL',
+    description: 'Encryption key material for data privacy (minimum 32 characters)',
+    example: 'your-secure-random-string-at-least-32-chars-long',
+    required: true,
+    note: 'This is CRITICAL for encrypting user data - use a secure random string'
+  },
+
 ];
 
 console.log('🔍 Checking environment variables...\n');
