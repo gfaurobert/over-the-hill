@@ -128,146 +128,117 @@ class SessionValidationService {
   }
 
   /**
-   * Validates the current session server-side
+   * Validate session with rate limiting awareness and exponential backoff
+   * Can be called with tokens or will use stored tokens
    */
   async validateSession(accessToken?: string, refreshToken?: string): Promise<ValidationResponse> {
-    // Return existing promise if validation is already in progress
-    if (this.validationPromise) {
-      console.log('[SESSION_VALIDATION] Using existing validation promise');
-      return this.validationPromise;
-    }
-
-    const tokens = accessToken && refreshToken ? { accessToken, refreshToken } : this.getStoredTokens();
-    
-    if (!tokens.accessToken) {
-      return {
-        valid: false,
-        error: 'No access token available',
-        code: 'NO_ACCESS_TOKEN'
-      };
-    }
-
-    // Create a stable cache key based on token hash
-    const tokenHash = this.hashToken(tokens.accessToken);
-    const cacheKey = `session_validation_${tokenHash}`;
-    const cached = this.validationCache.get(cacheKey);
-    
-    // Return cached result if still valid
-    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
-      console.log('[SESSION_VALIDATION] Using cached validation result');
-      return cached.result;
-    }
-
-    // Create validation promise with guaranteed accessToken
-    const validationTokens = {
-      accessToken: tokens.accessToken,
-      refreshToken: tokens.refreshToken
-    };
-    this.validationPromise = this.performValidation(validationTokens, cacheKey);
-    
     try {
+      // If no tokens provided, get them from storage
+      if (!accessToken) {
+        const storedTokens = this.getStoredTokens();
+        if (!storedTokens.accessToken) {
+          return {
+            valid: false,
+            error: 'No access token available',
+            code: 'NO_ACCESS_TOKEN'
+          };
+        }
+        accessToken = storedTokens.accessToken;
+        refreshToken = storedTokens.refreshToken;
+      }
+
+      // Check cache first
+      const cacheKey = `${accessToken}_${refreshToken || 'no_refresh'}`;
+      const cached = this.validationCache.get(cacheKey);
+      
+      if (cached && (Date.now() - cached.timestamp) < this.CACHE_DURATION) {
+        console.log('[SESSION_VALIDATION] Using cached validation result');
+        return cached.result;
+      }
+
+      // If there's a pending validation, wait for it
+      if (this.validationPromise) {
+        console.log('[SESSION_VALIDATION] Waiting for pending validation');
+        return await this.validationPromise;
+      }
+
+      // Create new validation promise
+      this.validationPromise = this.performValidation(accessToken, refreshToken);
       const result = await this.validationPromise;
+      
+      // Cache successful results
+      if (result.valid) {
+        this.validationCache.set(cacheKey, { result, timestamp: Date.now() });
+      }
+      
       return result;
+    } catch (error) {
+      console.error('[SESSION_VALIDATION] Validation error:', error);
+      throw error;
     } finally {
       this.validationPromise = null;
     }
   }
 
-  private async performValidation(tokens: { accessToken: string; refreshToken?: string }, cacheKey: string): Promise<ValidationResponse> {
-    try {
-      console.log('[SESSION_VALIDATION] Validating session server-side');
-      
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.REQUEST_TIMEOUT);
+  /**
+   * Perform actual validation with rate limiting handling
+   */
+  private async performValidation(accessToken: string, refreshToken?: string): Promise<ValidationResponse> {
+    const maxRetries = 3;
+    let retryCount = 0;
+    
+    while (retryCount < maxRetries) {
+      try {
+        const response = await fetch('/api/auth/validate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ accessToken, refreshToken })
+        });
 
-      const response = await fetch('/api/auth/validate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          accessToken: tokens.accessToken,
-          refreshToken: tokens.refreshToken
-        }),
-        credentials: 'include',
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      const result: ValidationResponse = await response.json();
-      
-      if (!response.ok) {
-        console.warn(`[SESSION_VALIDATION] Validation failed: ${result.error} (${result.code})`);
-        this.consecutiveFailures++;
-        
-        // If we've had too many failures, clear all auth data
-        if (this.isStuckState()) {
-          console.error('[SESSION_VALIDATION] Too many consecutive failures, clearing auth data');
-          this.clearAllAuthData();
-          return {
-            valid: false,
-            error: 'Authentication data cleared due to repeated failures',
-            code: 'AUTH_DATA_CLEARED'
-          };
+        if (response.status === 429) {
+          // Rate limited - handle gracefully
+          const errorData = await response.json();
+          const retryAfter = errorData.retryAfter || 60;
+          
+          console.warn(`[SESSION_VALIDATION] Rate limited, retrying after ${retryAfter} seconds`);
+          
+          if (retryCount < maxRetries - 1) {
+            // Wait before retry with exponential backoff
+            const waitTime = Math.min(retryAfter * 1000, Math.pow(2, retryCount) * 1000);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            retryCount++;
+            continue;
+          } else {
+            // Max retries reached
+            return {
+              valid: false,
+              error: 'Session validation rate limited. Please try again later.',
+              code: 'RATE_LIMITED'
+            };
+          }
         }
-        
-        // If server-side validation is not available, fall back to client-side validation
-        if (result.code === 'SERVER_VALIDATION_UNAVAILABLE') {
-          console.log('[SESSION_VALIDATION] Falling back to client-side validation');
-          return await this.performClientSideValidation(tokens);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
+
+        const data = await response.json();
+        return data;
+      } catch (error) {
+        console.error(`[SESSION_VALIDATION] Validation attempt ${retryCount + 1} failed:`, error);
         
-        return result;
+        if (retryCount < maxRetries - 1) {
+          // Exponential backoff for other errors
+          const waitTime = Math.pow(2, retryCount) * 1000;
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          retryCount++;
+        } else {
+          throw error;
+        }
       }
-
-      // Success - reset failure counter and cache the result
-      this.consecutiveFailures = 0;
-      this.validationCache.set(cacheKey, {
-        result,
-        timestamp: Date.now()
-      });
-
-      if (result.valid) {
-        console.log(`[SESSION_VALIDATION] Session valid for user: ${result.user?.id}`);
-      } else {
-        console.warn(`[SESSION_VALIDATION] Session invalid: ${result.error}`);
-      }
-
-      return result;
-
-    } catch (error) {
-      console.error('[SESSION_VALIDATION] Validation request failed:', error);
-      this.consecutiveFailures++;
-      
-      // Clear cache on error
-      this.validationCache.delete(cacheKey);
-      
-      // If we've had too many failures, clear all auth data
-      if (this.isStuckState()) {
-        console.error('[SESSION_VALIDATION] Too many consecutive failures, clearing auth data');
-        this.clearAllAuthData();
-        return {
-          valid: false,
-          error: 'Authentication data cleared due to repeated failures',
-          code: 'AUTH_DATA_CLEARED'
-        };
-      }
-      
-      if (error instanceof Error && error.name === 'AbortError') {
-        return {
-          valid: false,
-          error: 'Session validation timeout',
-          code: 'TIMEOUT'
-        };
-      }
-
-      return {
-        valid: false,
-        error: 'Session validation failed',
-        code: 'NETWORK_ERROR'
-      };
     }
+
+    throw new Error('Max validation retries exceeded');
   }
 
   /**

@@ -124,9 +124,12 @@ enabled = true
 site_url = "env(SITE_URL)"
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
 additional_redirect_urls = [
-    "https://overthehill.faurobert.fr",
-    "http://127.0.0.1:3000",
-    "http://localhost:3000"
+    "https://tim.faurobert.fr",
+    "https://tim.faurobert.fr/auth/callback",
+    "https://tim.faurobert.fr/auth/confirm",
+    "https://tim.faurobert.fr/auth/reset-password",
+    "http://127.0.0.1:3002",
+    "http://localhost:3002"
 ]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
@@ -199,13 +202,13 @@ admin_email = "env(SMTP_USERNAME)"
 sender_name = "env(SMTP_SENDER_NAME)"
 
 # Uncomment to customize email template
-# [auth.email.template.invite]
-# subject = "Time is Moneyyy - You have been invited"
-# content_path = "./supabase/templates/invite.html"
+[auth.email.template.invite]
+subject = "Time is Moneyyy - You have been invited"
+content_path = "./supabase/templates/invite.html"
 
-#[auth.email.template.confirmation]
-#subject = "Time is Moneyyy - Confirm your  email address"
-#content_path = "./supabase/templates/confirmation.html"
+[auth.email.template.confirmation]
+subject = "Time is Moneyyy - Confirm your  email address"
+content_path = "./supabase/templates/confirmation.html"
 
 [auth.sms]
 # Allow/disallow new user signups via SMS to your project.
@@ -327,8 +330,8 @@ deno_version = 1
 # secret_key = "env(SECRET_VALUE)"
 
 [analytics]
-enabled = false
-# port = "env(ANALYTICS_PORT)"
+enabled = true
+port = "env(ANALYTICS_PORT)"
 # Configure one of the supported backends: `postgres`, `bigquery`.
 backend = "postgres"
 

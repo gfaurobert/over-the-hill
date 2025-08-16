@@ -9,6 +9,19 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: "default-src 'self' http: https: data: blob: 'unsafe-inline'; script-src 'self' 'unsafe-inline';"
+          }
+        ],
+      },
+    ];
+  },
   webpack: (config, { dev, isServer }) => {
     // Optimize webpack cache to reduce large string serialization warnings
     if (!dev) {

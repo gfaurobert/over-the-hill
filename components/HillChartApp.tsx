@@ -422,7 +422,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       setCollectionInput("")
     }
     // Don't clear data when user is undefined (loading state)
-  }, [user, selectedCollection])
+  }, [user]) // Removed selectedCollection dependency to prevent unnecessary refetching
 
   // Reset snapshot success state after 3 seconds
   useEffect(() => {
@@ -527,6 +527,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   const addDot = async () => {
     if (!newDotLabel.trim() || !selectedCollection || !user) return
+    
+    console.log('[HILL_CHART] Adding dot:', { label: newDotLabel, collectionId: selectedCollection })
+    
     const newDot = {
       id: Date.now().toString(),
       label: newDotLabel,
@@ -536,12 +539,21 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       size: 3,
       archived: false,
     }
-    const addedDot = await addDotService(newDot, selectedCollection, user.id)
-    if (addedDot) {
-      setCollections((prev) =>
-        prev.map((c) => (c.id === selectedCollection ? { ...c, dots: [...c.dots, addedDot] } : c)),
-      )
-      setNewDotLabel("")
+    
+    try {
+      const addedDot = await addDotService(newDot, selectedCollection, user.id)
+      if (addedDot) {
+        console.log('[HILL_CHART] Dot created successfully:', addedDot)
+        // Update local state immediately
+        setCollections((prev) =>
+          prev.map((c) => (c.id === selectedCollection ? { ...c, dots: [...c.dots, addedDot] } : c)),
+        )
+        setNewDotLabel("")
+      } else {
+        console.error('[HILL_CHART] Dot creation returned null')
+      }
+    } catch (error) {
+      console.error('[HILL_CHART] Failed to create dot:', error)
     }
   }
 
@@ -699,8 +711,19 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         try {
           const added = await addCollection(newCollection, user.id)
           if (added) {
+            console.log('[HILL_CHART] Collection created successfully:', added)
+            // Update local state immediately
             setCollections((prev) => [...prev, added])
             setSelectedCollection(added.id)
+            setCollectionInput(added.name)
+            // Clear the input after successful creation
+            setCollectionInput("")
+          } else {
+            console.error('[HILL_CHART] Collection creation returned null')
+            setCollectionNameConflict({
+              name: trimmedName,
+              type: 'active'
+            })
           }
         } catch (error) {
           console.error("Failed to create collection:", error)
@@ -1019,25 +1042,77 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     const file = event.target.files?.[0]
     if (!file || !user) return
 
+    console.log('[HILL_CHART] Starting import process for file:', file.name)
+    
     const reader = new FileReader()
     reader.onload = async (e) => {
       try {
         const fileContent = e.target?.result as string
         const data = JSON.parse(fileContent) as ExportData
-        await importData(data, user.id)
         
-        const fetched = await fetchCollections(user.id)
-        setCollections(fetched)
-        if (fetched.length > 0) {
+        console.log('[HILL_CHART] Parsed import data:', { 
+          collections: data.collections?.length || 0, 
+          snapshots: data.snapshots?.length || 0 
+        })
+        
+        // Import the data
+        const importedCollections = await importData(data, user.id)
+        console.log('[HILL_CHART] Import completed, imported collections:', importedCollections.length)
+        
+        // Add a small delay to ensure database operations are complete
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        
+        // Fetch fresh data from database to ensure state is synchronized
+        console.log('[HILL_CHART] Fetching fresh collections after import...')
+        const fetched = await fetchCollections(user.id, false) // Only active collections
+        
+        console.log('[HILL_CHART] Raw fetched data:', fetched)
+        
+        if (fetched && fetched.length > 0) {
+          console.log('[HILL_CHART] Successfully fetched collections after import:', fetched.length)
+          console.log('[HILL_CHART] First collection details:', fetched[0])
+          
+          setCollections(fetched)
           setSelectedCollection(fetched[0].id)
           setCollectionInput(fetched[0].name)
+          
+          // Also fetch archived collections if any
+          console.log('[HILL_CHART] Fetching archived collections...')
+          const allCollections = await fetchCollections(user.id, true)
+          const archived = allCollections.filter(c => c.status === 'archived')
+          setArchivedCollections(archived)
+          
+          console.log('[HILL_CHART] State updated successfully after import')
+          console.log('[HILL_CHART] Current collections state:', fetched)
+        } else {
+          console.warn('[HILL_CHART] No collections found after import, this might indicate an issue')
+          console.warn('[HILL_CHART] Fetched data:', fetched)
+          console.warn('[HILL_CHART] User ID:', user.id)
+          
+          // Force a refresh of the collections state
+          setCollections([])
+          setSelectedCollection(null)
+          setCollectionInput("")
         }
+        
         setShowImportSuccess(true)
+        
+        // Clear any previous errors
+        setImportError(null)
+        
       } catch (error) {
-        console.error("Import error:", error)
+        console.error("[HILL_CHART] Import error:", error)
         setImportError(error instanceof Error ? error.message : String(error))
+        setShowImportSuccess(false)
       }
     }
+    
+    reader.onerror = () => {
+      console.error('[HILL_CHART] File reading error')
+      setImportError('Failed to read file')
+      setShowImportSuccess(false)
+    }
+    
     reader.readAsText(file)
     setShowEllipsisMenu(false)
     event.target.value = ""

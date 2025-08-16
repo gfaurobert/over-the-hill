@@ -16,7 +16,8 @@ RETURNS TEXT AS $$
 BEGIN
     -- SECURITY: Set safe search_path to prevent hijacking attacks
     -- This ensures all function calls resolve to trusted schemas only
-    SET LOCAL search_path = pg_catalog, pg_temp;
+    -- Include extensions schema to access pgcrypto functions
+    SET LOCAL search_path = pg_catalog, extensions, pg_temp;
     
     -- Use pgp_sym_encrypt for secure encryption with random IV and authentication
     -- This function automatically generates a random IV and includes integrity protection
@@ -45,7 +46,8 @@ DECLARE
 BEGIN
     -- SECURITY: Set safe search_path to prevent hijacking attacks
     -- This ensures all function calls resolve to trusted schemas only
-    SET LOCAL search_path = pg_catalog, pg_temp;
+    -- Include extensions schema to access pgcrypto functions
+    SET LOCAL search_path = pg_catalog, extensions, pg_temp;
     
     -- Handle empty or null data
     IF encrypted_data IS NULL OR encrypted_data = '' THEN

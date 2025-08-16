@@ -42,18 +42,23 @@ export class PrivacyService {
   // Generate a user-specific encryption key from user ID and session
   private async generateUserKey(userId: string): Promise<string> {
     try {
+      console.log('[PRIVACY_SERVICE] Starting key generation for user:', userId)
       // Get user session to ensure we have fresh authentication
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
+        console.error('[PRIVACY_SERVICE] No active session found')
         throw new Error('No active session')
       }
+      console.log('[PRIVACY_SERVICE] Session found, access token length:', session.access_token?.length || 0)
 
       // Check if we're running on the server-side (Node.js environment)
       const isServerSide = typeof window === 'undefined'
+      console.log('[PRIVACY_SERVICE] Environment check - isServerSide:', isServerSide)
       
       if (isServerSide) {
         // Server-side: Access environment variable directly
         const keyMaterial = process.env.KEY_MATERIAL
+        console.log('[PRIVACY_SERVICE] Server-side key material check - exists:', !!keyMaterial, 'length:', keyMaterial?.length || 0)
         if (!keyMaterial) {
           throw new Error('KEY_MATERIAL environment variable is not configured. Please set this environment variable with a secure random string.')
         }
@@ -66,9 +71,12 @@ export class PrivacyService {
         // Use HMAC-SHA256 with domain separation for primary key generation
         const hmac = createHmac('sha256', keyMaterial)
         hmac.update(`primary-key|${userId}`) // Domain-separated message format
-        return hmac.digest('hex').substring(0, 64) // Use first 64 chars for AES-256 (32 bytes)
+        const key = hmac.digest('hex').substring(0, 64) // Use first 64 chars for AES-256 (32 bytes)
+        console.log('[PRIVACY_SERVICE] Server-side key generation successful, key length:', key.length)
+        return key
       } else {
         // Client-side: Call API endpoint to generate key securely
+        console.log('[PRIVACY_SERVICE] Client-side key generation, calling API endpoint...')
         const response = await fetch('/api/auth/generate-key', {
           method: 'POST',
           headers: {
@@ -83,16 +91,19 @@ export class PrivacyService {
 
         if (!response.ok) {
           const errorData = await response.json()
+          console.error('[PRIVACY_SERVICE] API key generation failed:', response.status, errorData)
           throw new Error(`Key generation failed: ${errorData.error || 'Unknown error'}`)
         }
 
         const data = await response.json()
+        console.log('[PRIVACY_SERVICE] Client-side key generation successful, key length:', data.encryptionKey?.length || 0)
         return data.encryptionKey
       }
     } catch (error) {
-      console.error('Failed to generate user key:', error)
+      console.error('[PRIVACY_SERVICE] Failed to generate user key:', error)
       
       // For migration/fallback scenarios, try fallback key generation
+      console.log('[PRIVACY_SERVICE] Trying fallback key generation...')
       return await this.generateFallbackUserKey(userId)
     }
   }
@@ -152,13 +163,18 @@ export class PrivacyService {
 
   // Get or generate user key
   private async getUserKey(userId: string): Promise<string> {
+    console.log('[PRIVACY_SERVICE] Getting user key for user:', userId, 'hasKey:', this.userKeys.has(userId))
     if (!this.userKeys.has(userId)) {
-      console.log('Generating new user key for user:', userId)
+      console.log('[PRIVACY_SERVICE] Generating new user key for user:', userId)
       const userKey = await this.generateUserKey(userId)
       this.userKeys.set(userId, userKey)
-      console.log('Generated user key length:', userKey.length)
+      console.log('[PRIVACY_SERVICE] Generated user key length:', userKey.length)
+    } else {
+      console.log('[PRIVACY_SERVICE] Using cached user key, length:', this.userKeys.get(userId)!.length)
     }
-    return this.userKeys.get(userId)!
+    const key = this.userKeys.get(userId)!
+    console.log('[PRIVACY_SERVICE] Returning user key, length:', key.length)
+    return key
   }
 
   // Create a hash for searching without decryption
@@ -370,7 +386,9 @@ export class PrivacyService {
 
   // Encrypt collection data
   async encryptCollection(collection: { id: string; name: string; userId: string }) {
+    console.log('[PRIVACY_SERVICE] Encrypting collection:', { id: collection.id, name: collection.name, userId: collection.userId })
     const { encrypted, hash } = await this.encryptData(collection.name, collection.userId)
+    console.log('[PRIVACY_SERVICE] Collection encryption successful:', { id: collection.id, hasEncrypted: !!encrypted, hasHash: !!hash })
     return {
       id: collection.id,
       name_encrypted: encrypted,
@@ -381,7 +399,9 @@ export class PrivacyService {
 
   // Decrypt collection data
   async decryptCollection(collection: { id: string; name_encrypted: string; name_hash: string; userId: string }) {
+    console.log('[PRIVACY_SERVICE] Decrypting collection:', { id: collection.id, hasEncryptedName: !!collection.name_encrypted, hasHash: !!collection.name_hash, userId: collection.userId })
     const decryptedName = await this.decryptData(collection.name_encrypted, collection.userId)
+    console.log('[PRIVACY_SERVICE] Collection decryption successful:', { id: collection.id, decryptedName })
     return {
       id: collection.id,
       name: decryptedName,

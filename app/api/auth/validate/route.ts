@@ -4,8 +4,8 @@ import { validateUserId } from '@/lib/validation';
 
 // Rate limiting for session validation
 const validationAttempts = new Map<string, { count: number; lastAttempt: number }>();
-const MAX_VALIDATION_ATTEMPTS = 10;
-const VALIDATION_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_VALIDATION_ATTEMPTS = 30; // Increased from 10 to 30
+const VALIDATION_WINDOW_MS = 60 * 1000; // 1 minute (30 attempts per minute instead of 10)
 
 // Cleanup function to remove stale entries
 function cleanupValidationAttempts() {
@@ -97,14 +97,24 @@ export async function POST(request: NextRequest) {
     
     // Check rate limiting
     if (isRateLimited(clientIP)) {
+      const attempts = validationAttempts.get(clientIP);
+      const resetTime = attempts ? new Date(attempts.lastAttempt + VALIDATION_WINDOW_MS).toISOString() : null;
+      
       console.warn(`[Session Validation] Rate limit exceeded for IP: ${clientIP}`);
       return NextResponse.json(
         { 
           valid: false, 
           error: 'Too many validation attempts. Please try again later.',
-          code: 'RATE_LIMITED'
+          code: 'RATE_LIMITED',
+          resetTime: resetTime,
+          retryAfter: Math.ceil(VALIDATION_WINDOW_MS / 1000) // seconds
         },
-        { status: 429 }
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': Math.ceil(VALIDATION_WINDOW_MS / 1000).toString()
+          }
+        }
       );
     }
 

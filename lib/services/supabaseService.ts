@@ -142,10 +142,12 @@ export const fetchCollections = async (
   includeArchived: boolean = false
 ): Promise<Collection[]> => {
   try {
+    console.log('[FETCH_COLLECTIONS] Starting fetch for user:', userId, 'includeArchived:', includeArchived)
     const validatedUserId = validateUserId(userId)
 
     // Status filter: active + archived if requested, otherwise just active
     const statusFilter = includeArchived ? ['active', 'archived'] : ['active']
+    console.log('[FETCH_COLLECTIONS] Status filter:', statusFilter)
 
     const { data: collectionsData, error: collectionsError } = await supabase
       .from("collections")
@@ -156,8 +158,11 @@ export const fetchCollections = async (
       .order("name_hash", { ascending: true })
 
     if (collectionsError) {
+      console.error('[FETCH_COLLECTIONS] Collections query error:', collectionsError)
       throw collectionsError
     }
+
+    console.log('[FETCH_COLLECTIONS] Raw collections data:', collectionsData)
 
     const { data: dotsData, error: dotsError } = await supabase
       .from("dots")
@@ -165,54 +170,72 @@ export const fetchCollections = async (
       .eq("user_id", validatedUserId)
 
     if (dotsError) {
+      console.error('[FETCH_COLLECTIONS] Dots query error:', dotsError)
       throw dotsError
     }
+
+    console.log('[FETCH_COLLECTIONS] Raw dots data:', dotsData)
 
     // Decrypt collections and dots
     const decryptedCollections = await Promise.all(
       collectionsData.map(async (collection) => {
-        const decryptedCollection = await privacyService.decryptCollection({
-          id: collection.id,
-          name_encrypted: collection.name_encrypted,
-          name_hash: collection.name_hash,
-          userId: validatedUserId
-        })
-
-        const collectionDots = dotsData.filter((dot) => dot.collection_id === collection.id)
-        const decryptedDots = await Promise.all(
-          collectionDots.map(async (dot) => {
-            const decryptedDot = await privacyService.decryptDot({
-              id: dot.id,
-              label_encrypted: dot.label_encrypted,
-              label_hash: dot.label_hash,
-              userId: validatedUserId
-            })
-
-            return {
-              id: dot.id,
-              label: decryptedDot.label,
-              x: dot.x,
-              y: dot.y,
-              color: dot.color,
-              size: dot.size,
-              archived: dot.archived
-            }
+        try {
+          console.log('[FETCH_COLLECTIONS] Decrypting collection:', collection.id)
+          const decryptedCollection = await privacyService.decryptCollection({
+            id: collection.id,
+            name_encrypted: collection.name_encrypted,
+            name_hash: collection.name_hash,
+            userId: validatedUserId
           })
-        )
+          console.log('[FETCH_COLLECTIONS] Successfully decrypted collection:', decryptedCollection)
 
-        return {
-          id: decryptedCollection.id,
-          name: decryptedCollection.name,
-          status: collection.status as 'active' | 'archived' | 'deleted',
-          archived_at: collection.archived_at,
-          deleted_at: collection.deleted_at,
-          dots: decryptedDots
+          const collectionDots = dotsData.filter((dot) => dot.collection_id === collection.id)
+          console.log('[FETCH_COLLECTIONS] Found dots for collection:', collection.id, 'count:', collectionDots.length)
+          
+          const decryptedDots = await Promise.all(
+            collectionDots.map(async (dot) => {
+              try {
+                const decryptedDot = await privacyService.decryptDot({
+                  id: dot.id,
+                  label_encrypted: dot.label_encrypted,
+                  label_hash: dot.label_hash,
+                  userId: validatedUserId
+                })
+                return {
+                  id: dot.id,
+                  label: decryptedDot.label,
+                  x: dot.x,
+                  y: dot.y,
+                  color: dot.color,
+                  size: dot.size,
+                  archived: dot.archived
+                }
+              } catch (dotError) {
+                console.error('[FETCH_COLLECTIONS] Failed to decrypt dot:', dot.id, dotError)
+                throw dotError
+              }
+            })
+          )
+
+          return {
+            id: decryptedCollection.id,
+            name: decryptedCollection.name,
+            status: collection.status as 'active' | 'archived' | 'deleted',
+            archived_at: collection.archived_at,
+            deleted_at: collection.deleted_at,
+            dots: decryptedDots
+          }
+        } catch (collectionError) {
+          console.error('[FETCH_COLLECTIONS] Failed to decrypt collection:', collection.id, collectionError)
+          throw collectionError
         }
       })
     )
 
+    console.log('[FETCH_COLLECTIONS] Successfully decrypted collections:', decryptedCollections.length)
     return decryptedCollections
   } catch (error) {
+    console.error('[FETCH_COLLECTIONS] Overall error:', error)
     handleServiceError(error, 'fetch collections')
     throw error
   }
@@ -221,15 +244,19 @@ export const fetchCollections = async (
 // Add a new collection
 export const addCollection = async (collection: Collection, userId: string): Promise<Collection | null> => {
   try {
+    console.log('[ADD_COLLECTION] Starting collection creation:', { collectionId: collection.id, name: collection.name, userId })
     const validatedUserId = validateUserId(userId)
     const validatedCollection = validateCollection(collection)
+    console.log('[ADD_COLLECTION] Validation passed:', validatedCollection)
 
     // Encrypt collection data
+    console.log('[ADD_COLLECTION] Encrypting collection data...')
     const encryptedCollection = await privacyService.encryptCollection({
       id: validatedCollection.id,
       name: validatedCollection.name,
       userId: validatedUserId
     })
+    console.log('[ADD_COLLECTION] Encryption successful:', { id: encryptedCollection.id, hasEncryptedName: !!encryptedCollection.name_encrypted, hasHash: !!encryptedCollection.name_hash })
 
     const { data, error } = await supabase
       .from("collections")
@@ -243,11 +270,16 @@ export const addCollection = async (collection: Collection, userId: string): Pro
       .select()
 
     if (error) {
+      console.error('[ADD_COLLECTION] Database insert error:', error)
       throw error
     }
     
-    return data ? { ...validatedCollection, dots: [] } : null
+    console.log('[ADD_COLLECTION] Database insert successful:', data)
+    const result = data ? { ...validatedCollection, dots: [] } : null
+    console.log('[ADD_COLLECTION] Returning result:', result)
+    return result
   } catch (error) {
+    console.error('[ADD_COLLECTION] Overall error:', error)
     handleServiceError(error, 'add collection')
     return null
   }
@@ -640,12 +672,24 @@ export const deleteSnapshot = async (userId: string, snapshotId: string): Promis
 // Import data with comprehensive validation and encryption
 export const importData = async (data: ExportData, userId: string): Promise<Collection[]> => {
   try {
+    console.log('[IMPORT_DATA] Starting import for user:', userId)
+    console.log('[IMPORT_DATA] Input data:', { 
+      collections: data.collections?.length || 0, 
+      snapshots: data.snapshots?.length || 0 
+    })
+    
     const validatedUserId = validateUserId(userId)
     const validatedData = validateImportData(data)
+    
+    console.log('[IMPORT_DATA] Validated data:', { 
+      collections: validatedData.collections?.length || 0, 
+      snapshots: validatedData.snapshots?.length || 0 
+    })
 
     const { collections, snapshots } = validatedData
 
     // Prepare and encrypt collection rows
+    console.log('[IMPORT_DATA] Encrypting collections...')
     const collectionRows = await Promise.all(
       collections.map(async (collection) => {
         const encryptedCollection = await privacyService.encryptCollection({
@@ -665,11 +709,16 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
         }
       })
     )
+    
+    console.log('[IMPORT_DATA] Collection rows prepared:', collectionRows.length)
 
     const { error: collectionError } = await supabase.from("collections").upsert(collectionRows)
     if (collectionError) {
+      console.error('[IMPORT_DATA] Collection upsert error:', collectionError)
       throw collectionError
     }
+    
+    console.log('[IMPORT_DATA] Collections imported successfully')
 
     // Prepare and encrypt dot rows - build a single flat array of encryption promises
     // This avoids the problematic flatMap(async ...) pattern that creates nested promises
@@ -699,6 +748,8 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
       }
     }
     
+    console.log('[IMPORT_DATA] Dot encryption promises created:', allDotPromises.length)
+    
     // Process dot encryption promises with controlled concurrency
     // This approach avoids nested promises and gives us control over concurrency
     const encryptionBatchSize = 50 // Control how many dots are encrypted concurrently
@@ -712,28 +763,33 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
       
       // Optional: Log progress for large imports
       if (allDotPromises.length > 100) {
-        console.log(`Encrypted ${Math.min(i + encryptionBatchSize, allDotPromises.length)}/${allDotPromises.length} dots`)
+        console.log(`[IMPORT_DATA] Encrypted ${Math.min(i + encryptionBatchSize, allDotPromises.length)}/${allDotPromises.length} dots`)
       }
     }
+    
+    console.log('[IMPORT_DATA] All dots encrypted, processing in database...')
 
     // Process dots in batches to avoid overwhelming the database
     const batchSize = 100
-    console.log(`Processing ${dotRows.length} dots in batches of ${batchSize}`)
+    console.log(`[IMPORT_DATA] Processing ${dotRows.length} dots in batches of ${batchSize}`)
     
     for (let i = 0; i < dotRows.length; i += batchSize) {
       const batch = dotRows.slice(i, i + batchSize)
-      console.log(`Processing batch ${Math.floor(i/batchSize) + 1}, dots:`, batch.length)
+      console.log(`[IMPORT_DATA] Processing batch ${Math.floor(i/batchSize) + 1}, dots:`, batch.length)
       
       const { error: dotError } = await supabase.from("dots").upsert(batch)
       if (dotError) {
-        console.error('Dot batch error:', dotError)
-        console.error('Batch data sample:', batch[0])
+        console.error('[IMPORT_DATA] Dot batch error:', dotError)
+        console.error('[IMPORT_DATA] Batch data sample:', batch[0])
         throw dotError
       }
     }
+    
+    console.log('[IMPORT_DATA] All dots imported successfully')
 
     // Process snapshots if present
     if (snapshots?.length) {
+      console.log('[IMPORT_DATA] Processing snapshots:', snapshots.length)
       // Filter snapshots to only include those that reference imported collections
       const importedCollectionIds = new Set(collections.map(c => c.id))
       const validSnapshots = snapshots.filter(snapshot => 
@@ -743,7 +799,7 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
       // Log if any snapshots were skipped
       if (validSnapshots.length < snapshots.length) {
         const skippedCount = snapshots.length - validSnapshots.length
-        console.log(`Skipping ${skippedCount} snapshot${skippedCount > 1 ? 's' : ''} for non-existent or renamed collections`)
+        console.log(`[IMPORT_DATA] Skipping ${skippedCount} snapshot${skippedCount > 1 ? 's' : ''} for non-existent or renamed collections`)
       }
       
       // Only process valid snapshots
@@ -767,15 +823,17 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
         const { error: snapshotError } = await supabase.from("snapshots").upsert(snapshotRows)
         if (snapshotError) {
           // This should be rare now since we've filtered invalid snapshots
-          console.warn("Warning: Some snapshots could not be imported:", snapshotError.message)
+          console.warn("[IMPORT_DATA] Warning: Some snapshots could not be imported:", snapshotError.message)
         } else if (validSnapshots.length > 0) {
-          console.log(`Successfully imported ${validSnapshots.length} snapshot${validSnapshots.length > 1 ? 's' : ''}`)
+          console.log(`[IMPORT_DATA] Successfully imported ${validSnapshots.length} snapshot${validSnapshots.length > 1 ? 's' : ''}`)
         }
       }
     }
 
+    console.log('[IMPORT_DATA] Import completed successfully, returning collections:', collections.length)
     return collections
   } catch (error) {
+    console.error('[IMPORT_DATA] Import failed:', error)
     handleServiceError(error, 'import data')
     return [] // Unreachable but satisfies linter
   }
