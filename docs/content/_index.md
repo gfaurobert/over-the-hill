@@ -12,7 +12,8 @@ Read [Shape Up: Show Porgress (Chapt. 13)](https://basecamp.com/shapeup/3.4-chap
 
 Over The Hill is a web and desktop application designed to visualize project progress using a "Hill Chart." A Hill Chart is a simple yet powerful tool for tracking the status of tasks or features, categorizing them into two main phases: "Up the Hill" (discovery/problem-solving) and "Down the Hill" (execution/implementation).
 
- ![](images/image_readme.png)
+[Introduction Video](https://youtu.be/SvkJ-YrMq6o)
+{{< youtube SvkJ-YrMq6o >}}
   
 
 This app allows you to:

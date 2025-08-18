@@ -1,6 +1,5 @@
 ---
-title: Getting Started
-date: 2025-06-21
+title: Hello
 draft: true
 description: Welcome to your first page with the modern Hugo theme
 tags:
