@@ -7,7 +7,7 @@
   - Write unit tests for cache operations and TTL behavior
   - _Requirements: 3.1, 3.3_
 
-- [ ] 2. Implement cache invalidation system
+- [x] 2. Implement cache invalidation system
   - Create InvalidationRule interface and pattern matching logic
   - Implement pattern-based cache key invalidation (e.g., `user:123:collections:*`)
   - Add cascade invalidation for related data (collections → dots → snapshots)

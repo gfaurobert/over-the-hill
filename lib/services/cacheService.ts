@@ -5,6 +5,8 @@
  * to solve data synchronization issues between local cache and remote database.
  */
 
+import { getInvalidationRuleManager } from './cacheInvalidationRules'
+
 // Cache entry interface with metadata
 export interface CacheEntry<T> {
   key: string
@@ -165,8 +167,37 @@ class IndexedDBStorage implements StorageBackend {
   }
 }
 
+// Cache manager interface
+export interface ICacheManager {
+  // Cache operations
+  get<T>(key: string): Promise<T | null>
+  set<T>(key: string, data: T, ttl?: number): Promise<void>
+  invalidate(key: string | string[]): Promise<void>
+  clear(): Promise<void>
+  
+  // Pattern-based invalidation
+  invalidatePattern(pattern: string): Promise<void>
+  invalidateWithCascade(key: string, entityType: CacheEntry<any>['entityType'], entityId?: string): Promise<void>
+  invalidateUser(userId: string): Promise<void>
+  invalidateSession(sessionId: string): Promise<void>
+  
+  // Freshness validation
+  isStale(key: string): Promise<boolean>
+  validateFreshness(key: string): Promise<boolean>
+  refreshStaleData(): Promise<void>
+  
+  // Metadata management
+  updateMetadata(updates: Partial<CacheMetadata>): Promise<void>
+  
+  // Rule-based invalidation
+  invalidateByOperation(operation: string, userId: string, entityId?: string, entityType?: CacheEntry<any>['entityType']): Promise<void>
+  
+  // Lifecycle
+  destroy(): void
+}
+
 // Main cache manager class
-export class CacheManager {
+export class CacheManager implements ICacheManager {
   private config: CacheConfig
   private storage: StorageBackend
   private cleanupTimer: NodeJS.Timeout | null = null
@@ -359,6 +390,188 @@ export class CacheManager {
     }
   }
 
+  // Invalidate cache keys matching a pattern
+  async invalidatePattern(pattern: string): Promise<void> {
+    try {
+      console.log(`[CACHE] Invalidating pattern: ${pattern}`)
+      const keys = await this.storage.keys()
+      const cacheKeys = keys.filter(key => key.startsWith(this.config.storagePrefix))
+      
+      // Convert pattern to regex
+      const regex = this.patternToRegex(pattern)
+      const matchingKeys: string[] = []
+      
+      for (const cacheKey of cacheKeys) {
+        if (cacheKey.endsWith('metadata')) continue // Skip metadata
+        
+        // Remove prefix to get original key
+        const originalKey = cacheKey.replace(this.config.storagePrefix, '')
+        
+        if (regex.test(originalKey)) {
+          matchingKeys.push(cacheKey)
+        }
+      }
+      
+      // Remove matching keys
+      for (const cacheKey of matchingKeys) {
+        await this.storage.removeItem(cacheKey)
+      }
+      
+      console.log(`[CACHE] Invalidated ${matchingKeys.length} keys matching pattern: ${pattern}`)
+    } catch (error) {
+      console.error(`[CACHE] Failed to invalidate pattern ${pattern}:`, error)
+    }
+  }
+
+  // Convert glob-like pattern to regex
+  private patternToRegex(pattern: string): RegExp {
+    // Escape special regex characters except * and ?
+    let regexPattern = pattern
+      .replace(/[.+^${}()|[\]\\]/g, '\\$&')
+      .replace(/\*/g, '.*')
+      .replace(/\?/g, '.')
+    
+    return new RegExp(`^${regexPattern}$`)
+  }
+
+  // Invalidate with cascade rules
+  async invalidateWithCascade(key: string, entityType: CacheEntry<any>['entityType'], entityId?: string): Promise<void> {
+    try {
+      console.log(`[CACHE] Invalidating with cascade: ${key}, type: ${entityType}, id: ${entityId}`)
+      
+      // First invalidate the specific key
+      await this.invalidate(key)
+      
+      // Apply cascade rules based on entity type
+      const cascadePatterns = this.getCascadePatterns(entityType, entityId)
+      
+      for (const pattern of cascadePatterns) {
+        await this.invalidatePattern(pattern)
+      }
+      
+      console.log(`[CACHE] Cascade invalidation complete for ${key}`)
+    } catch (error) {
+      console.error(`[CACHE] Failed to invalidate with cascade ${key}:`, error)
+    }
+  }
+
+  // Get cascade patterns for entity type
+  private getCascadePatterns(entityType: CacheEntry<any>['entityType'], entityId?: string): string[] {
+    const patterns: string[] = []
+    
+    switch (entityType) {
+      case 'collection':
+        if (entityId) {
+          // When a collection changes, invalidate its dots and related snapshots
+          patterns.push(`*:dots:${entityId}*`)
+          patterns.push(`*:snapshots:${entityId}*`)
+          patterns.push(`*:collection:${entityId}*`)
+        }
+        // Also invalidate collection lists
+        patterns.push('*:collections*')
+        break
+        
+      case 'dot':
+        if (entityId) {
+          // When a dot changes, invalidate the parent collection
+          patterns.push(`*:collection:*${entityId}*`)
+          patterns.push(`*:collections*`)
+        }
+        break
+        
+      case 'snapshot':
+        // Snapshots don't typically cascade to other entities
+        break
+        
+      case 'user_preferences':
+        // User preferences might affect UI state caching
+        patterns.push('*:ui:*')
+        break
+    }
+    
+    return patterns
+  }
+
+  // Invalidate all cache for a specific user
+  async invalidateUser(userId: string): Promise<void> {
+    try {
+      console.log(`[CACHE] Invalidating all cache for user: ${userId}`)
+      await this.invalidatePattern(`${userId}:*`)
+      console.log(`[CACHE] User cache invalidation complete for: ${userId}`)
+    } catch (error) {
+      console.error(`[CACHE] Failed to invalidate user cache for ${userId}:`, error)
+    }
+  }
+
+  // Invalidate all cache for a specific session
+  async invalidateSession(sessionId: string): Promise<void> {
+    try {
+      console.log(`[CACHE] Invalidating all cache for session: ${sessionId}`)
+      
+      // Get all cache keys and check their metadata
+      const keys = await this.storage.keys()
+      const cacheKeys = keys.filter(key => key.startsWith(this.config.storagePrefix) && !key.endsWith('metadata'))
+      
+      const keysToInvalidate: string[] = []
+      
+      for (const cacheKey of cacheKeys) {
+        try {
+          const entryStr = await this.storage.getItem(cacheKey)
+          if (entryStr) {
+            const entry: CacheEntry<any> = JSON.parse(this.decompressData(entryStr))
+            // Note: We don't store sessionId in cache entries currently,
+            // but this structure allows for future enhancement
+            keysToInvalidate.push(cacheKey)
+          }
+        } catch (error) {
+          // Remove corrupted entries
+          keysToInvalidate.push(cacheKey)
+        }
+      }
+      
+      // Remove all keys (for now, since we don't track sessionId in entries)
+      for (const cacheKey of keysToInvalidate) {
+        await this.storage.removeItem(cacheKey)
+      }
+      
+      console.log(`[CACHE] Session cache invalidation complete for: ${sessionId}`)
+    } catch (error) {
+      console.error(`[CACHE] Failed to invalidate session cache for ${sessionId}:`, error)
+    }
+  }
+
+  // Refresh stale data by invalidating expired entries
+  async refreshStaleData(): Promise<void> {
+    try {
+      console.log('[CACHE] Refreshing stale data')
+      const keys = await this.storage.keys()
+      const cacheKeys = keys.filter(key => key.startsWith(this.config.storagePrefix) && !key.endsWith('metadata'))
+      
+      let refreshedCount = 0
+      
+      for (const cacheKey of cacheKeys) {
+        try {
+          const entryStr = await this.storage.getItem(cacheKey)
+          if (entryStr) {
+            const entry: CacheEntry<any> = JSON.parse(this.decompressData(entryStr))
+            if (this.isExpired(entry)) {
+              await this.storage.removeItem(cacheKey)
+              refreshedCount++
+            }
+          }
+        } catch (error) {
+          // Remove corrupted entries
+          await this.storage.removeItem(cacheKey)
+          refreshedCount++
+        }
+      }
+      
+      console.log(`[CACHE] Refreshed ${refreshedCount} stale entries`)
+    } catch (error) {
+      console.error('[CACHE] Failed to refresh stale data:', error)
+    }
+  }
+
   // Clear all cache
   async clear(): Promise<void> {
     try {
@@ -433,6 +646,35 @@ export class CacheManager {
     if (this.metadata) {
       this.metadata = { ...this.metadata, ...updates }
       await this.saveMetadata()
+    }
+  }
+
+  // Invalidate cache based on operation and rules
+  async invalidateByOperation(
+    operation: string,
+    userId: string,
+    entityId?: string,
+    entityType?: CacheEntry<any>['entityType']
+  ): Promise<void> {
+    try {
+      console.log(`[CACHE] Invalidating by operation: ${operation}, user: ${userId}, entity: ${entityId}`)
+      
+      const ruleManager = getInvalidationRuleManager()
+      const patterns = ruleManager.getInvalidationPatterns(operation, entityId, userId)
+      
+      for (const pattern of patterns) {
+        await this.invalidatePattern(pattern)
+      }
+      
+      // If entity type is provided, also run cascade invalidation
+      if (entityType && entityId) {
+        const cacheKey = `user:${userId}:${entityType}:${entityId}`
+        await this.invalidateWithCascade(cacheKey, entityType, entityId)
+      }
+      
+      console.log(`[CACHE] Operation-based invalidation complete: ${operation}`)
+    } catch (error) {
+      console.error(`[CACHE] Failed to invalidate by operation ${operation}:`, error)
     }
   }
 

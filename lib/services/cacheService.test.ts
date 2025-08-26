@@ -194,6 +194,136 @@ export class CacheServiceTester {
     })
   }
 
+  // Test pattern-based invalidation
+  async testPatternInvalidation(): Promise<void> {
+    await this.runTest('Pattern invalidation with wildcards', async () => {
+      const testData = { id: '1', name: 'Test' }
+      
+      // Set multiple keys with similar patterns
+      await this.cacheManager.set('user:123:collections:active', testData)
+      await this.cacheManager.set('user:123:collections:archived', testData)
+      await this.cacheManager.set('user:123:dots:collection-1', testData)
+      await this.cacheManager.set('user:456:collections:active', testData)
+      
+      // Invalidate all collections for user 123
+      await this.cacheManager.invalidatePattern('user:123:collections:*')
+      
+      // Check results
+      const result1 = await this.cacheManager.get('user:123:collections:active')
+      const result2 = await this.cacheManager.get('user:123:collections:archived')
+      const result3 = await this.cacheManager.get('user:123:dots:collection-1')
+      const result4 = await this.cacheManager.get('user:456:collections:active')
+      
+      if (result1 !== null || result2 !== null) {
+        throw new Error('User 123 collections should be invalidated')
+      }
+      
+      if (result3 === null || result4 === null) {
+        throw new Error('Other keys should remain valid')
+      }
+    })
+
+    await this.runTest('User-wide invalidation', async () => {
+      const testData = { id: '1', name: 'Test' }
+      
+      // Set keys for multiple users
+      await this.cacheManager.set('user:123:collections', testData)
+      await this.cacheManager.set('user:123:dots', testData)
+      await this.cacheManager.set('user:456:collections', testData)
+      
+      // Invalidate all data for user 123
+      await this.cacheManager.invalidateUser('123')
+      
+      // Check results
+      const result1 = await this.cacheManager.get('user:123:collections')
+      const result2 = await this.cacheManager.get('user:123:dots')
+      const result3 = await this.cacheManager.get('user:456:collections')
+      
+      if (result1 !== null || result2 !== null) {
+        throw new Error('User 123 data should be invalidated')
+      }
+      
+      if (result3 === null) {
+        throw new Error('User 456 data should remain valid')
+      }
+    })
+
+    await this.runTest('Cascade invalidation', async () => {
+      const testData = { id: '1', name: 'Test' }
+      const collectionId = 'collection-123'
+      
+      // Set related data
+      await this.cacheManager.set(`user:123:collection:${collectionId}`, testData)
+      await this.cacheManager.set(`user:123:dots:${collectionId}`, testData)
+      await this.cacheManager.set(`user:123:snapshots:${collectionId}`, testData)
+      await this.cacheManager.set('user:123:collections', testData)
+      
+      // Invalidate collection with cascade
+      await this.cacheManager.invalidateWithCascade(
+        `user:123:collection:${collectionId}`,
+        'collection',
+        collectionId
+      )
+      
+      // Check that related data is also invalidated
+      const collectionResult = await this.cacheManager.get(`user:123:collection:${collectionId}`)
+      const collectionsResult = await this.cacheManager.get('user:123:collections')
+      
+      if (collectionResult !== null || collectionsResult !== null) {
+        throw new Error('Collection and collections list should be invalidated')
+      }
+    })
+
+    await this.runTest('Stale data refresh', async () => {
+      const testData = { id: '1', name: 'Test' }
+      const shortTTL = 50
+      
+      // Set data with short TTL
+      await this.cacheManager.set('user:123:test1', testData, shortTTL)
+      await this.cacheManager.set('user:123:test2', testData, 10000) // Long TTL
+      
+      // Wait for first item to expire
+      await new Promise(resolve => setTimeout(resolve, shortTTL + 20))
+      
+      // Refresh stale data
+      await this.cacheManager.refreshStaleData()
+      
+      // Check results
+      const result1 = await this.cacheManager.get('user:123:test1')
+      const result2 = await this.cacheManager.get('user:123:test2')
+      
+      if (result1 !== null) {
+        throw new Error('Stale data should be removed')
+      }
+      
+      if (result2 === null) {
+        throw new Error('Fresh data should remain')
+      }
+    })
+
+    await this.runTest('Rule-based invalidation', async () => {
+      const testData = { id: '1', name: 'Test' }
+      const userId = '123'
+      const collectionId = 'collection-456'
+      
+      // Set up related cache entries
+      await this.cacheManager.set(`user:${userId}:collections`, testData)
+      await this.cacheManager.set(`user:${userId}:collection:${collectionId}`, testData)
+      await this.cacheManager.set(`user:${userId}:dots:${collectionId}`, testData)
+      
+      // Invalidate using collection update operation
+      await this.cacheManager.invalidateByOperation('collection:update', userId, collectionId, 'collection')
+      
+      // Check that related data is invalidated
+      const collectionsResult = await this.cacheManager.get(`user:${userId}:collections`)
+      const collectionResult = await this.cacheManager.get(`user:${userId}:collection:${collectionId}`)
+      
+      if (collectionsResult !== null || collectionResult !== null) {
+        throw new Error('Related data should be invalidated by operation rules')
+      }
+    })
+  }
+
   // Test entity type detection
   async testEntityTypes(): Promise<void> {
     await this.runTest('Collection entity type', async () => {
@@ -271,6 +401,9 @@ export class CacheServiceTester {
     
     console.log('\n⏰ Testing TTL behavior...')
     await this.testTTLBehavior()
+    
+    console.log('\n🎯 Testing pattern invalidation...')
+    await this.testPatternInvalidation()
     
     console.log('\n🏷️ Testing entity types...')
     await this.testEntityTypes()
