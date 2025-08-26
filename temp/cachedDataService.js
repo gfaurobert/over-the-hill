@@ -1,0 +1,427 @@
+"use strict";
+/**
+ * Cached Data Service - Cache-aware wrapper for Supabase operations
+ *
+ * Provides cache-first data fetching with fallback to database,
+ * automatic cache invalidation on mutations, and force refresh capabilities.
+ */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
+var _a;
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.validateCacheFreshness = exports.clearUserCache = exports.refreshCache = exports.resetAllCollections = exports.importData = exports.fetchUserPreferences = exports.deleteSnapshot = exports.loadSnapshot = exports.fetchSnapshots = exports.createSnapshot = exports.deleteDot = exports.updateDot = exports.addDot = exports.deleteCollection = exports.unarchiveCollection = exports.archiveCollection = exports.updateCollection = exports.addCollection = exports.fetchCollections = exports.getCachedDataService = exports.CachedDataService = void 0;
+const cacheService_1 = require("./cacheService");
+const supabaseService = __importStar(require("./supabaseService"));
+// Cache key generators
+const CacheKeys = {
+    collections: (userId, includeArchived = false) => `user:${userId}:collections${includeArchived ? ':archived' : ''}`,
+    collection: (userId, collectionId) => `user:${userId}:collection:${collectionId}`,
+    snapshots: (userId) => `user:${userId}:snapshots`,
+    userPreferences: (userId) => `user:${userId}:preferences`,
+    collectionDots: (userId, collectionId) => `user:${userId}:collection:${collectionId}:dots`
+};
+// Cache TTL configurations (in milliseconds)
+const CacheTTL = {
+    collections: 5 * 60 * 1000, // 5 minutes
+    snapshots: 10 * 60 * 1000, // 10 minutes  
+    userPreferences: 30 * 60 * 1000, // 30 minutes
+    shortLived: 2 * 60 * 1000 // 2 minutes for frequently changing data
+};
+/**
+ * Cache-aware data service that wraps Supabase operations
+ */
+class CachedDataService {
+    constructor() {
+        this.cacheManager = (0, cacheService_1.getCacheManager)();
+    }
+    // Collections operations
+    async fetchCollections(userId, includeArchived = false, options = {}) {
+        const { forceRefresh = false, useCache = true, ttl = CacheTTL.collections } = options;
+        const cacheKey = CacheKeys.collections(userId, includeArchived);
+        try {
+            // Check cache first unless force refresh is requested
+            if (useCache && !forceRefresh) {
+                const cached = await this.cacheManager.get(cacheKey);
+                if (cached) {
+                    console.log(`[CACHED_DATA] Cache hit for collections: ${cacheKey}`);
+                    return cached;
+                }
+            }
+            // Fetch from database
+            console.log(`[CACHED_DATA] Fetching collections from database: ${cacheKey}`);
+            const collections = await supabaseService.fetchCollections(userId, includeArchived);
+            // Cache the result
+            if (useCache) {
+                await this.cacheManager.set(cacheKey, collections, ttl);
+            }
+            return collections;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to fetch collections:', error);
+            // Try to return stale cache data as fallback
+            if (useCache) {
+                const staleData = await this.cacheManager.get(cacheKey);
+                if (staleData) {
+                    console.warn('[CACHED_DATA] Returning stale cache data for collections');
+                    return staleData;
+                }
+            }
+            throw error;
+        }
+    }
+    async addCollection(collection, userId) {
+        try {
+            const result = await supabaseService.addCollection(collection, userId);
+            if (result) {
+                // Invalidate collections cache
+                await this.cacheManager.invalidateByOperation('collection:create', userId, collection.id, 'collection');
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to add collection:', error);
+            throw error;
+        }
+    }
+    async updateCollection(collectionId, newName, userId) {
+        try {
+            const result = await supabaseService.updateCollection(collectionId, newName, userId);
+            if (result) {
+                // Invalidate related cache entries
+                await this.cacheManager.invalidateByOperation('collection:update', userId, collectionId, 'collection');
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to update collection:', error);
+            throw error;
+        }
+    }
+    async archiveCollection(collectionId, userId) {
+        try {
+            const result = await supabaseService.archiveCollection(collectionId, userId);
+            if (result) {
+                // Invalidate collections cache (both regular and archived views)
+                await this.cacheManager.invalidateByOperation('collection:archive', userId, collectionId, 'collection');
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to archive collection:', error);
+            throw error;
+        }
+    }
+    async unarchiveCollection(collectionId, userId) {
+        try {
+            const result = await supabaseService.unarchiveCollection(collectionId, userId);
+            if (result) {
+                // Invalidate collections cache (both regular and archived views)
+                await this.cacheManager.invalidateByOperation('collection:unarchive', userId, collectionId, 'collection');
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to unarchive collection:', error);
+            throw error;
+        }
+    }
+    async deleteCollection(collectionId, userId) {
+        try {
+            const result = await supabaseService.deleteCollection(collectionId, userId);
+            if (result) {
+                // Invalidate all related cache entries
+                await this.cacheManager.invalidateByOperation('collection:delete', userId, collectionId, 'collection');
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to delete collection:', error);
+            throw error;
+        }
+    }
+    // Dot operations
+    async addDot(dot, collectionId, userId) {
+        try {
+            const result = await supabaseService.addDot(dot, collectionId, userId);
+            if (result) {
+                // Invalidate collection and dots cache
+                await this.cacheManager.invalidateByOperation('dot:create', userId, dot.id, 'dot');
+                // Also invalidate the specific collection cache
+                const collectionCacheKey = CacheKeys.collection(userId, collectionId);
+                await this.cacheManager.invalidate(collectionCacheKey);
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to add dot:', error);
+            throw error;
+        }
+    }
+    async updateDot(dot, userId) {
+        try {
+            const result = await supabaseService.updateDot(dot, userId);
+            if (result) {
+                // Invalidate dot-related cache
+                await this.cacheManager.invalidateByOperation('dot:update', userId, dot.id, 'dot');
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to update dot:', error);
+            throw error;
+        }
+    }
+    async deleteDot(dotId, userId) {
+        try {
+            const result = await supabaseService.deleteDot(dotId, userId);
+            if (result.success) {
+                // Invalidate dot-related cache
+                await this.cacheManager.invalidateByOperation('dot:delete', userId, dotId, 'dot');
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to delete dot:', error);
+            throw error;
+        }
+    }
+    // Snapshot operations
+    async createSnapshot(userId, collectionId, collectionName, dots) {
+        try {
+            const result = await supabaseService.createSnapshot(userId, collectionId, collectionName, dots);
+            if (result) {
+                // Invalidate snapshots cache
+                await this.cacheManager.invalidateByOperation('snapshot:create', userId, collectionId, 'snapshot');
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to create snapshot:', error);
+            throw error;
+        }
+    }
+    async fetchSnapshots(userId, options = {}) {
+        const { forceRefresh = false, useCache = true, ttl = CacheTTL.snapshots } = options;
+        const cacheKey = CacheKeys.snapshots(userId);
+        try {
+            // Check cache first unless force refresh is requested
+            if (useCache && !forceRefresh) {
+                const cached = await this.cacheManager.get(cacheKey);
+                if (cached) {
+                    console.log(`[CACHED_DATA] Cache hit for snapshots: ${cacheKey}`);
+                    return cached;
+                }
+            }
+            // Fetch from database
+            console.log(`[CACHED_DATA] Fetching snapshots from database: ${cacheKey}`);
+            const snapshots = await supabaseService.fetchSnapshots(userId);
+            // Cache the result
+            if (useCache) {
+                await this.cacheManager.set(cacheKey, snapshots, ttl);
+            }
+            return snapshots;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to fetch snapshots:', error);
+            // Try to return stale cache data as fallback
+            if (useCache) {
+                const staleData = await this.cacheManager.get(cacheKey);
+                if (staleData) {
+                    console.warn('[CACHED_DATA] Returning stale cache data for snapshots');
+                    return staleData;
+                }
+            }
+            throw error;
+        }
+    }
+    async loadSnapshot(userId, snapshotId) {
+        try {
+            // Snapshots are typically loaded once, so we don't cache individual snapshots
+            // but we could add caching here if needed
+            return await supabaseService.loadSnapshot(userId, snapshotId);
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to load snapshot:', error);
+            throw error;
+        }
+    }
+    async deleteSnapshot(userId, snapshotId) {
+        try {
+            const result = await supabaseService.deleteSnapshot(userId, snapshotId);
+            if (result) {
+                // Invalidate snapshots cache
+                await this.cacheManager.invalidateByOperation('snapshot:delete', userId, snapshotId, 'snapshot');
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to delete snapshot:', error);
+            throw error;
+        }
+    }
+    // User preferences operations
+    async fetchUserPreferences(userId, options = {}) {
+        const { forceRefresh = false, useCache = true, ttl = CacheTTL.userPreferences } = options;
+        const cacheKey = CacheKeys.userPreferences(userId);
+        try {
+            // Check cache first unless force refresh is requested
+            if (useCache && !forceRefresh) {
+                const cached = await this.cacheManager.get(cacheKey);
+                if (cached) {
+                    console.log(`[CACHED_DATA] Cache hit for user preferences: ${cacheKey}`);
+                    return cached;
+                }
+            }
+            // Fetch from database
+            console.log(`[CACHED_DATA] Fetching user preferences from database: ${cacheKey}`);
+            const preferences = await supabaseService.fetchUserPreferences(userId);
+            // Cache the result
+            if (useCache && preferences) {
+                await this.cacheManager.set(cacheKey, preferences, ttl);
+            }
+            return preferences;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to fetch user preferences:', error);
+            // Try to return stale cache data as fallback
+            if (useCache) {
+                const staleData = await this.cacheManager.get(cacheKey);
+                if (staleData) {
+                    console.warn('[CACHED_DATA] Returning stale cache data for user preferences');
+                    return staleData;
+                }
+            }
+            throw error;
+        }
+    }
+    // Import/Export operations
+    async importData(data, userId) {
+        try {
+            const result = await supabaseService.importData(data, userId);
+            if (result.length > 0) {
+                // Invalidate all user cache since import affects multiple entities
+                await this.cacheManager.invalidateUser(userId);
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to import data:', error);
+            throw error;
+        }
+    }
+    async resetAllCollections(userId) {
+        try {
+            const result = await supabaseService.resetAllCollections(userId);
+            if (result) {
+                // Clear all user cache
+                await this.cacheManager.invalidateUser(userId);
+            }
+            return result;
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to reset collections:', error);
+            throw error;
+        }
+    }
+    // Cache management utilities
+    async refreshCache(userId) {
+        try {
+            console.log(`[CACHED_DATA] Refreshing cache for user: ${userId}`);
+            // Invalidate all user cache
+            await this.cacheManager.invalidateUser(userId);
+            // Pre-populate cache with fresh data
+            await this.fetchCollections(userId, false, { forceRefresh: true });
+            await this.fetchSnapshots(userId, { forceRefresh: true });
+            await this.fetchUserPreferences(userId, { forceRefresh: true });
+            console.log(`[CACHED_DATA] Cache refresh complete for user: ${userId}`);
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to refresh cache:', error);
+            throw error;
+        }
+    }
+    async clearUserCache(userId) {
+        try {
+            await this.cacheManager.invalidateUser(userId);
+            console.log(`[CACHED_DATA] Cleared cache for user: ${userId}`);
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to clear user cache:', error);
+            throw error;
+        }
+    }
+    async validateCacheFreshness(userId) {
+        try {
+            const [collectionsValid, snapshotsValid, preferencesValid] = await Promise.all([
+                this.cacheManager.validateFreshness(CacheKeys.collections(userId)),
+                this.cacheManager.validateFreshness(CacheKeys.snapshots(userId)),
+                this.cacheManager.validateFreshness(CacheKeys.userPreferences(userId))
+            ]);
+            return {
+                collections: collectionsValid,
+                snapshots: snapshotsValid,
+                preferences: preferencesValid
+            };
+        }
+        catch (error) {
+            console.error('[CACHED_DATA] Failed to validate cache freshness:', error);
+            return {
+                collections: false,
+                snapshots: false,
+                preferences: false
+            };
+        }
+    }
+}
+exports.CachedDataService = CachedDataService;
+// Singleton instance
+let cachedDataServiceInstance = null;
+const getCachedDataService = () => {
+    if (!cachedDataServiceInstance) {
+        cachedDataServiceInstance = new CachedDataService();
+    }
+    return cachedDataServiceInstance;
+};
+exports.getCachedDataService = getCachedDataService;
+// Export individual functions for backward compatibility
+_a = (0, exports.getCachedDataService)()
+// Additional cache utilities
+, exports.fetchCollections = _a.fetchCollections, exports.addCollection = _a.addCollection, exports.updateCollection = _a.updateCollection, exports.archiveCollection = _a.archiveCollection, exports.unarchiveCollection = _a.unarchiveCollection, exports.deleteCollection = _a.deleteCollection, exports.addDot = _a.addDot, exports.updateDot = _a.updateDot, exports.deleteDot = _a.deleteDot, exports.createSnapshot = _a.createSnapshot, exports.fetchSnapshots = _a.fetchSnapshots, exports.loadSnapshot = _a.loadSnapshot, exports.deleteSnapshot = _a.deleteSnapshot, exports.fetchUserPreferences = _a.fetchUserPreferences, exports.importData = _a.importData, exports.resetAllCollections = _a.resetAllCollections;
+// Additional cache utilities
+const refreshCache = (userId) => (0, exports.getCachedDataService)().refreshCache(userId);
+exports.refreshCache = refreshCache;
+const clearUserCache = (userId) => (0, exports.getCachedDataService)().clearUserCache(userId);
+exports.clearUserCache = clearUserCache;
+const validateCacheFreshness = (userId) => (0, exports.getCachedDataService)().validateCacheFreshness(userId);
+exports.validateCacheFreshness = validateCacheFreshness;
