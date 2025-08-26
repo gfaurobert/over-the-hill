@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Supabase Container Manager (sbContMan)
-# Usage: ./sbContMan [stop|delete] [container_name_pattern]
+# Usage: ./sbContMan [list|stop|delete] [container_name_pattern]
+# Example: ./sbContMan list
 # Example: ./sbContMan stop tim
 # Example: ./sbContMan delete tim
 
@@ -25,17 +26,19 @@ print_color() {
 show_usage() {
     echo "Supabase Container Manager (sbContMan)"
     echo ""
-    echo "Usage: $0 [stop|delete] [container_name_pattern]"
+    echo "Usage: $0 [list|stop|delete] [container_name_pattern]"
     echo ""
     echo "Commands:"
+    echo "  list   - List all Supabase containers with their status"
     echo "  stop   - Stop containers matching the pattern"
     echo "  delete - Delete containers and volumes matching the pattern"
     echo ""
     echo "Examples:"
+    echo "  $0 list         - Show all Supabase containers"
     echo "  $0 stop tim     - Stop all containers with 'tim' in the name"
     echo "  $0 delete tim   - Delete all containers and volumes with 'tim' in the name"
     echo ""
-    echo "Note: The script will search for containers containing the pattern in their names"
+    echo "Note: For stop/delete commands, the script will search for containers containing the pattern in their names"
 }
 
 # Function to find containers matching pattern
@@ -74,6 +77,44 @@ stop_containers() {
     else
         print_color $YELLOW "Operation cancelled."
     fi
+}
+
+# Function to list all Supabase containers
+list_containers() {
+    print_color $BLUE "Listing all Supabase containers:"
+    echo ""
+    
+    # Check if any Supabase containers exist
+    local supabase_containers=$(docker ps -a --format "{{.Names}}" | grep -i "supabase" || true)
+    
+    if [ -z "$supabase_containers" ]; then
+        print_color $YELLOW "No Supabase containers found."
+        return
+    fi
+    
+    # Display containers in a nice format
+    printf "%-40s %-15s %-20s %-15s\n" "CONTAINER NAME" "STATUS" "IMAGE" "PORTS"
+    printf "%-40s %-15s %-20s %-15s\n" "$(printf '%*s' 40 | tr ' ' '-')" "$(printf '%*s' 15 | tr ' ' '-')" "$(printf '%*s' 20 | tr ' ' '-')" "$(printf '%*s' 15 | tr ' ' '-')"
+    
+    # Get detailed info for each Supabase container
+    docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}" | grep -i "supabase" | tail -n +2 | while IFS=$'\t' read -r name status image ports; do
+        # Color code based on status
+        if [[ "$status" == *"Up"* ]]; then
+            printf "${GREEN}%-40s${NC} %-15s %-20s %-15s\n" "$name" "$status" "$image" "$ports"
+        else
+            printf "${RED}%-40s${NC} %-15s %-20s %-15s\n" "$name" "$status" "$image" "$ports"
+        fi
+    done$'\t' read -r name status image ports; do
+        # Color code based on status
+        if [[ "$status" == *"Up"* ]]; then
+            printf "${GREEN}%-40s${NC} %-15s %-20s %-15s\n" "$name" "$status" "$image" "$ports"
+        else
+            printf "${RED}%-40s${NC} %-15s %-20s %-15s\n" "$name" "$status" "$image" "$ports"
+        fi
+    done
+    
+    echo ""
+    print_color $BLUE "Legend: ${GREEN}Green${NC} = Running, ${RED}Red${NC} = Stopped"
 }
 
 # Function to delete containers and volumes
@@ -118,7 +159,7 @@ main() {
     check_docker
     
     # Check arguments
-    if [ $# -ne 2 ]; then
+    if [ $# -lt 1 ] || [ $# -gt 2 ]; then
         print_color $RED "Error: Invalid number of arguments"
         echo ""
         show_usage
@@ -128,8 +169,27 @@ main() {
     local action=$1
     local pattern=$2
     
+    # For list command, pattern is optional
+    if [ "$action" = "list" ] && [ $# -gt 1 ]; then
+        print_color $RED "Error: 'list' command does not accept additional arguments"
+        echo ""
+        show_usage
+        exit 1
+    fi
+    
+    # For stop/delete commands, pattern is required
+    if [ "$action" != "list" ] && [ $# -ne 2 ]; then
+        print_color $RED "Error: '$action' command requires a container name pattern"
+        echo ""
+        show_usage
+        exit 1
+    fi
+    
     # Validate action
     case "$action" in
+        "list")
+            list_containers
+            ;;
         "stop")
             print_color $BLUE "Stopping containers matching pattern: $pattern"
             stop_containers "$pattern"
