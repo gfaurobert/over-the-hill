@@ -177,10 +177,10 @@ export class PrivacyService {
     return key
   }
 
-  // Create a hash for searching without decryption
-  private createSearchHash(text: string): string {
+  // Create a salted hash for searching without decryption (user-specific salt)
+  private createSearchHash(text: string, userId: string): string {
     const hash = createHash('sha256')
-    hash.update(text.toLowerCase().trim())
+    hash.update(`${userId}:${text.toLowerCase().trim()}`) // User-specific salt
     return hash.digest('hex')
   }
 
@@ -227,7 +227,7 @@ export class PrivacyService {
   async encryptData(data: string, userId: string): Promise<{ encrypted: string; hash: string }> {
     try {
       if (!data) {
-        return { encrypted: '', hash: this.createSearchHash('') }
+        return { encrypted: '', hash: this.createSearchHash('', userId) }
       }
 
       const userKey = await this.getUserKey(userId)
@@ -256,7 +256,7 @@ export class PrivacyService {
 
       return {
         encrypted: result,
-        hash: this.createSearchHash(data)
+        hash: this.createSearchHash(data, userId)
       }
     } catch (error) {
       console.error('Database encryption failed, attempting client-side encryption:', error)
@@ -269,7 +269,7 @@ export class PrivacyService {
         
         return {
           encrypted: clientEncrypted,
-          hash: this.createSearchHash(data)
+          hash: this.createSearchHash(data, userId)
         }
       } catch (clientError) {
         console.error('Client-side encryption also failed:', clientError)
@@ -434,13 +434,13 @@ export class PrivacyService {
   // Note: This performs exact hash matching. If substring/fuzzy search is needed,
   // implement a tokenization scheme that hashes normalized tokens and searches across token hashes.
   async searchCollectionsByName(userId: string, searchTerm: string): Promise<string[]> {
-    const searchHash = this.createSearchHash(searchTerm)
+    const searchHash = this.createSearchHash(searchTerm, userId)
     
     const { data, error } = await supabase
       .from('collections')
       .select('id')
       .eq('user_id', userId)
-      .eq('name_hash', searchHash) // Exact hash match - changed from ilike for cryptographic correctness
+      .eq('name_hash', searchHash) // Exact hash match with user-specific salt
       .eq('status', 'active')
 
     if (error) {
