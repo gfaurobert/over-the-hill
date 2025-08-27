@@ -34,18 +34,18 @@ class IndexedDBStorage {
             const db = await this.getDB();
             const transaction = db.transaction([this.storeName], 'readonly');
             const store = transaction.objectStore(this.storeName);
-            
+
             return new Promise((resolve, reject) => {
                 let completed = false;
-                
+
                 const cleanup = () => {
                     if (!completed) {
                         completed = true;
                     }
                 };
-                
+
                 const request = store.get(key);
-                
+
                 request.onerror = () => {
                     cleanup();
                     // Abort transaction on request error
@@ -56,27 +56,27 @@ class IndexedDBStorage {
                     }
                     reject(request.error);
                 };
-                
+
                 request.onsuccess = () => {
                     cleanup();
                     const result = request.result;
                     resolve(result ? result.value : null);
                 };
-                
+
                 // Handle transaction-level events
                 transaction.oncomplete = () => {
                     if (!completed) {
                         cleanup();
                     }
                 };
-                
+
                 transaction.onabort = () => {
                     cleanup();
                     if (!completed) {
                         reject(new Error('Transaction was aborted'));
                     }
                 };
-                
+
                 transaction.onerror = () => {
                     cleanup();
                     if (!completed) {
@@ -238,14 +238,14 @@ class CacheManager {
         if (!this.config.compressionEnabled) {
             return data;
         }
-        
+
         try {
             // Convert string to Buffer for compression
             const inputBuffer = Buffer.from(data, 'utf8');
-            
+
             // Use gzip compression for good compression ratio and compatibility
             const compressedBuffer = zlib.gzipSync(inputBuffer);
-            
+
             // Convert compressed buffer to base64 string for storage
             // Prefix with 'gzip:' to indicate compression format
             return 'gzip:' + compressedBuffer.toString('base64');
@@ -256,7 +256,7 @@ class CacheManager {
             return data;
         }
     }
-    
+
     // Decompress data using zlib decompression
     decompressData(data) {
         // Check if data is compressed (has gzip prefix)
@@ -264,15 +264,15 @@ class CacheManager {
             // Not compressed or legacy format, return as-is
             return data;
         }
-        
+
         try {
             // Remove the 'gzip:' prefix and decode from base64
             const base64Data = data.substring(5);
             const compressedBuffer = Buffer.from(base64Data, 'base64');
-            
+
             // Decompress using gzip
             const decompressedBuffer = zlib.gunzipSync(compressedBuffer);
-            
+
             // Convert back to string
             return decompressedBuffer.toString('utf8');
         }
