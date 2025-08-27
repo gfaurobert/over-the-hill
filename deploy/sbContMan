@@ -104,13 +104,6 @@ list_containers() {
         else
             printf "${RED}%-40s${NC} %-15s %-20s %-15s\n" "$name" "$status" "$image" "$ports"
         fi
-    done$'\t' read -r name status image ports; do
-        # Color code based on status
-        if [[ "$status" == *"Up"* ]]; then
-            printf "${GREEN}%-40s${NC} %-15s %-20s %-15s\n" "$name" "$status" "$image" "$ports"
-        else
-            printf "${RED}%-40s${NC} %-15s %-20s %-15s\n" "$name" "$status" "$image" "$ports"
-        fi
     done
     
     echo ""

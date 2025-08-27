@@ -30,7 +30,7 @@ export class CacheServiceTester {
   // Run a single test
   private async runTest(name: string, testFn: () => Promise<void>): Promise<void> {
     const startTime = Date.now()
-    
+
     try {
       await testFn()
       this.results.push({
@@ -55,10 +55,10 @@ export class CacheServiceTester {
     await this.runTest('Basic set and get', async () => {
       const testData = { id: '1', name: 'Test Collection' }
       const cacheKey = 'user:123:collections'
-      
+
       await this.cacheManager.set(cacheKey, testData)
       const retrieved = await this.cacheManager.get(cacheKey)
-      
+
       if (JSON.stringify(retrieved) !== JSON.stringify(testData)) {
         throw new Error('Retrieved data does not match set data')
       }
@@ -74,17 +74,17 @@ export class CacheServiceTester {
     await this.runTest('Cache invalidation', async () => {
       const testData = { id: '1', name: 'Test' }
       const cacheKey = 'user:123:test'
-      
+
       await this.cacheManager.set(cacheKey, testData)
       const beforeInvalidation = await this.cacheManager.get(cacheKey)
-      
+
       if (!beforeInvalidation) {
         throw new Error('Data should exist before invalidation')
       }
-      
+
       await this.cacheManager.invalidate(cacheKey)
       const afterInvalidation = await this.cacheManager.get(cacheKey)
-      
+
       if (afterInvalidation !== null) {
         throw new Error('Data should be null after invalidation')
       }
@@ -95,15 +95,15 @@ export class CacheServiceTester {
       const testData2 = { id: '2', name: 'Test2' }
       const key1 = 'user:123:test1'
       const key2 = 'user:123:test2'
-      
+
       await this.cacheManager.set(key1, testData1)
       await this.cacheManager.set(key2, testData2)
-      
+
       await this.cacheManager.invalidate([key1, key2])
-      
+
       const result1 = await this.cacheManager.get(key1)
       const result2 = await this.cacheManager.get(key2)
-      
+
       if (result1 !== null || result2 !== null) {
         throw new Error('Both keys should be null after invalidation')
       }
@@ -111,15 +111,15 @@ export class CacheServiceTester {
 
     await this.runTest('Clear all cache', async () => {
       const testData = { id: '1', name: 'Test' }
-      
+
       await this.cacheManager.set('key1', testData)
       await this.cacheManager.set('key2', testData)
-      
+
       await this.cacheManager.clear()
-      
+
       const result1 = await this.cacheManager.get('key1')
       const result2 = await this.cacheManager.get('key2')
-      
+
       if (result1 !== null || result2 !== null) {
         throw new Error('All keys should be null after clear')
       }
@@ -132,18 +132,29 @@ export class CacheServiceTester {
       const testData = { id: '1', name: 'Test' }
       const cacheKey = 'user:123:test'
       const customTTL = 100 // 100ms
-      
+
       await this.cacheManager.set(cacheKey, testData, customTTL)
-      
+
       // Should be available immediately
       const immediate = await this.cacheManager.get(cacheKey)
       if (!immediate) {
         throw new Error('Data should be available immediately')
       }
-      
-      // Wait for TTL to expire
-      await new Promise(resolve => setTimeout(resolve, customTTL + 50))
-      
+
+      // Wait for TTL to expire using deterministic polling
+      const maxWaitTime = customTTL + 500 // Generous timeout
+      const pollInterval = 10 // Check every 10ms
+      let elapsed = 0
+
+      while (elapsed < maxWaitTime) {
+        const current = await this.cacheManager.get(cacheKey)
+        if (current === null) {
+          break // Item has expired
+        }
+        await new Promise(resolve => setTimeout(resolve, pollInterval))
+        elapsed += pollInterval
+      }
+
       // Should be expired
       const expired = await this.cacheManager.get(cacheKey)
       if (expired !== null) {
@@ -155,29 +166,40 @@ export class CacheServiceTester {
       const testData = { id: '1', name: 'Test' }
       const cacheKey = 'user:123:test'
       const shortTTL = 100
-      
+
       await this.cacheManager.set(cacheKey, testData, shortTTL)
-      
+
       // Should not be stale immediately
       const freshCheck = await this.cacheManager.isStale(cacheKey)
       if (freshCheck) {
         throw new Error('Data should not be stale immediately')
       }
-      
+
       const freshnessCheck = await this.cacheManager.validateFreshness(cacheKey)
       if (!freshnessCheck) {
         throw new Error('Data should be fresh immediately')
       }
-      
-      // Wait for expiration
-      await new Promise(resolve => setTimeout(resolve, shortTTL + 50))
-      
+
+      // Wait for expiration using deterministic polling
+      const maxWaitTime = shortTTL + 500 // Generous timeout
+      const pollInterval = 10 // Check every 10ms
+      let elapsed = 0
+
+      while (elapsed < maxWaitTime) {
+        const isStale = await this.cacheManager.isStale(cacheKey)
+        if (isStale) {
+          break // Item has expired
+        }
+        await new Promise(resolve => setTimeout(resolve, pollInterval))
+        elapsed += pollInterval
+      }
+
       // Should be stale
       const staleCheck = await this.cacheManager.isStale(cacheKey)
       if (!staleCheck) {
         throw new Error('Data should be stale after TTL')
       }
-      
+
       const stalenessFreshnessCheck = await this.cacheManager.validateFreshness(cacheKey)
       if (stalenessFreshnessCheck) {
         throw new Error('Data should not be fresh after TTL')
@@ -187,7 +209,7 @@ export class CacheServiceTester {
     await this.runTest('Non-existent key staleness', async () => {
       const staleCheck = await this.cacheManager.isStale('non-existent')
       const freshnessCheck = await this.cacheManager.validateFreshness('non-existent')
-      
+
       if (!staleCheck || freshnessCheck) {
         throw new Error('Non-existent keys should be stale and not fresh')
       }
@@ -198,26 +220,26 @@ export class CacheServiceTester {
   async testPatternInvalidation(): Promise<void> {
     await this.runTest('Pattern invalidation with wildcards', async () => {
       const testData = { id: '1', name: 'Test' }
-      
+
       // Set multiple keys with similar patterns
       await this.cacheManager.set('user:123:collections:active', testData)
       await this.cacheManager.set('user:123:collections:archived', testData)
       await this.cacheManager.set('user:123:dots:collection-1', testData)
       await this.cacheManager.set('user:456:collections:active', testData)
-      
+
       // Invalidate all collections for user 123
       await this.cacheManager.invalidatePattern('user:123:collections:*')
-      
+
       // Check results
       const result1 = await this.cacheManager.get('user:123:collections:active')
       const result2 = await this.cacheManager.get('user:123:collections:archived')
       const result3 = await this.cacheManager.get('user:123:dots:collection-1')
       const result4 = await this.cacheManager.get('user:456:collections:active')
-      
+
       if (result1 !== null || result2 !== null) {
         throw new Error('User 123 collections should be invalidated')
       }
-      
+
       if (result3 === null || result4 === null) {
         throw new Error('Other keys should remain valid')
       }
@@ -225,24 +247,24 @@ export class CacheServiceTester {
 
     await this.runTest('User-wide invalidation', async () => {
       const testData = { id: '1', name: 'Test' }
-      
+
       // Set keys for multiple users
       await this.cacheManager.set('user:123:collections', testData)
       await this.cacheManager.set('user:123:dots', testData)
       await this.cacheManager.set('user:456:collections', testData)
-      
+
       // Invalidate all data for user 123
       await this.cacheManager.invalidateUser('123')
-      
+
       // Check results
       const result1 = await this.cacheManager.get('user:123:collections')
       const result2 = await this.cacheManager.get('user:123:dots')
       const result3 = await this.cacheManager.get('user:456:collections')
-      
+
       if (result1 !== null || result2 !== null) {
         throw new Error('User 123 data should be invalidated')
       }
-      
+
       if (result3 === null) {
         throw new Error('User 456 data should remain valid')
       }
@@ -251,51 +273,74 @@ export class CacheServiceTester {
     await this.runTest('Cascade invalidation', async () => {
       const testData = { id: '1', name: 'Test' }
       const collectionId = 'collection-123'
-      
+
       // Set related data
       await this.cacheManager.set(`user:123:collection:${collectionId}`, testData)
       await this.cacheManager.set(`user:123:dots:${collectionId}`, testData)
       await this.cacheManager.set(`user:123:snapshots:${collectionId}`, testData)
       await this.cacheManager.set('user:123:collections', testData)
-      
+
       // Invalidate collection with cascade
       await this.cacheManager.invalidateWithCascade(
         `user:123:collection:${collectionId}`,
         'collection',
         collectionId
       )
-      
+
       // Check that related data is also invalidated
       const collectionResult = await this.cacheManager.get(`user:123:collection:${collectionId}`)
       const collectionsResult = await this.cacheManager.get('user:123:collections')
-      
+      const dotsResult = await this.cacheManager.get(`user:123:dots:${collectionId}`)
+      const snapshotsResult = await this.cacheManager.get(`user:123:snapshots:${collectionId}`)
+
       if (collectionResult !== null || collectionsResult !== null) {
         throw new Error('Collection and collections list should be invalidated')
+      }
+
+      if (dotsResult !== null || snapshotsResult !== null) {
+        throw new Error('Dots and snapshots should be invalidated by cascade')
       }
     })
 
     await this.runTest('Stale data refresh', async () => {
       const testData = { id: '1', name: 'Test' }
       const shortTTL = 50
-      
+
       // Set data with short TTL
       await this.cacheManager.set('user:123:test1', testData, shortTTL)
       await this.cacheManager.set('user:123:test2', testData, 10000) // Long TTL
-      
-      // Wait for first item to expire
-      await new Promise(resolve => setTimeout(resolve, shortTTL + 20))
-      
+
+      // Wait for first item to expire using deterministic polling
+      const maxWaitTime = shortTTL + 500 // Generous timeout
+      const pollInterval = 10 // Check every 10ms
+      let elapsed = 0
+
+      while (elapsed < maxWaitTime) {
+        const isStale = await this.cacheManager.isStale('user:123:test1')
+        if (isStale) {
+          break // Item has expired
+        }
+        await new Promise(resolve => setTimeout(resolve, pollInterval))
+        elapsed += pollInterval
+      }
+
+      // Verify the item is actually stale before proceeding
+      const isStale = await this.cacheManager.isStale('user:123:test1')
+      if (!isStale) {
+        throw new Error('Test setup failed: item should be stale after TTL')
+      }
+
       // Refresh stale data
       await this.cacheManager.refreshStaleData()
-      
+
       // Check results
       const result1 = await this.cacheManager.get('user:123:test1')
       const result2 = await this.cacheManager.get('user:123:test2')
-      
+
       if (result1 !== null) {
         throw new Error('Stale data should be removed')
       }
-      
+
       if (result2 === null) {
         throw new Error('Fresh data should remain')
       }
@@ -305,21 +350,26 @@ export class CacheServiceTester {
       const testData = { id: '1', name: 'Test' }
       const userId = '123'
       const collectionId = 'collection-456'
-      
+
       // Set up related cache entries
       await this.cacheManager.set(`user:${userId}:collections`, testData)
       await this.cacheManager.set(`user:${userId}:collection:${collectionId}`, testData)
       await this.cacheManager.set(`user:${userId}:dots:${collectionId}`, testData)
-      
+
       // Invalidate using collection update operation
       await this.cacheManager.invalidateByOperation('collection:update', userId, collectionId, 'collection')
-      
+
       // Check that related data is invalidated
       const collectionsResult = await this.cacheManager.get(`user:${userId}:collections`)
       const collectionResult = await this.cacheManager.get(`user:${userId}:collection:${collectionId}`)
-      
+      const dotsResult = await this.cacheManager.get(`user:${userId}:dots:${collectionId}`)
+
       if (collectionsResult !== null || collectionResult !== null) {
         throw new Error('Related data should be invalidated by operation rules')
+      }
+
+      if (dotsResult !== null) {
+        throw new Error('Dots data should be invalidated by operation rules')
       }
     })
   }
@@ -329,7 +379,7 @@ export class CacheServiceTester {
     await this.runTest('Collection entity type', async () => {
       const testData = { id: '1', name: 'Test Collection' }
       await this.cacheManager.set('user:123:collections:active', testData)
-      
+
       const retrieved = await this.cacheManager.get('user:123:collections:active')
       if (JSON.stringify(retrieved) !== JSON.stringify(testData)) {
         throw new Error('Collection data not retrieved correctly')
@@ -339,7 +389,7 @@ export class CacheServiceTester {
     await this.runTest('Dot entity type', async () => {
       const testData = { id: '1', label: 'Test Dot' }
       await this.cacheManager.set('user:123:dots:collection-1', testData)
-      
+
       const retrieved = await this.cacheManager.get('user:123:dots:collection-1')
       if (JSON.stringify(retrieved) !== JSON.stringify(testData)) {
         throw new Error('Dot data not retrieved correctly')
@@ -349,7 +399,7 @@ export class CacheServiceTester {
     await this.runTest('Snapshot entity type', async () => {
       const testData = { id: '1', date: '2024-01-01' }
       await this.cacheManager.set('user:123:snapshots', testData)
-      
+
       const retrieved = await this.cacheManager.get('user:123:snapshots')
       if (JSON.stringify(retrieved) !== JSON.stringify(testData)) {
         throw new Error('Snapshot data not retrieved correctly')
@@ -359,7 +409,7 @@ export class CacheServiceTester {
     await this.runTest('User preferences entity type', async () => {
       const testData = { theme: 'dark', copyFormat: 'PNG' }
       await this.cacheManager.set('user:123:preferences', testData)
-      
+
       const retrieved = await this.cacheManager.get('user:123:preferences')
       if (JSON.stringify(retrieved) !== JSON.stringify(testData)) {
         throw new Error('Preferences data not retrieved correctly')
@@ -372,7 +422,7 @@ export class CacheServiceTester {
     await this.runTest('Singleton instance', async () => {
       const instance1 = getCacheManager()
       const instance2 = getCacheManager()
-      
+
       if (instance1 !== instance2) {
         throw new Error('getCacheManager should return same instance')
       }
@@ -381,9 +431,9 @@ export class CacheServiceTester {
     await this.runTest('Initialize with user context', async () => {
       const userId = 'user-123'
       const sessionId = 'session-456'
-      
+
       const cacheManager = initializeCacheManager(userId, sessionId)
-      
+
       if (!cacheManager) {
         throw new Error('initializeCacheManager should return cache manager')
       }
@@ -393,45 +443,45 @@ export class CacheServiceTester {
   // Run all tests
   async runAllTests(): Promise<TestResult[]> {
     console.log('🧪 Starting Cache Service Tests...\n')
-    
+
     this.results = []
-    
+
     console.log('📝 Testing basic operations...')
     await this.testBasicOperations()
-    
+
     console.log('\n⏰ Testing TTL behavior...')
     await this.testTTLBehavior()
-    
+
     console.log('\n🎯 Testing pattern invalidation...')
     await this.testPatternInvalidation()
-    
+
     console.log('\n🏷️ Testing entity types...')
     await this.testEntityTypes()
-    
+
     console.log('\n🔄 Testing singleton behavior...')
     await this.testSingleton()
-    
+
     // Clean up
     await this.cacheManager.clear()
     this.cacheManager.destroy()
-    
+
     // Print summary
     const passed = this.results.filter(r => r.passed).length
     const failed = this.results.filter(r => !r.passed).length
     const totalTime = this.results.reduce((sum, r) => sum + r.duration, 0)
-    
+
     console.log(`\n📊 Test Summary:`)
     console.log(`✅ Passed: ${passed}`)
     console.log(`❌ Failed: ${failed}`)
     console.log(`⏱️ Total time: ${totalTime}ms`)
-    
+
     if (failed > 0) {
       console.log('\n❌ Failed tests:')
       this.results.filter(r => !r.passed).forEach(r => {
         console.log(`  - ${r.name}: ${r.error}`)
       })
     }
-    
+
     return this.results
   }
 }

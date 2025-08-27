@@ -50,12 +50,14 @@ class PrivacyService {
             }
             console.log('[PRIVACY_SERVICE] Session found, access token length:', session.access_token?.length || 0);
             // Check if we're running on the server-side (Node.js environment)
-            const isServerSide = typeof window === 'undefined';
+            const isServerSide = typeof window === 'undefined'
+                && typeof process !== 'undefined'
+                && process.versions
+                && process.versions.node;
             console.log('[PRIVACY_SERVICE] Environment check - isServerSide:', isServerSide);
             if (isServerSide) {
                 // Server-side: Access environment variable directly
                 const keyMaterial = process.env.KEY_MATERIAL;
-                console.log('[PRIVACY_SERVICE] Server-side key material check - exists:', !!keyMaterial, 'length:', keyMaterial?.length || 0);
                 if (!keyMaterial) {
                     throw new Error('KEY_MATERIAL environment variable is not configured. Please set this environment variable with a secure random string.');
                 }
@@ -63,6 +65,8 @@ class PrivacyService {
                 if (keyMaterial.length < 32) {
                     throw new Error('KEY_MATERIAL must be at least 32 characters long for adequate security');
                 }
+                // Log successful configuration without sensitive details
+                console.log('[PRIVACY_SERVICE] KEY_MATERIAL configured');
                 // Use HMAC-SHA256 with domain separation for primary key generation
                 const hmac = (0, crypto_1.createHmac)('sha256', keyMaterial);
                 hmac.update(`primary-key|${userId}`); // Domain-separated message format
@@ -73,13 +77,19 @@ class PrivacyService {
             else {
                 // Client-side: Call API endpoint to generate key securely
                 console.log('[PRIVACY_SERVICE] Client-side key generation, calling API endpoint...');
+
+                // Ensure access token is available
+                if (!session.access_token) {
+                    throw new Error('Access token is missing from session');
+                }
+
                 const response = await fetch('/api/auth/generate-key', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session.access_token}`,
                     },
                     body: JSON.stringify({
-                        accessToken: session.access_token,
                         userId: userId,
                         keyType: 'primary'
                     }),
@@ -164,20 +174,36 @@ class PrivacyService {
         console.log('[PRIVACY_SERVICE] Returning user key, length:', key.length);
         return key;
     }
-    // Create a hash for searching without decryption
-    createSearchHash(text) {
+    // Create a salted hash for searching without decryption
+    // Uses per-user salt to prevent rainbow table attacks
+    createSearchHash(text, userId) {
+        if (!userId) {
+            throw new Error('userId is required for creating search hash');
+        }
+
+        // Derive a consistent salt from userId
+        const saltHash = (0, crypto_1.createHash)('sha256');
+        saltHash.update(`search_salt_${userId}`);
+        const salt = saltHash.digest('hex');
+
+        // Create salted hash of the search text
         const hash = (0, crypto_1.createHash)('sha256');
-        hash.update(text.toLowerCase().trim());
+        const normalizedText = text.toLowerCase().trim();
+        hash.update(salt + normalizedText); // Prepend salt to text
         return hash.digest('hex');
     }
     // Client-side encryption fallback using Web Crypto API
     async encryptClientSide(data, userKey) {
         try {
             // Convert hex key to ArrayBuffer
-            const keyBuffer = new Uint8Array(userKey.match(/.{2}/g)?.map(byte => parseInt(byte, 16)) || []);
+            const hexMatches = userKey.match(/.{2}/g);
+            if (!hexMatches || hexMatches.length < 32) {
+                throw new Error('Invalid user key format: must be at least 64 hex characters');
+            }
+            const keyBuffer = new Uint8Array(hexMatches.map(byte => parseInt(byte, 16)));
             // Import the key for AES-GCM
             const cryptoKey = await crypto.subtle.importKey('raw', keyBuffer.slice(0, 32), // Use first 32 bytes for AES-256
-            { name: 'AES-GCM' }, false, ['encrypt']);
+                { name: 'AES-GCM' }, false, ['encrypt']);
             // Generate a random IV
             const iv = crypto.getRandomValues(new Uint8Array(12));
             // Encrypt the data
@@ -199,7 +225,7 @@ class PrivacyService {
     async encryptData(data, userId) {
         try {
             if (!data) {
-                return { encrypted: '', hash: this.createSearchHash('') };
+                return { encrypted: '', hash: this.createSearchHash('', userId) };
             }
             const userKey = await this.getUserKey(userId);
             console.log('Encrypting data with key length:', userKey.length, 'for user:', userId);
@@ -223,7 +249,7 @@ class PrivacyService {
             }
             return {
                 encrypted: result,
-                hash: this.createSearchHash(data)
+                hash: this.createSearchHash(data, userId)
             };
         }
         catch (error) {
@@ -235,7 +261,7 @@ class PrivacyService {
                 console.log('Successfully encrypted data using client-side fallback');
                 return {
                     encrypted: clientEncrypted,
-                    hash: this.createSearchHash(data)
+                    hash: this.createSearchHash(data, userId)
                 };
             }
             catch (clientError) {
@@ -255,10 +281,14 @@ class PrivacyService {
             const iv = combined.slice(0, 12);
             const encryptedBuffer = combined.slice(12);
             // Convert hex key to ArrayBuffer
-            const keyBuffer = new Uint8Array(userKey.match(/.{2}/g)?.map(byte => parseInt(byte, 16)) || []);
+            const hexMatches = userKey.match(/.{2}/g);
+            if (!hexMatches || hexMatches.length < 32) {
+                throw new Error('Invalid user key format: must be at least 64 hex characters');
+            }
+            const keyBuffer = new Uint8Array(hexMatches.map(byte => parseInt(byte, 16)));
             // Import the key for AES-GCM
             const cryptoKey = await crypto.subtle.importKey('raw', keyBuffer.slice(0, 32), // Use first 32 bytes for AES-256
-            { name: 'AES-GCM' }, false, ['decrypt']);
+                { name: 'AES-GCM' }, false, ['decrypt']);
             // Decrypt the data
             const decryptedBuffer = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, cryptoKey, encryptedBuffer);
             return new TextDecoder().decode(decryptedBuffer);
@@ -370,18 +400,52 @@ class PrivacyService {
     // Search collections by name hash (privacy-preserving search)
     // Note: This performs exact hash matching. If substring/fuzzy search is needed,
     // implement a tokenization scheme that hashes normalized tokens and searches across token hashes.
+    // Create legacy (unsalted) hash for backward compatibility during migration
+    createLegacyHash(text) {
+        const hash = (0, crypto_1.createHash)('sha256');
+        hash.update(text.toLowerCase().trim());
+        return hash.digest('hex');
+    }
+
     async searchCollectionsByName(userId, searchTerm) {
-        const searchHash = this.createSearchHash(searchTerm);
-        const { data, error } = await supabaseClient_1.supabase
+        const saltedHash = this.createSearchHash(searchTerm, userId);
+
+        // First try with new salted hash
+        let { data, error } = await supabaseClient_1.supabase
             .from('collections')
             .select('id')
             .eq('user_id', userId)
-            .eq('name_hash', searchHash) // Exact hash match - changed from ilike for cryptographic correctness
+            .eq('name_hash', saltedHash)
             .eq('status', 'active');
+
         if (error) {
             console.error('Search failed:', error);
             return [];
         }
+
+        // If no results with salted hash, try legacy hash for backward compatibility
+        if (!data || data.length === 0) {
+            console.log('[PRIVACY_SERVICE] No results with salted hash, trying legacy hash for backward compatibility');
+            const legacyHash = this.createLegacyHash(searchTerm);
+
+            const { data: legacyData, error: legacyError } = await supabaseClient_1.supabase
+                .from('collections')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('name_hash', legacyHash)
+                .eq('status', 'active');
+
+            if (legacyError) {
+                console.error('Legacy search failed:', legacyError);
+                return [];
+            }
+
+            if (legacyData && legacyData.length > 0) {
+                console.log(`[PRIVACY_SERVICE] Found ${legacyData.length} results with legacy hash - migration needed`);
+                return legacyData?.map(c => c.id) || [];
+            }
+        }
+
         return data?.map(c => c.id) || [];
     }
     // Clear user key (for logout)

@@ -18,7 +18,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       cascadeRules: ['*:user:*:collections*']
     }
   ],
-  
+
   'collection:update': [
     {
       trigger: 'mutation',
@@ -27,7 +27,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       cascadeRules: ['*:collections*', '*:dots:*', '*:snapshots:*']
     }
   ],
-  
+
   'collection:delete': [
     {
       trigger: 'mutation',
@@ -36,7 +36,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       cascadeRules: ['*:collections*', '*:dots:*', '*:snapshots:*']
     }
   ],
-  
+
   'collection:archive': [
     {
       trigger: 'mutation',
@@ -45,7 +45,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       cascadeRules: ['*:collections*']
     }
   ],
-  
+
   // Dot operations
   'dot:create': [
     {
@@ -55,7 +55,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       cascadeRules: ['*:collection:*', '*:collections*']
     }
   ],
-  
+
   'dot:update': [
     {
       trigger: 'mutation',
@@ -64,7 +64,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       cascadeRules: ['*:dots:*', '*:collection:*']
     }
   ],
-  
+
   'dot:delete': [
     {
       trigger: 'mutation',
@@ -73,7 +73,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       cascadeRules: ['*:dots:*', '*:collection:*']
     }
   ],
-  
+
   'dot:archive': [
     {
       trigger: 'mutation',
@@ -82,7 +82,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       cascadeRules: ['*:dots:*', '*:collection:*']
     }
   ],
-  
+
   // Snapshot operations
   'snapshot:create': [
     {
@@ -91,7 +91,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       entityTypes: ['snapshot']
     }
   ],
-  
+
   'snapshot:delete': [
     {
       trigger: 'mutation',
@@ -100,7 +100,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       cascadeRules: ['*:snapshots*']
     }
   ],
-  
+
   // User preference operations
   'preferences:update': [
     {
@@ -110,7 +110,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       cascadeRules: ['*:ui:*']
     }
   ],
-  
+
   // Session-based invalidation
   'session:login': [
     {
@@ -119,7 +119,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       entityTypes: ['collection', 'dot', 'snapshot', 'user_preferences']
     }
   ],
-  
+
   'session:logout': [
     {
       trigger: 'session',
@@ -127,7 +127,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       entityTypes: ['collection', 'dot', 'snapshot', 'user_preferences']
     }
   ],
-  
+
   'session:expire': [
     {
       trigger: 'session',
@@ -135,7 +135,7 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       entityTypes: ['collection', 'dot', 'snapshot', 'user_preferences']
     }
   ],
-  
+
   // Time-based invalidation
   'time:stale': [
     {
@@ -149,42 +149,43 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
 // Invalidation rule manager
 export class InvalidationRuleManager {
   private rules: Map<string, InvalidationRule[]> = new Map()
-  
+
   constructor() {
     // Load predefined rules
     Object.entries(INVALIDATION_RULES).forEach(([operation, rules]) => {
       this.rules.set(operation, rules)
     })
   }
-  
+
   // Get invalidation rules for an operation
   getRules(operation: string): InvalidationRule[] {
     return this.rules.get(operation) || []
   }
-  
+
   // Add custom invalidation rule
   addRule(operation: string, rule: InvalidationRule): void {
     const existingRules = this.rules.get(operation) || []
     this.rules.set(operation, [...existingRules, rule])
   }
-  
+
   // Remove invalidation rule
   removeRule(operation: string, ruleIndex: number): void {
     const existingRules = this.rules.get(operation) || []
     if (ruleIndex >= 0 && ruleIndex < existingRules.length) {
-      existingRules.splice(ruleIndex, 1)
-      this.rules.set(operation, existingRules)
+      // Create new array without the rule at ruleIndex (immutable operation)
+      const newRules = existingRules.filter((_, index) => index !== ruleIndex)
+      this.rules.set(operation, newRules)
     }
   }
-  
+
   // Get all patterns to invalidate for an operation
   getInvalidationPatterns(operation: string, entityId?: string, userId?: string): string[] {
     const rules = this.getRules(operation)
     const patterns: string[] = []
-    
+
     for (const rule of rules) {
       let pattern = rule.pattern
-      
+
       // Replace placeholders with actual values
       if (entityId) {
         pattern = pattern.replace(/\{entityId\}/g, entityId)
@@ -192,9 +193,9 @@ export class InvalidationRuleManager {
       if (userId) {
         pattern = pattern.replace(/\{userId\}/g, userId)
       }
-      
+
       patterns.push(pattern)
-      
+
       // Add cascade patterns
       if (rule.cascadeRules) {
         for (let cascadePattern of rule.cascadeRules) {
@@ -208,27 +209,27 @@ export class InvalidationRuleManager {
         }
       }
     }
-    
+
     return patterns
   }
-  
+
   // Check if operation should trigger invalidation
   shouldInvalidate(operation: string, trigger: InvalidationRule['trigger']): boolean {
     const rules = this.getRules(operation)
     return rules.some(rule => rule.trigger === trigger)
   }
-  
+
   // Get entity types affected by operation
   getAffectedEntityTypes(operation: string): CacheEntry<any>['entityType'][] {
     const rules = this.getRules(operation)
     const entityTypes = new Set<CacheEntry<any>['entityType']>()
-    
+
     rules.forEach(rule => {
       rule.entityTypes.forEach(type => {
         entityTypes.add(type as CacheEntry<any>['entityType'])
       })
     })
-    
+
     return Array.from(entityTypes)
   }
 }
@@ -251,15 +252,15 @@ export const generateCacheKey = (
   suffix?: string
 ): string => {
   let key = `user:${userId}:${entityType}`
-  
+
   if (entityId) {
     key += `:${entityId}`
   }
-  
+
   if (suffix) {
     key += `:${suffix}`
   }
-  
+
   return key
 }
 
@@ -278,8 +279,21 @@ export const extractEntityTypeFromKey = (key: string): string | null => {
 // Helper function to extract entity ID from cache key
 export const extractEntityIdFromKey = (key: string): string | null => {
   const parts = key.split(':')
-  if (parts.length >= 4) {
-    return parts[3]
+
+  // Key format: user:${userId}:${entityType}[:${entityId}][:${suffix}]
+  // Only return entityId if the key structure indicates it has one
+  if (parts.length >= 4 && parts[0] === 'user') {
+    // Check if parts[3] looks like an entityId (not empty and not a known suffix pattern)
+    const potentialEntityId = parts[3]
+
+    // EntityId should not be empty and should not be common suffix patterns
+    if (potentialEntityId &&
+      potentialEntityId !== 'list' &&
+      potentialEntityId !== 'all' &&
+      potentialEntityId !== 'metadata') {
+      return potentialEntityId
+    }
   }
+
   return null
 }

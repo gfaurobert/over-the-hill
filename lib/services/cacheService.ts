@@ -6,6 +6,36 @@
  */
 
 import { getInvalidationRuleManager } from './cacheInvalidationRules'
+import * as LZString from 'lz-string'
+
+// Custom error types for IndexedDB operations
+export class CacheStorageError extends Error {
+  constructor(message: string, public readonly cause?: Error) {
+    super(message)
+    this.name = 'CacheStorageError'
+  }
+}
+
+export class CacheQuotaExceededError extends CacheStorageError {
+  constructor(message: string = 'Storage quota exceeded', cause?: Error) {
+    super(message, cause)
+    this.name = 'CacheQuotaExceededError'
+  }
+}
+
+export class CacheBlockedError extends CacheStorageError {
+  constructor(message: string = 'Database operation blocked', cause?: Error) {
+    super(message, cause)
+    this.name = 'CacheBlockedError'
+  }
+}
+
+export class CacheUpgradeError extends CacheStorageError {
+  constructor(message: string = 'Database upgrade failed', cause?: Error) {
+    super(message, cause)
+    this.name = 'CacheUpgradeError'
+  }
+}
 
 // Cache entry interface with metadata
 export interface CacheEntry<T> {
@@ -63,86 +93,429 @@ class IndexedDBStorage implements StorageBackend {
   private async getDB(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.version)
-      
-      request.onerror = () => reject(request.error)
+
+      request.onerror = () => {
+        const error = request.error
+        if (error) {
+          // Handle quota exceeded errors specifically
+          if (error.name === 'QuotaExceededError' ||
+            (error as any).code === 22 || // Legacy quota error code
+            error.message?.toLowerCase().includes('quota')) {
+            reject(new CacheQuotaExceededError(
+              `IndexedDB quota exceeded: ${error.message}`,
+              error
+            ))
+            return
+          }
+
+          // Handle other specific error types
+          if (error.name === 'VersionError') {
+            reject(new CacheUpgradeError(
+              `IndexedDB version error: ${error.message}`,
+              error
+            ))
+            return
+          }
+
+          // Generic storage error
+          reject(new CacheStorageError(
+            `IndexedDB open failed: ${error.message}`,
+            error
+          ))
+        } else {
+          reject(new CacheStorageError('IndexedDB open failed with unknown error'))
+        }
+      }
+
       request.onsuccess = () => resolve(request.result)
-      
+
+      request.onblocked = () => {
+        reject(new CacheBlockedError(
+          'IndexedDB open blocked - another connection may be preventing the operation'
+        ))
+      }
+
       request.onupgradeneeded = (event) => {
-        const db = (event.target as IDBOpenDBRequest).result
-        if (!db.objectStoreNames.contains(this.storeName)) {
-          db.createObjectStore(this.storeName, { keyPath: 'key' })
+        try {
+          const db = (event.target as IDBOpenDBRequest).result
+
+          // Guard against errors during object store creation
+          if (!db.objectStoreNames.contains(this.storeName)) {
+            db.createObjectStore(this.storeName, { keyPath: 'key' })
+          }
+        } catch (error) {
+          // Handle quota or other errors during upgrade
+          if (error instanceof Error) {
+            if (error.name === 'QuotaExceededError' ||
+              (error as any).code === 22 ||
+              error.message?.toLowerCase().includes('quota')) {
+              reject(new CacheQuotaExceededError(
+                `Quota exceeded during database upgrade: ${error.message}`,
+                error
+              ))
+            } else {
+              reject(new CacheUpgradeError(
+                `Database upgrade failed: ${error.message}`,
+                error
+              ))
+            }
+          } else {
+            reject(new CacheUpgradeError('Database upgrade failed with unknown error'))
+          }
         }
       }
     })
   }
 
   async getItem(key: string): Promise<string | null> {
+    let db: IDBDatabase | null = null
+
     try {
-      const db = await this.getDB()
+      db = await this.getDB()
       const transaction = db.transaction([this.storeName], 'readonly')
       const store = transaction.objectStore(this.storeName)
-      
+
       return new Promise((resolve, reject) => {
+        let completed = false
+
+        const cleanup = () => {
+          if (!completed) {
+            completed = true
+            // Close the database connection to prevent memory leaks
+            if (db) {
+              db.close()
+            }
+          }
+        }
+
         const request = store.get(key)
-        request.onerror = () => reject(request.error)
+
+        request.onerror = () => {
+          cleanup()
+          const error = request.error
+          if (error) {
+            reject(new CacheStorageError(
+              `IndexedDB get failed: ${error.message}`,
+              error
+            ))
+          } else {
+            reject(new CacheStorageError('IndexedDB get failed with unknown error'))
+          }
+        }
+
         request.onsuccess = () => {
+          cleanup()
           const result = request.result
           resolve(result ? result.value : null)
         }
+
+        // Handle transaction events
+        transaction.oncomplete = () => {
+          if (!completed) {
+            cleanup()
+          }
+        }
+
+        transaction.onabort = () => {
+          cleanup()
+          if (!completed) {
+            reject(new CacheStorageError('Transaction was aborted'))
+          }
+        }
+
+        transaction.onerror = () => {
+          cleanup()
+          const error = transaction.error
+          if (!completed) {
+            reject(new CacheStorageError(
+              `Transaction error: ${error?.message || 'Unknown transaction error'}`,
+              error || undefined
+            ))
+          }
+        }
       })
     } catch (error) {
-      console.warn('[CACHE] IndexedDB getItem failed, falling back to localStorage:', error)
+      // Close db connection if getDB() succeeded but transaction setup failed
+      if (db) {
+        db.close()
+      }
+
+      if (error instanceof CacheBlockedError) {
+        console.warn('[CACHE] IndexedDB blocked while getting item, falling back to localStorage:', error.message)
+      } else {
+        console.warn('[CACHE] IndexedDB getItem failed, falling back to localStorage:', error)
+      }
       return localStorage.getItem(key)
     }
   }
 
   async setItem(key: string, value: string): Promise<void> {
+    let db: IDBDatabase | null = null
+
     try {
-      const db = await this.getDB()
+      db = await this.getDB()
       const transaction = db.transaction([this.storeName], 'readwrite')
       const store = transaction.objectStore(this.storeName)
-      
+
       return new Promise((resolve, reject) => {
+        let completed = false
+
+        const cleanup = () => {
+          if (!completed) {
+            completed = true
+            // Close the database connection to prevent memory leaks
+            if (db) {
+              db.close()
+            }
+          }
+        }
+
         const request = store.put({ key, value })
-        request.onerror = () => reject(request.error)
-        request.onsuccess = () => resolve()
+
+        request.onerror = () => {
+          cleanup()
+          const error = request.error
+          if (error) {
+            // Handle quota exceeded errors specifically
+            if (error.name === 'QuotaExceededError' ||
+              (error as any).code === 22 ||
+              error.message?.toLowerCase().includes('quota')) {
+              reject(new CacheQuotaExceededError(
+                `Storage quota exceeded while saving: ${error.message}`,
+                error
+              ))
+            } else {
+              reject(new CacheStorageError(
+                `IndexedDB put failed: ${error.message}`,
+                error
+              ))
+            }
+          } else {
+            reject(new CacheStorageError('IndexedDB put failed with unknown error'))
+          }
+        }
+
+        request.onsuccess = () => {
+          cleanup()
+          resolve()
+        }
+
+        // Handle transaction events
+        transaction.oncomplete = () => {
+          if (!completed) {
+            cleanup()
+          }
+        }
+
+        transaction.onabort = () => {
+          cleanup()
+          if (!completed) {
+            reject(new CacheStorageError('Transaction was aborted'))
+          }
+        }
+
+        transaction.onerror = () => {
+          cleanup()
+          const error = transaction.error
+          if (!completed) {
+            if (error && (error.name === 'QuotaExceededError' || (error as any).code === 22)) {
+              reject(new CacheQuotaExceededError(
+                `Transaction quota exceeded: ${error.message}`,
+                error
+              ))
+            } else {
+              reject(new CacheStorageError(
+                `Transaction error: ${error?.message || 'Unknown transaction error'}`,
+                error || undefined
+              ))
+            }
+          }
+        }
       })
     } catch (error) {
-      console.warn('[CACHE] IndexedDB setItem failed, falling back to localStorage:', error)
-      localStorage.setItem(key, value)
+      // Close db connection if getDB() succeeded but transaction setup failed
+      if (db) {
+        db.close()
+      }
+
+      // Handle specific error types for better fallback decisions
+      if (error instanceof CacheQuotaExceededError) {
+        console.warn('[CACHE] IndexedDB quota exceeded, falling back to localStorage:', error.message)
+        // Try localStorage but it might also fail due to quota
+        try {
+          localStorage.setItem(key, value)
+        } catch (lsError) {
+          throw new CacheQuotaExceededError('Both IndexedDB and localStorage quota exceeded')
+        }
+      } else if (error instanceof CacheBlockedError) {
+        console.warn('[CACHE] IndexedDB blocked, falling back to localStorage:', error.message)
+        localStorage.setItem(key, value)
+      } else {
+        console.warn('[CACHE] IndexedDB setItem failed, falling back to localStorage:', error)
+        localStorage.setItem(key, value)
+      }
     }
   }
 
   async removeItem(key: string): Promise<void> {
+    let db: IDBDatabase | null = null
+
     try {
-      const db = await this.getDB()
+      db = await this.getDB()
       const transaction = db.transaction([this.storeName], 'readwrite')
       const store = transaction.objectStore(this.storeName)
-      
+
       return new Promise((resolve, reject) => {
+        let completed = false
+
+        const cleanup = () => {
+          if (!completed) {
+            completed = true
+            // Close the database connection to prevent memory leaks
+            if (db) {
+              db.close()
+            }
+          }
+        }
+
         const request = store.delete(key)
-        request.onerror = () => reject(request.error)
-        request.onsuccess = () => resolve()
+
+        request.onerror = () => {
+          cleanup()
+          const error = request.error
+          if (error) {
+            reject(new CacheStorageError(
+              `IndexedDB delete failed: ${error.message}`,
+              error
+            ))
+          } else {
+            reject(new CacheStorageError('IndexedDB delete failed with unknown error'))
+          }
+        }
+
+        request.onsuccess = () => {
+          cleanup()
+          resolve()
+        }
+
+        // Handle transaction events
+        transaction.oncomplete = () => {
+          if (!completed) {
+            cleanup()
+          }
+        }
+
+        transaction.onabort = () => {
+          cleanup()
+          if (!completed) {
+            reject(new CacheStorageError('Transaction was aborted'))
+          }
+        }
+
+        transaction.onerror = () => {
+          cleanup()
+          const error = transaction.error
+          if (!completed) {
+            reject(new CacheStorageError(
+              `Transaction error: ${error?.message || 'Unknown transaction error'}`,
+              error || undefined
+            ))
+          }
+        }
       })
     } catch (error) {
-      console.warn('[CACHE] IndexedDB removeItem failed, falling back to localStorage:', error)
+      // Close db connection if getDB() succeeded but transaction setup failed
+      if (db) {
+        db.close()
+      }
+
+      if (error instanceof CacheBlockedError) {
+        console.warn('[CACHE] IndexedDB blocked while removing item, falling back to localStorage:', error.message)
+      } else {
+        console.warn('[CACHE] IndexedDB removeItem failed, falling back to localStorage:', error)
+      }
       localStorage.removeItem(key)
     }
   }
 
   async clear(): Promise<void> {
+    let db: IDBDatabase | null = null
+
     try {
-      const db = await this.getDB()
+      db = await this.getDB()
       const transaction = db.transaction([this.storeName], 'readwrite')
       const store = transaction.objectStore(this.storeName)
-      
+
       return new Promise((resolve, reject) => {
+        let completed = false
+
+        const cleanup = () => {
+          if (!completed) {
+            completed = true
+            // Close the database connection to prevent memory leaks
+            if (db) {
+              db.close()
+            }
+          }
+        }
+
         const request = store.clear()
-        request.onerror = () => reject(request.error)
-        request.onsuccess = () => resolve()
+
+        request.onerror = () => {
+          cleanup()
+          const error = request.error
+          if (error) {
+            reject(new CacheStorageError(
+              `IndexedDB clear failed: ${error.message}`,
+              error
+            ))
+          } else {
+            reject(new CacheStorageError('IndexedDB clear failed with unknown error'))
+          }
+        }
+
+        request.onsuccess = () => {
+          cleanup()
+          resolve()
+        }
+
+        // Handle transaction events
+        transaction.oncomplete = () => {
+          if (!completed) {
+            cleanup()
+          }
+        }
+
+        transaction.onabort = () => {
+          cleanup()
+          if (!completed) {
+            reject(new CacheStorageError('Transaction was aborted'))
+          }
+        }
+
+        transaction.onerror = () => {
+          cleanup()
+          const error = transaction.error
+          if (!completed) {
+            reject(new CacheStorageError(
+              `Transaction error: ${error?.message || 'Unknown transaction error'}`,
+              error || undefined
+            ))
+          }
+        }
       })
     } catch (error) {
-      console.warn('[CACHE] IndexedDB clear failed, falling back to localStorage:', error)
+      // Close db connection if getDB() succeeded but transaction setup failed
+      if (db) {
+        db.close()
+      }
+
+      if (error instanceof CacheBlockedError) {
+        console.warn('[CACHE] IndexedDB blocked while clearing, falling back to localStorage:', error.message)
+      } else {
+        console.warn('[CACHE] IndexedDB clear failed, falling back to localStorage:', error)
+      }
+
       // Clear all cache-related localStorage keys
       const keys = Object.keys(localStorage).filter(key => key.startsWith('oth_cache_'))
       keys.forEach(key => localStorage.removeItem(key))
@@ -150,18 +523,105 @@ class IndexedDBStorage implements StorageBackend {
   }
 
   async keys(): Promise<string[]> {
+    let db: IDBDatabase | null = null
+
     try {
-      const db = await this.getDB()
+      db = await this.getDB()
       const transaction = db.transaction([this.storeName], 'readonly')
       const store = transaction.objectStore(this.storeName)
-      
+
+      // Handle transaction-level errors
+      transaction.onerror = () => {
+        const error = transaction.error
+        if (error && (error.name === 'QuotaExceededError' || (error as any).code === 22)) {
+          throw new CacheQuotaExceededError(`Transaction quota exceeded: ${error.message}`, error)
+        }
+      }
+
       return new Promise((resolve, reject) => {
+        let completed = false
+
+        const cleanup = () => {
+          if (db && !completed) {
+            completed = true
+            // Note: Don't call db.close() as it may interfere with other operations
+            // IndexedDB connections are typically managed by the browser
+          }
+        }
+
         const request = store.getAllKeys()
-        request.onerror = () => reject(request.error)
-        request.onsuccess = () => resolve(request.result as string[])
+
+        request.onerror = () => {
+          cleanup()
+          const error = request.error
+          if (error) {
+            if (error.name === 'QuotaExceededError' ||
+              (error as any).code === 22 ||
+              error.message?.toLowerCase().includes('quota')) {
+              reject(new CacheQuotaExceededError(
+                `Quota exceeded while getting keys: ${error.message}`,
+                error
+              ))
+            } else {
+              reject(new CacheStorageError(
+                `IndexedDB getAllKeys failed: ${error.message}`,
+                error
+              ))
+            }
+          } else {
+            reject(new CacheStorageError('IndexedDB getAllKeys failed with unknown error'))
+          }
+        }
+
+        request.onsuccess = () => {
+          cleanup()
+          resolve(request.result as string[])
+        }
+
+        // Handle transaction completion/abort
+        transaction.oncomplete = () => {
+          // Transaction completed successfully
+          if (!completed) {
+            cleanup()
+          }
+        }
+
+        transaction.onabort = () => {
+          cleanup()
+          if (!completed) {
+            reject(new CacheStorageError('Transaction was aborted'))
+          }
+        }
+
+        transaction.onerror = () => {
+          cleanup()
+          const error = transaction.error
+          if (!completed) {
+            if (error && (error.name === 'QuotaExceededError' || (error as any).code === 22)) {
+              reject(new CacheQuotaExceededError(
+                `Transaction error - quota exceeded: ${error.message}`,
+                error
+              ))
+            } else {
+              reject(new CacheStorageError(
+                `Transaction error: ${error?.message || 'Unknown transaction error'}`,
+                error || undefined
+              ))
+            }
+          }
+        }
       })
     } catch (error) {
-      console.warn('[CACHE] IndexedDB keys failed, falling back to localStorage:', error)
+      // Handle specific error types for better fallback decisions
+      if (error instanceof CacheQuotaExceededError) {
+        console.warn('[CACHE] IndexedDB quota exceeded while getting keys, falling back to localStorage:', error.message)
+      } else if (error instanceof CacheBlockedError) {
+        console.warn('[CACHE] IndexedDB blocked while getting keys, falling back to localStorage:', error.message)
+      } else {
+        console.warn('[CACHE] IndexedDB keys failed, falling back to localStorage:', error)
+      }
+
+      // Fallback to localStorage
       return Object.keys(localStorage).filter(key => key.startsWith('oth_cache_'))
     }
   }
@@ -174,24 +634,24 @@ export interface ICacheManager {
   set<T>(key: string, data: T, ttl?: number): Promise<void>
   invalidate(key: string | string[]): Promise<void>
   clear(): Promise<void>
-  
+
   // Pattern-based invalidation
   invalidatePattern(pattern: string): Promise<void>
   invalidateWithCascade(key: string, entityType: CacheEntry<any>['entityType'], entityId?: string): Promise<void>
   invalidateUser(userId: string): Promise<void>
   invalidateSession(sessionId: string): Promise<void>
-  
+
   // Freshness validation
   isStale(key: string): Promise<boolean>
   validateFreshness(key: string): Promise<boolean>
   refreshStaleData(): Promise<void>
-  
+
   // Metadata management
   updateMetadata(updates: Partial<CacheMetadata>): Promise<void>
-  
+
   // Rule-based invalidation
   invalidateByOperation(operation: string, userId: string, entityId?: string, entityType?: CacheEntry<any>['entityType']): Promise<void>
-  
+
   // Lifecycle
   destroy(): void
 }
@@ -200,7 +660,7 @@ export interface ICacheManager {
 export class CacheManager implements ICacheManager {
   private config: CacheConfig
   private storage: StorageBackend
-  private cleanupTimer: NodeJS.Timeout | null = null
+  private cleanupTimer: number | null = null
   private metadata: CacheMetadata | null = null
 
   constructor(config: Partial<CacheConfig> = {}) {
@@ -215,20 +675,20 @@ export class CacheManager implements ICacheManager {
 
     // Use IndexedDB for better storage capacity
     this.storage = new IndexedDBStorage()
-    
+
     this.initializeCleanup()
     this.loadMetadata()
   }
 
   // Initialize periodic cleanup
   private initializeCleanup(): void {
-    if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer)
+    if (this.cleanupTimer !== null) {
+      window.clearInterval(this.cleanupTimer)
     }
 
-    this.cleanupTimer = setInterval(() => {
+    this.cleanupTimer = window.setInterval(() => {
       this.cleanupExpiredEntries()
-    }, this.config.cleanupInterval)
+    }, this.config.cleanupInterval) as number
   }
 
   // Load cache metadata
@@ -278,23 +738,54 @@ export class CacheManager implements ICacheManager {
     return `${this.config.storagePrefix}${key}`
   }
 
-  // Compress data if enabled
+  // Compress data using LZ-String compression
   private compressData(data: string): string {
-    if (!this.config.compressionEnabled) return data
-    
-    // Simple compression using JSON.stringify optimization
-    // In production, consider using a proper compression library
+    if (!this.config.compressionEnabled) {
+      return data
+    }
+
     try {
-      return JSON.stringify(JSON.parse(data))
-    } catch {
+      // Use LZ-String compression for efficient string compression
+      const compressed = LZString.compressToUTF16(data)
+
+      // Add prefix to identify compressed data
+      if (compressed && compressed.length < data.length) {
+        return 'lz:' + compressed
+      } else {
+        // If compression doesn't reduce size, return original
+        return data
+      }
+    } catch (error) {
+      console.warn('[CACHE] Compression failed, storing uncompressed:', error)
       return data
     }
   }
 
-  // Decompress data if needed
+  // Decompress data using LZ-String decompression
   private decompressData(data: string): string {
-    // For now, just return as-is since we're using simple JSON optimization
-    return data
+    // Check if data is compressed (has lz: prefix)
+    if (!data.startsWith('lz:')) {
+      // Not compressed, return as-is
+      return data
+    }
+
+    try {
+      // Remove the 'lz:' prefix and decompress
+      const compressedData = data.substring(3)
+      const decompressed = LZString.decompressFromUTF16(compressedData)
+
+      if (decompressed !== null) {
+        return decompressed
+      } else {
+        console.warn('[CACHE] Decompression failed, returning original data')
+        // Return original data without prefix if decompression fails
+        return compressedData
+      }
+    } catch (error) {
+      console.warn('[CACHE] Decompression error, returning original data:', error)
+      // Return data without prefix on error
+      return data.substring(3)
+    }
   }
 
   // Get item from cache
@@ -302,7 +793,7 @@ export class CacheManager implements ICacheManager {
     try {
       const cacheKey = this.getCacheKey(key)
       const entryStr = await this.storage.getItem(cacheKey)
-      
+
       if (!entryStr) {
         return null
       }
@@ -345,7 +836,17 @@ export class CacheManager implements ICacheManager {
       await this.storage.setItem(cacheKey, compressed)
       console.log(`[CACHE] Cache set for key: ${key}, TTL: ${entry.ttl}ms`)
     } catch (error) {
-      console.error(`[CACHE] Failed to set cache entry for key ${key}:`, error)
+      if (error instanceof CacheQuotaExceededError) {
+        console.warn(`[CACHE] Storage quota exceeded for key ${key}. Consider clearing old cache entries.`, error)
+        // Optionally trigger cleanup of expired entries
+        this.cleanupExpiredEntries().catch(() => {
+          // Ignore cleanup errors in this context
+        })
+      } else if (error instanceof CacheBlockedError) {
+        console.warn(`[CACHE] Storage blocked for key ${key}. Retrying later may succeed.`, error)
+      } else {
+        console.error(`[CACHE] Failed to set cache entry for key ${key}:`, error)
+      }
     }
   }
 
@@ -379,7 +880,7 @@ export class CacheManager implements ICacheManager {
   async invalidate(key: string | string[]): Promise<void> {
     try {
       const keys = Array.isArray(key) ? key : [key]
-      
+
       for (const k of keys) {
         const cacheKey = this.getCacheKey(k)
         await this.storage.removeItem(cacheKey)
@@ -396,27 +897,27 @@ export class CacheManager implements ICacheManager {
       console.log(`[CACHE] Invalidating pattern: ${pattern}`)
       const keys = await this.storage.keys()
       const cacheKeys = keys.filter(key => key.startsWith(this.config.storagePrefix))
-      
+
       // Convert pattern to regex
       const regex = this.patternToRegex(pattern)
       const matchingKeys: string[] = []
-      
+
       for (const cacheKey of cacheKeys) {
         if (cacheKey.endsWith('metadata')) continue // Skip metadata
-        
+
         // Remove prefix to get original key
         const originalKey = cacheKey.replace(this.config.storagePrefix, '')
-        
+
         if (regex.test(originalKey)) {
           matchingKeys.push(cacheKey)
         }
       }
-      
+
       // Remove matching keys
       for (const cacheKey of matchingKeys) {
         await this.storage.removeItem(cacheKey)
       }
-      
+
       console.log(`[CACHE] Invalidated ${matchingKeys.length} keys matching pattern: ${pattern}`)
     } catch (error) {
       console.error(`[CACHE] Failed to invalidate pattern ${pattern}:`, error)
@@ -430,7 +931,7 @@ export class CacheManager implements ICacheManager {
       .replace(/[.+^${}()|[\]\\]/g, '\\$&')
       .replace(/\*/g, '.*')
       .replace(/\?/g, '.')
-    
+
     return new RegExp(`^${regexPattern}$`)
   }
 
@@ -438,17 +939,17 @@ export class CacheManager implements ICacheManager {
   async invalidateWithCascade(key: string, entityType: CacheEntry<any>['entityType'], entityId?: string): Promise<void> {
     try {
       console.log(`[CACHE] Invalidating with cascade: ${key}, type: ${entityType}, id: ${entityId}`)
-      
+
       // First invalidate the specific key
       await this.invalidate(key)
-      
+
       // Apply cascade rules based on entity type
       const cascadePatterns = this.getCascadePatterns(entityType, entityId)
-      
+
       for (const pattern of cascadePatterns) {
         await this.invalidatePattern(pattern)
       }
-      
+
       console.log(`[CACHE] Cascade invalidation complete for ${key}`)
     } catch (error) {
       console.error(`[CACHE] Failed to invalidate with cascade ${key}:`, error)
@@ -458,7 +959,7 @@ export class CacheManager implements ICacheManager {
   // Get cascade patterns for entity type
   private getCascadePatterns(entityType: CacheEntry<any>['entityType'], entityId?: string): string[] {
     const patterns: string[] = []
-    
+
     switch (entityType) {
       case 'collection':
         if (entityId) {
@@ -470,7 +971,7 @@ export class CacheManager implements ICacheManager {
         // Also invalidate collection lists
         patterns.push('*:collections*')
         break
-        
+
       case 'dot':
         if (entityId) {
           // When a dot changes, invalidate the parent collection
@@ -478,17 +979,17 @@ export class CacheManager implements ICacheManager {
           patterns.push(`*:collections*`)
         }
         break
-        
+
       case 'snapshot':
         // Snapshots don't typically cascade to other entities
         break
-        
+
       case 'user_preferences':
         // User preferences might affect UI state caching
         patterns.push('*:ui:*')
         break
     }
-    
+
     return patterns
   }
 
@@ -507,33 +1008,27 @@ export class CacheManager implements ICacheManager {
   async invalidateSession(sessionId: string): Promise<void> {
     try {
       console.log(`[CACHE] Invalidating all cache for session: ${sessionId}`)
-      
-      // Get all cache keys and check their metadata
+
+      // Get all cache keys
       const keys = await this.storage.keys()
       const cacheKeys = keys.filter(key => key.startsWith(this.config.storagePrefix) && !key.endsWith('metadata'))
-      
+
+      // Since sessionId is not currently stored in cache entries, invalidate all keys
+      // TODO: If sessionId is later stored in cache entries, reintroduce parsing logic:
+      // - Add try/catch around getItem/JSON.parse/decompressData
+      // - Check entry.sessionId === sessionId before adding to keysToInvalidate
+      // - Handle corrupted entries by adding them to keysToInvalidate for cleanup
       const keysToInvalidate: string[] = []
-      
+
       for (const cacheKey of cacheKeys) {
-        try {
-          const entryStr = await this.storage.getItem(cacheKey)
-          if (entryStr) {
-            const entry: CacheEntry<any> = JSON.parse(this.decompressData(entryStr))
-            // Note: We don't store sessionId in cache entries currently,
-            // but this structure allows for future enhancement
-            keysToInvalidate.push(cacheKey)
-          }
-        } catch (error) {
-          // Remove corrupted entries
-          keysToInvalidate.push(cacheKey)
-        }
+        keysToInvalidate.push(cacheKey)
       }
-      
-      // Remove all keys (for now, since we don't track sessionId in entries)
+
+      // Remove all keys
       for (const cacheKey of keysToInvalidate) {
         await this.storage.removeItem(cacheKey)
       }
-      
+
       console.log(`[CACHE] Session cache invalidation complete for: ${sessionId}`)
     } catch (error) {
       console.error(`[CACHE] Failed to invalidate session cache for ${sessionId}:`, error)
@@ -546,9 +1041,9 @@ export class CacheManager implements ICacheManager {
       console.log('[CACHE] Refreshing stale data')
       const keys = await this.storage.keys()
       const cacheKeys = keys.filter(key => key.startsWith(this.config.storagePrefix) && !key.endsWith('metadata'))
-      
+
       let refreshedCount = 0
-      
+
       for (const cacheKey of cacheKeys) {
         try {
           const entryStr = await this.storage.getItem(cacheKey)
@@ -565,7 +1060,7 @@ export class CacheManager implements ICacheManager {
           refreshedCount++
         }
       }
-      
+
       console.log(`[CACHE] Refreshed ${refreshedCount} stale entries`)
     } catch (error) {
       console.error('[CACHE] Failed to refresh stale data:', error)
@@ -587,7 +1082,7 @@ export class CacheManager implements ICacheManager {
     try {
       const cacheKey = this.getCacheKey(key)
       const entryStr = await this.storage.getItem(cacheKey)
-      
+
       if (!entryStr) {
         return true // No cache entry means stale
       }
@@ -611,12 +1106,12 @@ export class CacheManager implements ICacheManager {
       console.log('[CACHE] Starting cleanup of expired entries')
       const keys = await this.storage.keys()
       const cacheKeys = keys.filter(key => key.startsWith(this.config.storagePrefix))
-      
+
       let cleanedCount = 0
-      
+
       for (const cacheKey of cacheKeys) {
         if (cacheKey.endsWith('metadata')) continue // Skip metadata
-        
+
         try {
           const entryStr = await this.storage.getItem(cacheKey)
           if (entryStr) {
@@ -632,7 +1127,7 @@ export class CacheManager implements ICacheManager {
           cleanedCount++
         }
       }
-      
+
       if (cleanedCount > 0) {
         console.log(`[CACHE] Cleaned up ${cleanedCount} expired/corrupted entries`)
       }
@@ -658,20 +1153,20 @@ export class CacheManager implements ICacheManager {
   ): Promise<void> {
     try {
       console.log(`[CACHE] Invalidating by operation: ${operation}, user: ${userId}, entity: ${entityId}`)
-      
+
       const ruleManager = getInvalidationRuleManager()
       const patterns = ruleManager.getInvalidationPatterns(operation, entityId, userId)
-      
+
       for (const pattern of patterns) {
         await this.invalidatePattern(pattern)
       }
-      
+
       // If entity type is provided, also run cascade invalidation
       if (entityType && entityId) {
         const cacheKey = `user:${userId}:${entityType}:${entityId}`
         await this.invalidateWithCascade(cacheKey, entityType, entityId)
       }
-      
+
       console.log(`[CACHE] Operation-based invalidation complete: ${operation}`)
     } catch (error) {
       console.error(`[CACHE] Failed to invalidate by operation ${operation}:`, error)
@@ -680,8 +1175,8 @@ export class CacheManager implements ICacheManager {
 
   // Destroy cache manager
   destroy(): void {
-    if (this.cleanupTimer) {
-      clearInterval(this.cleanupTimer)
+    if (this.cleanupTimer !== null) {
+      window.clearInterval(this.cleanupTimer)
       this.cleanupTimer = null
     }
   }

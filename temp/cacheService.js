@@ -8,6 +8,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.initializeCacheManager = exports.getCacheManager = exports.CacheManager = void 0;
 const cacheInvalidationRules_1 = require("./cacheInvalidationRules");
+const zlib = require("zlib");
 // IndexedDB storage backend for larger data
 class IndexedDBStorage {
     constructor() {
@@ -33,18 +34,65 @@ class IndexedDBStorage {
             const db = await this.getDB();
             const transaction = db.transaction([this.storeName], 'readonly');
             const store = transaction.objectStore(this.storeName);
+            
             return new Promise((resolve, reject) => {
+                let completed = false;
+                
+                const cleanup = () => {
+                    if (!completed) {
+                        completed = true;
+                    }
+                };
+                
                 const request = store.get(key);
-                request.onerror = () => reject(request.error);
+                
+                request.onerror = () => {
+                    cleanup();
+                    // Abort transaction on request error
+                    try {
+                        transaction.abort();
+                    } catch (abortError) {
+                        // Transaction may already be aborted
+                    }
+                    reject(request.error);
+                };
+                
                 request.onsuccess = () => {
+                    cleanup();
                     const result = request.result;
                     resolve(result ? result.value : null);
+                };
+                
+                // Handle transaction-level events
+                transaction.oncomplete = () => {
+                    if (!completed) {
+                        cleanup();
+                    }
+                };
+                
+                transaction.onabort = () => {
+                    cleanup();
+                    if (!completed) {
+                        reject(new Error('Transaction was aborted'));
+                    }
+                };
+                
+                transaction.onerror = () => {
+                    cleanup();
+                    if (!completed) {
+                        reject(transaction.error || new Error('Transaction error'));
+                    }
                 };
             });
         }
         catch (error) {
             console.warn('[CACHE] IndexedDB getItem failed, falling back to localStorage:', error);
-            return localStorage.getItem(key);
+            // Return Promise to maintain async contract
+            try {
+                return Promise.resolve(localStorage.getItem(key));
+            } catch (lsError) {
+                return Promise.reject(new Error(`Both IndexedDB and localStorage failed: ${error.message}, ${lsError.message}`));
+            }
         }
     }
     async setItem(key, value) {
@@ -185,23 +233,55 @@ class CacheManager {
     getCacheKey(key) {
         return `${this.config.storagePrefix}${key}`;
     }
-    // Compress data if enabled
+    // Compress data using zlib compression
     compressData(data) {
-        if (!this.config.compressionEnabled)
+        if (!this.config.compressionEnabled) {
             return data;
-        // Simple compression using JSON.stringify optimization
-        // In production, consider using a proper compression library
-        try {
-            return JSON.stringify(JSON.parse(data));
         }
-        catch {
+        
+        try {
+            // Convert string to Buffer for compression
+            const inputBuffer = Buffer.from(data, 'utf8');
+            
+            // Use gzip compression for good compression ratio and compatibility
+            const compressedBuffer = zlib.gzipSync(inputBuffer);
+            
+            // Convert compressed buffer to base64 string for storage
+            // Prefix with 'gzip:' to indicate compression format
+            return 'gzip:' + compressedBuffer.toString('base64');
+        }
+        catch (error) {
+            console.warn('[CACHE] Compression failed, storing uncompressed:', error.message);
+            // Fall back to original data on compression failure
             return data;
         }
     }
-    // Decompress data if needed
+    
+    // Decompress data using zlib decompression
     decompressData(data) {
-        // For now, just return as-is since we're using simple JSON optimization
-        return data;
+        // Check if data is compressed (has gzip prefix)
+        if (!data.startsWith('gzip:')) {
+            // Not compressed or legacy format, return as-is
+            return data;
+        }
+        
+        try {
+            // Remove the 'gzip:' prefix and decode from base64
+            const base64Data = data.substring(5);
+            const compressedBuffer = Buffer.from(base64Data, 'base64');
+            
+            // Decompress using gzip
+            const decompressedBuffer = zlib.gunzipSync(compressedBuffer);
+            
+            // Convert back to string
+            return decompressedBuffer.toString('utf8');
+        }
+        catch (error) {
+            console.warn('[CACHE] Decompression failed, returning original data:', error.message);
+            // Fall back to original data on decompression failure
+            // Remove prefix if it exists to avoid corruption
+            return data.startsWith('gzip:') ? data.substring(5) : data;
+        }
     }
     // Get item from cache
     async get(key) {

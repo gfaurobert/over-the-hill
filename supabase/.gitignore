@@ -6,3 +6,10 @@
 .env.keys
 .env.local
 .env.*.local
+#
+# Also ignore all plaintext env files by default
+.env
+.env.*
+# Re-include safe-to-commit templates/artifacts (if you use them)
+!.env.example
+!.env.vault
