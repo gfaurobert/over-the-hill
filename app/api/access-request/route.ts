@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabaseClient';
+import { emailService } from '@/lib/services/emailService';
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,6 +55,40 @@ export async function POST(request: NextRequest) {
         { error: 'Failed to submit access request. Please try again.' },
         { status: 500 }
       );
+    }
+
+    // Send email notification after successful database insertion
+    // This is done asynchronously and failures won't affect the access request success
+    const emailStartTime = Date.now();
+    try {
+      console.log(`Attempting to send email notification for access request: ${email}`);
+      
+      const emailSent = await emailService.sendAccessRequestNotification(
+        email.toLowerCase().trim(),
+        messageEncrypted || ''
+      );
+      
+      const emailDuration = Date.now() - emailStartTime;
+      
+      if (emailSent) {
+        console.log(`✅ Email notification sent successfully for access request: ${email} (${emailDuration}ms)`);
+        console.log(`📧 Notification sent to admin: ${process.env.TO_EMAIL}`);
+      } else {
+        console.warn(`⚠️ Email notification failed for access request: ${email} (${emailDuration}ms)`);
+        console.warn(`📧 Failed to notify admin: ${process.env.TO_EMAIL}`);
+      }
+    } catch (emailError) {
+      const emailDuration = Date.now() - emailStartTime;
+      
+      // Log email errors but don't fail the request
+      // Ensure we don't log sensitive SMTP credentials
+      const sanitizedError = emailError instanceof Error 
+        ? { message: emailError.message, code: (emailError as any).code }
+        : 'Unknown email error';
+        
+      console.error(`❌ Email notification error for ${email} (${emailDuration}ms):`, sanitizedError);
+      console.warn(`✅ Access request stored successfully but email notification failed for: ${email}`);
+      console.info(`🔧 Check SMTP configuration and connectivity`);
     }
 
     return NextResponse.json(

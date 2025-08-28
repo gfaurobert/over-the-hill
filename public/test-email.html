@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Email - Over The Hill</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background-color: #2563eb;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        button:hover {
+            background-color: #1d4ed8;
+        }
+        button:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .success {
+            background-color: #d1fae5;
+            border: 1px solid #10b981;
+            color: #065f46;
+        }
+        .error {
+            background-color: #fee2e2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+        }
+        .info {
+            background-color: #dbeafe;
+            border: 1px solid #3b82f6;
+            color: #1e40af;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📧 Over The Hill - Email Test</h1>
+        <p>Use this page to test the email notification system.</p>
+        
+        <h3>Test Options:</h3>
+        
+        <button onclick="sendTestEmail()">📧 Send Test Email</button>
+        <p><small>Sends a test access request notification email</small></p>
+        
+        <button onclick="checkEmailHealth()">📊 Check Email Health</button>
+        <p><small>Check the current status and metrics of the email service</small></p>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        async function sendTestEmail() {
+            const button = event.target;
+            const resultDiv = document.getElementById('result');
+            
+            button.disabled = true;
+            button.textContent = '⏳ Sending...';
+            
+            try {
+                const response = await fetch('/api/test-email', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    resultDiv.className = 'result success';
+                    resultDiv.textContent = `✅ Test email sent successfully!
+
+📧 Check your inbox at: ${data.healthStatus?.metrics ? 'configured email address' : 'your email'}
+
+The email should contain:
+- Subject: "Over The Hill - New Access Request from test-user@example.com"
+- Professional HTML formatting
+- Requester information
+- Test message content
+- Reply button
+
+Health Status: ${data.healthStatus?.status || 'Unknown'}
+Success Rate: ${data.healthStatus?.metrics?.successfulSends || 0}/${data.healthStatus?.metrics?.totalAttempts || 0}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ Test email failed: ${data.error}
+
+Details: ${data.details || 'No additional details'}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Request failed: ${error.message}`;
+            } finally {
+                button.disabled = false;
+                button.textContent = '📧 Send Test Email';
+            }
+        }
+        
+        async function checkEmailHealth() {
+            const button = event.target;
+            const resultDiv = document.getElementById('result');
+            
+            button.disabled = true;
+            button.textContent = '⏳ Checking...';
+            
+            try {
+                const response = await fetch('/api/test-email', {
+                    method: 'GET'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    const metrics = data.healthStatus.metrics;
+                    resultDiv.className = 'result info';
+                    resultDiv.textContent = `📊 Email Service Health Status
+
+Status: ${data.healthStatus.status}
+Healthy: ${data.healthStatus.isHealthy ? 'Yes' : 'No'}
+
+Metrics:
+- Total Attempts: ${metrics.totalAttempts}
+- Successful Sends: ${metrics.successfulSends}
+- Failed Sends: ${metrics.failedSends}
+- Success Rate: ${metrics.totalAttempts > 0 ? Math.round((metrics.successfulSends / metrics.totalAttempts) * 100) : 0}%
+- Average Response Time: ${metrics.averageResponseTime}ms
+- Last Successful Send: ${metrics.lastSuccessfulSend || 'Never'}
+- Last Failed Send: ${metrics.lastFailedSend || 'Never'}
+
+Recent Errors: ${metrics.recentErrors.length}
+
+Timestamp: ${data.timestamp}`;
+                } else {
+                    resultDiv.className = 'result error';
+                    resultDiv.textContent = `❌ Health check failed: ${data.error}`;
+                }
+            } catch (error) {
+                resultDiv.className = 'result error';
+                resultDiv.textContent = `❌ Request failed: ${error.message}`;
+            } finally {
+                button.disabled = false;
+                button.textContent = '📊 Check Email Health';
+            }
+        }
+    </script>
+</body>
+</html>
