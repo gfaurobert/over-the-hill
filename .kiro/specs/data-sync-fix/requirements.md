@@ -49,36 +49,3 @@ This feature addresses critical data synchronization issues in the Over The Hill
 2. WHEN a user's session expires THEN the system SHALL clear all local cached data and redirect to login
 3. WHEN a user logs back in after session expiry THEN the system SHALL fetch all data fresh from the remote database
 4. WHEN session validation fails THEN the system SHALL clear local cache and require re-authentication
-
-### Requirement 5
-
-**User Story:** As a user, I want the application to scale efficiently with large numbers of collections, so that performance remains good as my data grows.
-
-#### Acceptance Criteria
-
-1. WHEN the application loads THEN the system SHALL implement lazy loading for collection data instead of loading everything upfront
-2. WHEN a user has more than 50 collections THEN the system SHALL paginate or virtualize the collection list
-3. WHEN a collection is selected THEN the system SHALL load only that collection's data on-demand
-4. WHEN switching between collections THEN the system SHALL maintain a reasonable cache size limit and evict least recently used data
-
-### Requirement 6
-
-**User Story:** As a user, I want clear feedback when data is being synchronized, so that I understand when operations are in progress.
-
-#### Acceptance Criteria
-
-1. WHEN data is being fetched from the remote database THEN the system SHALL display appropriate loading indicators
-2. WHEN a data modification is being saved THEN the system SHALL provide visual feedback of the save operation
-3. WHEN cache is being refreshed THEN the system SHALL show a subtle indicator that data is being updated
-4. WHEN network connectivity issues occur THEN the system SHALL display appropriate error messages and retry mechanisms
-
-### Requirement 7
-
-**User Story:** As a user, I want the application to handle offline scenarios gracefully, so that I can continue working when connectivity is intermittent.
-
-#### Acceptance Criteria
-
-1. WHEN the user goes offline THEN the system SHALL detect the offline state and inform the user
-2. WHEN offline THEN the system SHALL allow read-only access to cached data with clear indicators that data may be stale
-3. WHEN connectivity is restored THEN the system SHALL automatically sync any pending changes and refresh stale data
-4. WHEN conflicts arise during sync THEN the system SHALL provide conflict resolution mechanisms or clear error messages

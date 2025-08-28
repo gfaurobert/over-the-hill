@@ -15,7 +15,13 @@
     "test:install": "playwright install --with-deps",
     "test:unit": "jest",
     "test:unit:watch": "jest --watch",
-    "test:unit:coverage": "jest --coverage"
+    "test:unit:coverage": "jest --coverage",
+    "test:unit:clean": "jest --testPathIgnorePatterns='temp/' --testPathIgnorePatterns='.yoyo/' --testPathIgnorePatterns='cacheService'",
+    "test:unit:clean:coverage": "jest --coverage --testPathIgnorePatterns='temp/' --testPathIgnorePatterns='.yoyo/' --testPathIgnorePatterns='cacheService'",
+    "test:password": "jest --testPathPattern='Password|password-input|SignInForm'",
+    "test:password:coverage": "jest --coverage --testPathPattern='Password|password-input|SignInForm'",
+    "test:all": "node scripts/run-all-tests.js",
+    "test:report": "npm run test:unit:clean:coverage && npm run test -- --reporter=html"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -78,6 +84,10 @@
     "@playwright/browser-firefox": "^1.45.0",
     "@playwright/browser-webkit": "^1.45.0",
     "@playwright/test": "^1.45.0",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.8.0",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/jest": "^29.5.12",
     "@types/node": "^22.16.2",
     "@types/react": "^19.1.8",

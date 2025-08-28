@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from './ui/card';
 import { Input } from './ui/input';
+import { PasswordInput } from './ui/password-input';
 import { Label } from './ui/label';
 
 interface SignInFormProps {
@@ -83,9 +84,8 @@ const SignInForm: React.FC<SignInFormProps> = ({ onSignIn, onRequestAccess, onRe
                   Forgot your password?
                 </button>
               </div>
-              <Input
+              <PasswordInput
                 id="password"
-                type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 disabled={loading}

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { PasswordInput } from './ui/password-input';
 import { Label } from './ui/label';
 import { Card, CardContent } from './ui/card';
 
@@ -106,9 +107,8 @@ const SetPasswordForm: React.FC<SetPasswordFormProps> = ({ onPasswordSet }) => {
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor="password">Password</Label>
-        <Input
+        <PasswordInput
           id="password"
-          type="password"
           value={password}
           onChange={(e) => handlePasswordChange(e.target.value)}
           placeholder="Create a strong password"
@@ -150,9 +150,8 @@ const SetPasswordForm: React.FC<SetPasswordFormProps> = ({ onPasswordSet }) => {
 
       <div className="space-y-2">
         <Label htmlFor="confirmPassword">Confirm Password</Label>
-        <Input
+        <PasswordInput
           id="confirmPassword"
-          type="password"
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
           placeholder="Confirm your password"
