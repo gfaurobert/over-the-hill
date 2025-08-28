@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
 import { Button } from './ui/button';
 import {
   Card,
@@ -23,14 +22,30 @@ const RequestAccessForm: React.FC = () => {
     setLoading(true);
     setError(null);
     setSuccess(false);
-    const { error } = await supabase.from('access_requests').insert({ email, message });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else {
-      setSuccess(true);
-      setEmail('');
-      setMessage('');
+
+    try {
+      const response = await fetch('/api/access-request', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, message }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to submit access request');
+      } else {
+        setSuccess(true);
+        setEmail('');
+        setMessage('');
+      }
+    } catch (err) {
+      console.error('Access request submission error:', err);
+      setError('Network error. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
