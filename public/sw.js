@@ -1,8 +1,8 @@
-const CACHE_NAME = 'over-the-hill-v1';
+const CACHE_NAME = 'over-the-hill-v1756473747537'; // Bump version to force update
 const urlsToCache = [
-  '/',
   '/manifest.json',
   '/favicon.ico',
+  // Remove '/' from cache to prevent stale homepage
 ];
 
 // Install event - cache resources
@@ -43,78 +43,90 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
+  const { request } = event;
+  const url = new URL(request.url);
+  
   // Skip non-GET requests
-  if (event.request.method !== 'GET') {
+  if (request.method !== 'GET') {
     return;
   }
 
-  // Skip API requests and external resources
-  if (event.request.url.includes('/api/') || 
-      !event.request.url.startsWith(self.location.origin)) {
+  // Skip external resources
+  if (!url.href.startsWith(self.location.origin)) {
     return;
   }
 
-  // Skip caching for data-related requests (Supabase, auth, etc.)
-  if (event.request.url.includes('supabase.co') ||
-      event.request.url.includes('supabase.com') ||
-      event.request.url.includes('/auth/') ||
-      event.request.url.includes('/_next/data/') ||
-      event.request.url.includes('.json')) {
-    console.log('[SW] Skipping cache for data request:', event.request.url);
+  // Define patterns that should NEVER be cached
+  const shouldSkipCache = 
+    // API routes
+    url.pathname.includes('/api/') ||
+    // Supabase endpoints
+    url.hostname.includes('supabase') ||
+    // Next.js data routes (production)
+    url.pathname.includes('/_next/data/') ||
+    // JSON responses
+    url.pathname.endsWith('.json') ||
+    url.searchParams.has('_rsc') || // React Server Components
+    // Authentication
+    url.pathname.includes('/auth/') ||
+    // Main pages (to ensure fresh data)
+    url.pathname === '/' ||
+    url.pathname === '/index.html' ||
+    // Next.js build files that contain dynamic imports
+    url.pathname.includes('/_next/static/chunks/pages/') ||
+    // Any query parameters (likely dynamic content)
+    url.search.length > 0;
+
+  if (shouldSkipCache) {
+    console.log('[SW] Network-only for:', request.url);
     return;
   }
 
-  // Skip caching for the main page to ensure fresh data
-  if (event.request.url === self.location.origin + '/' || 
-      event.request.url === self.location.origin + '/index.html') {
-    console.log('[SW] Skipping cache for main page:', event.request.url);
+  // Only cache static assets (images, fonts, CSS, JS bundles)
+  const isStaticAsset = 
+    url.pathname.includes('/_next/static/') ||
+    url.pathname.match(/\.(png|jpg|jpeg|svg|gif|webp|ico|woff|woff2|ttf|otf|css)$/i);
+  
+  if (!isStaticAsset) {
+    console.log('[SW] Skipping non-static asset:', request.url);
     return;
   }
 
+  // For static assets, use cache-first strategy
   event.respondWith(
-    caches.match(event.request)
+    caches.match(request)
       .then((response) => {
-        // Return cached version or fetch from network
         if (response) {
-          console.log('[SW] Serving from cache:', event.request.url);
+          console.log('[SW] Cache hit:', request.url);
           return response;
         }
 
-        console.log('[SW] Fetching from network:', event.request.url);
-        return fetch(event.request)
+        console.log('[SW] Cache miss, fetching:', request.url);
+        return fetch(request)
           .then((response) => {
-            // Don't cache non-successful responses
+            // Only cache successful responses
             if (!response || response.status !== 200 || response.type !== 'basic') {
               return response;
             }
 
-            // Clone the response
+            // Only cache truly static assets
             const responseToCache = response.clone();
-
             caches.open(CACHE_NAME)
               .then((cache) => {
-                cache.put(event.request, responseToCache)
-                  .catch((error) => {
-                    console.error('[SW] Failed to cache response:', event.request.url, error);
-                    // Handle specific error types
-                    if (error.name === 'QuotaExceededError') {
-                      console.warn('[SW] Storage quota exceeded, unable to cache:', event.request.url);
-                    }
-                  });
+                console.log('[SW] Caching static asset:', request.url);
+                cache.put(request, responseToCache);
               })
               .catch((error) => {
-                console.error('[SW] Failed to open cache:', CACHE_NAME, error);
+                console.error('[SW] Cache error:', error);
               });
 
             return response;
-          })
-          .catch((error) => {
-            console.error('[SW] Fetch failed:', error);
-            // Return a custom offline page if available
-            if (event.request.destination === 'document') {
-              return caches.match('/');
-            }
           });
+      })
+      .catch((error) => {
+        console.error('[SW] Fetch failed:', error);
+        // Don't return cached pages for failed requests
+        return new Response('Network error', { status: 503 });
       })
   );
 });
