@@ -52,7 +52,7 @@ import {
   fetchSnapshots,
   loadSnapshot,
   resetAllCollections,
-} from "@/lib/services/cachedDataService"
+} from "@/lib/services/simpleDataService"
 
 export interface Dot {
   id: string
@@ -386,7 +386,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       setIsLoadingCollections(true)
       
       // Fetch active collections with force refresh on login
-      fetchCollections(user.id, false, { forceRefresh: true }).then((activeCollections) => {
+      fetchCollections(user.id, false).then((activeCollections) => {
         console.log('[HILL_CHART] Loaded active collections:', activeCollections.length)
         setCollections(activeCollections)
         setOriginalCollections(activeCollections)
@@ -401,7 +401,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       })
       
       // Fetch archived collections with force refresh on login
-      fetchCollections(user.id, true, { forceRefresh: true }).then((allCollections) => {
+      fetchCollections(user.id, true).then((allCollections) => {
         const archived = allCollections.filter(c => c.status === 'archived')
         console.log('[HILL_CHART] Loaded archived collections:', archived.length)
         setArchivedCollections(archived)
@@ -410,7 +410,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       })
       
       // Fetch snapshots with force refresh on login
-      fetchSnapshots(user.id, { forceRefresh: true }).then((fetchedSnapshots) => {
+      fetchSnapshots(user.id).then((fetchedSnapshots) => {
         console.log('[HILL_CHART] Loaded snapshots:', fetchedSnapshots.length)
         setSnapshots(fetchedSnapshots)
       }).catch((error) => {
@@ -440,17 +440,26 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
   }, [snapshotSuccess])
 
+  // Register service worker and handle updates
+  useEffect(() => {
+    const initServiceWorker = async () => {
+      const { registerServiceWorker } = await import('@/lib/utils/serviceWorkerUtils')
+      await registerServiceWorker()
+    }
+    initServiceWorker()
+  }, [])
+
   // Force refresh data when user returns to the app after being away
   useEffect(() => {
     const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible' && user?.id) {
         console.log('[HILL_CHART] User returned to app, force refreshing data...')
         try {
-          // Force refresh all data to ensure it's up to date
+          // Fetch fresh data from database
           const [activeCollections, allCollections, snapshots] = await Promise.all([
-            fetchCollections(user.id, false, { forceRefresh: true }),
-            fetchCollections(user.id, true, { forceRefresh: true }),
-            fetchSnapshots(user.id, { forceRefresh: true })
+            fetchCollections(user.id, false),
+            fetchCollections(user.id, true),
+            fetchSnapshots(user.id)
           ])
           
           setCollections(activeCollections)
@@ -578,7 +587,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
     
     try {
-      const addedDot = await addDotService(newDot, selectedCollection, user.id)
+      const addedDot = await addDotService(user.id, selectedCollection, newDot)
       if (addedDot) {
         console.log('[HILL_CHART] Dot created successfully:', addedDot)
         // Update local state immediately
@@ -596,7 +605,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   const confirmDelete = async () => {
     if (deleteConfirm && selectedCollection && user) {
-      const { success } = await deleteDotService(deleteConfirm.dotId, user.id)
+      const success = await deleteDotService(user.id, selectedCollection, deleteConfirm.dotId)
       if (success) {
         setCollections((prev) =>
           prev.map((c) =>
@@ -746,7 +755,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         }
         
         try {
-          const added = await addCollection(newCollection, user.id)
+          const added = await addCollection(user.id, newCollection.name)
           if (added) {
             console.log('[HILL_CHART] Collection created successfully:', added)
             // Update local state immediately
@@ -1027,7 +1036,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       status: collection.status,
       archived_at: collection.archived_at,
       deleted_at: collection.deleted_at,
-      dots: collection.dots.map(dot => ({
+      dots: (collection.dots || []).map(dot => ({
         id: dot.id,
         label: dot.label, // This is already decrypted
         x: dot.x,
@@ -1043,7 +1052,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       date: snapshot.date,
       collectionId: snapshot.collectionId,
       collectionName: snapshot.collectionName, // Already decrypted
-      dots: snapshot.dots.map(dot => ({
+      dots: (snapshot.dots || []).map(dot => ({
         id: dot.id,
         label: dot.label, // Already decrypted
         x: dot.x,
@@ -1093,7 +1102,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         })
         
         // Import the data
-        const importedCollections = await importData(data, user.id)
+        const importedCollections = await importData(user.id, data)
         console.log('[HILL_CHART] Import completed, imported collections:', importedCollections.length)
         
         // Add a small delay to ensure database operations are complete
@@ -1289,7 +1298,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     if (!user || !currentCollection) return
 
     // Ensure every dot has an explicit archived property
-    const dotsWithArchived = currentCollection.dots.map(dot => ({
+    const dotsWithArchived = (currentCollection.dots || []).map(dot => ({
       ...dot,
       archived: dot.archived // force boolean
     }))
@@ -1983,10 +1992,12 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                             console.log('[HILL_CHART] Manual data refresh requested')
                             setIsLoadingCollections(true)
                             try {
+                              // Fetch fresh data from database
+                              
                               const [activeCollections, allCollections, snapshots] = await Promise.all([
-                                fetchCollections(user.id, false, { forceRefresh: true }),
-                                fetchCollections(user.id, true, { forceRefresh: true }),
-                                fetchSnapshots(user.id, { forceRefresh: true })
+                                fetchCollections(user.id, false),
+                                fetchCollections(user.id, true),
+                                fetchSnapshots(user.id)
                               ])
                               
                               setCollections(activeCollections)
@@ -2008,6 +2019,43 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
                       >
                         <Download className="w-4 h-4" /> Refresh Data
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (confirm('This will clear all stored data and force a complete refresh. Continue?')) {
+                            console.log('[HILL_CHART] Manual storage clear requested')
+                            try {
+                              const { clearAllAppStorage } = await import('@/lib/utils/storageUtils')
+                              await clearAllAppStorage()
+                              console.log('[HILL_CHART] All storage cleared successfully')
+                              // Reload the page to start fresh
+                              window.location.reload()
+                            } catch (error) {
+                              console.error('[HILL_CHART] Failed to clear storage:', error)
+                            }
+                          }
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 text-orange-600 dark:text-orange-400"
+                      >
+                        <Trash2 className="w-4 h-4" /> Clear All Storage
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (confirm('This will clear the service worker cache and reload the page. Continue?')) {
+                            console.log('[HILL_CHART] Service worker cache clear requested')
+                            try {
+                              const { clearServiceWorkerCache } = await import('@/lib/utils/serviceWorkerUtils')
+                              await clearServiceWorkerCache()
+                              console.log('[HILL_CHART] Service worker cache cleared, reloading...')
+                              window.location.reload()
+                            } catch (error) {
+                              console.error('[HILL_CHART] Failed to clear service worker cache:', error)
+                            }
+                          }
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 text-blue-600 dark:text-blue-400"
+                      >
+                        <Download className="w-4 h-4" /> Clear SW Cache
                       </button>
 
                       {/* Privacy Section */}

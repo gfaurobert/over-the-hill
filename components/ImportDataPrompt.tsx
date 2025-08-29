@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { useAuth } from './AuthProvider';
-import { importData } from '@/lib/services/cachedDataService';
+import { importData } from '@/lib/services/simpleDataService';
 import { ValidationError } from '@/lib/validation';
 import { ImportSecurityService } from '@/lib/security/importSecurity';
 

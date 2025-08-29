@@ -26,7 +26,8 @@ import {
   fetchCollections,
   fetchSnapshots,
   fetchUserPreferences
-} from "@/lib/services/cachedDataService"
+} from "@/lib/services/simpleDataService"
+import type { Dot } from "./HillChartApp"
 import { supabase } from "@/lib/supabaseClient"
 
 interface PrivacySettingsProps {
@@ -191,7 +192,7 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
         status: collection.status,
         archived_at: collection.archived_at,
         deleted_at: collection.deleted_at,
-        dots: collection.dots.map(dot => ({
+        dots: collection.dots.map((dot: Dot) => ({
           id: dot.id,
           label: dot.label, // Already decrypted
           x: dot.x,
@@ -207,7 +208,7 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
         date: snapshot.date,
         collectionId: snapshot.collectionId,
         collectionName: snapshot.collectionName, // Already decrypted
-        dots: snapshot.dots.map(dot => ({
+        dots: snapshot.dots.map((dot: Dot) => ({
           id: dot.id,
           label: dot.label, // Already decrypted
           x: dot.x,

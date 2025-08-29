@@ -54,6 +54,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Skip caching for the main page to ensure fresh data
+  if (event.request.url === self.location.origin + '/' || 
+      event.request.url === self.location.origin + '/index.html') {
+    console.log('[SW] Skipping cache for main page:', event.request.url);
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
