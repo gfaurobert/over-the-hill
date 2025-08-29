@@ -385,8 +385,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       console.log('[HILL_CHART] Loading collections for user:', user.id)
       setIsLoadingCollections(true)
       
-      // Fetch active collections
-      fetchCollections(user.id, false).then((activeCollections) => {
+      // Fetch active collections with force refresh on login
+      fetchCollections(user.id, false, { forceRefresh: true }).then((activeCollections) => {
         console.log('[HILL_CHART] Loaded active collections:', activeCollections.length)
         setCollections(activeCollections)
         setOriginalCollections(activeCollections)
@@ -400,8 +400,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         setIsLoadingCollections(false)
       })
       
-      // Fetch archived collections
-      fetchCollections(user.id, true).then((allCollections) => {
+      // Fetch archived collections with force refresh on login
+      fetchCollections(user.id, true, { forceRefresh: true }).then((allCollections) => {
         const archived = allCollections.filter(c => c.status === 'archived')
         console.log('[HILL_CHART] Loaded archived collections:', archived.length)
         setArchivedCollections(archived)
@@ -409,8 +409,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         console.error('[HILL_CHART] Failed to fetch archived collections:', error)
       })
       
-      // Fetch snapshots
-      fetchSnapshots(user.id).then((fetchedSnapshots) => {
+      // Fetch snapshots with force refresh on login
+      fetchSnapshots(user.id, { forceRefresh: true }).then((fetchedSnapshots) => {
         console.log('[HILL_CHART] Loaded snapshots:', fetchedSnapshots.length)
         setSnapshots(fetchedSnapshots)
       }).catch((error) => {
@@ -439,6 +439,37 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       return () => clearTimeout(timer)
     }
   }, [snapshotSuccess])
+
+  // Force refresh data when user returns to the app after being away
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && user?.id) {
+        console.log('[HILL_CHART] User returned to app, force refreshing data...')
+        try {
+          // Force refresh all data to ensure it's up to date
+          const [activeCollections, allCollections, snapshots] = await Promise.all([
+            fetchCollections(user.id, false, { forceRefresh: true }),
+            fetchCollections(user.id, true, { forceRefresh: true }),
+            fetchSnapshots(user.id, { forceRefresh: true })
+          ])
+          
+          setCollections(activeCollections)
+          setOriginalCollections(activeCollections)
+          
+          const archived = allCollections.filter(c => c.status === 'archived')
+          setArchivedCollections(archived)
+          setSnapshots(snapshots)
+          
+          console.log('[HILL_CHART] Data refreshed successfully after visibility change')
+        } catch (error) {
+          console.error('[HILL_CHART] Failed to refresh data on visibility change:', error)
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [user])
 
   const filteredCollections = collections.filter((c) => c.name.toLowerCase().includes(collectionInput.toLowerCase()))
   const currentCollection = collections.find((c) => c.id === selectedCollection)
@@ -1946,6 +1977,38 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         <span className="text-sm text-muted-foreground">Data Sync</span>
                         <CacheStatusBadge />
                       </div>
+                      <button
+                        onClick={async () => {
+                          if (user?.id) {
+                            console.log('[HILL_CHART] Manual data refresh requested')
+                            setIsLoadingCollections(true)
+                            try {
+                              const [activeCollections, allCollections, snapshots] = await Promise.all([
+                                fetchCollections(user.id, false, { forceRefresh: true }),
+                                fetchCollections(user.id, true, { forceRefresh: true }),
+                                fetchSnapshots(user.id, { forceRefresh: true })
+                              ])
+                              
+                              setCollections(activeCollections)
+                              setOriginalCollections(activeCollections)
+                              
+                              const archived = allCollections.filter(c => c.status === 'archived')
+                              setArchivedCollections(archived)
+                              setSnapshots(snapshots)
+                              
+                              console.log('[HILL_CHART] Manual refresh completed successfully')
+                            } catch (error) {
+                              console.error('[HILL_CHART] Manual refresh failed:', error)
+                            } finally {
+                              setIsLoadingCollections(false)
+                              setShowEllipsisMenu(false)
+                            }
+                          }
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                      >
+                        <Download className="w-4 h-4" /> Refresh Data
+                      </button>
 
                       {/* Privacy Section */}
                       <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
