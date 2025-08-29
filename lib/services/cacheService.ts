@@ -682,6 +682,11 @@ export class CacheManager implements ICacheManager {
 
   // Initialize periodic cleanup
   private initializeCleanup(): void {
+    // Only initialize cleanup in browser environment
+    if (typeof window === 'undefined') {
+      return
+    }
+
     if (this.cleanupTimer !== null) {
       window.clearInterval(this.cleanupTimer)
     }
@@ -1175,7 +1180,7 @@ export class CacheManager implements ICacheManager {
 
   // Destroy cache manager
   destroy(): void {
-    if (this.cleanupTimer !== null) {
+    if (typeof window !== 'undefined' && this.cleanupTimer !== null) {
       window.clearInterval(this.cleanupTimer)
       this.cleanupTimer = null
     }
@@ -1187,13 +1192,56 @@ let cacheManagerInstance: CacheManager | null = null
 
 export const getCacheManager = (): CacheManager => {
   if (!cacheManagerInstance) {
-    cacheManagerInstance = new CacheManager()
+    // Only create cache manager in browser environment
+    if (typeof window !== 'undefined') {
+      cacheManagerInstance = new CacheManager()
+    } else {
+      // Return a mock cache manager for SSR
+      return {
+        get: async () => null,
+        set: async () => {},
+        invalidate: async () => {},
+        clear: async () => {},
+        invalidatePattern: async () => {},
+        invalidateWithCascade: async () => {},
+        invalidateUser: async () => {},
+        invalidateSession: async () => {},
+        isStale: async () => true,
+        validateFreshness: async () => false,
+        refreshStaleData: async () => {},
+        updateMetadata: async () => {},
+        invalidateByOperation: async () => {},
+        destroy: () => {},
+        // Add all required properties from CacheManager interface
+        config: {
+          defaultTTL: 5 * 60 * 1000,
+          maxCacheSize: 50 * 1024 * 1024,
+          cleanupInterval: 60 * 60 * 1000,
+          compressionEnabled: true,
+          storagePrefix: 'oth_cache_'
+        },
+        storage: {} as any,
+        cleanupTimer: null,
+        metadata: {
+          version: '1.0.0',
+          lastSync: Date.now(),
+          userId: '',
+          sessionId: '',
+          invalidationRules: []
+        }
+      } as unknown as CacheManager
+    }
   }
   return cacheManagerInstance
 }
 
 // Initialize cache manager with user context
 export const initializeCacheManager = (userId: string, sessionId: string): CacheManager => {
+  // Only initialize in browser environment
+  if (typeof window === 'undefined') {
+    return getCacheManager() // Returns mock in SSR
+  }
+  
   const cacheManager = getCacheManager()
   cacheManager.updateMetadata({ userId, sessionId, lastSync: Date.now() })
   return cacheManager

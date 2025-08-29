@@ -36,6 +36,7 @@ import { useTheme } from "next-themes"
 import SignOutButton from "./SignOutButton"
 import { useAuth } from "./AuthProvider"
 import { PrivacySettings } from "./PrivacySettings"
+import { CacheStatusBadge } from "./CacheStatusBadge"
 import {
   fetchCollections,
   addCollection,
@@ -51,7 +52,7 @@ import {
   fetchSnapshots,
   loadSnapshot,
   resetAllCollections,
-} from "@/lib/services/supabaseService"
+} from "@/lib/services/cachedDataService"
 
 export interface Dot {
   id: string
@@ -303,6 +304,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   const [collections, setCollections] = useState<Collection[]>([])
   const [selectedCollection, setSelectedCollection] = useState<string | null>(null)
+  const [isLoadingCollections, setIsLoadingCollections] = useState(false)
   const [newDotLabel, setNewDotLabel] = useState("")
   const [isDragging, setIsDragging] = useState<string | null>(null)
   const [collectionInput, setCollectionInput] = useState("")
@@ -381,6 +383,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   useEffect(() => {
     if (user && user.id) {
       console.log('[HILL_CHART] Loading collections for user:', user.id)
+      setIsLoadingCollections(true)
       
       // Fetch active collections
       fetchCollections(user.id, false).then((activeCollections) => {
@@ -391,8 +394,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           setSelectedCollection(activeCollections[0].id)
           setCollectionInput(activeCollections[0].name)
         }
+        setIsLoadingCollections(false)
       }).catch((error) => {
         console.error('[HILL_CHART] Failed to fetch active collections:', error)
+        setIsLoadingCollections(false)
       })
       
       // Fetch archived collections
@@ -420,6 +425,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       setSnapshots([])
       setSelectedCollection(null)
       setCollectionInput("")
+      setIsLoadingCollections(false)
     }
     // Don't clear data when user is undefined (loading state)
   }, [user]) // Removed selectedCollection dependency to prevent unnecessary refetching
@@ -1469,6 +1475,18 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
               </div>
             </CardHeader>
             <CardContent className="p-2">
+              {/* Loading overlay */}
+              {isLoadingCollections && (
+                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg">
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    <div className="text-sm text-muted-foreground">
+                      <div>Loading collections...</div>
+                      <div className="text-xs mt-1">Decrypting your data</div>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="relative w-full h-full bg-background -m-2 flex items-center justify-center">
                 <svg
                   ref={svgRef}
@@ -1920,6 +1938,15 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       </button>
                       <SignOutButton className="w-full px-3 py-2 text-sm text-left text-red-600 dark:text-red-500 hover:bg-accent hover:text-accent-foreground flex items-center gap-2" />
 
+                      {/* Cache Status Section */}
+                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                        Cache Status
+                      </div>
+                      <div className="px-3 py-2 flex items-center justify-between">
+                        <span className="text-sm text-muted-foreground">Data Sync</span>
+                        <CacheStatusBadge />
+                      </div>
+
                       {/* Privacy Section */}
                       <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
                         Privacy
@@ -2061,7 +2088,12 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
                 {showDropdown && (
                   <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md shadow-lg max-h-60 overflow-auto">
-                    {filteredCollections.length > 0 ? (
+                    {isLoadingCollections ? (
+                      <div className="px-3 py-4 text-sm text-muted-foreground flex items-center gap-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                        Loading collections...
+                      </div>
+                    ) : filteredCollections.length > 0 ? (
                       filteredCollections.map((collection) => (
                         <div
                           key={collection.id}

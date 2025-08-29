@@ -56,7 +56,52 @@ export interface FetchOptions {
  * Cache-aware data service that wraps Supabase operations
  */
 export class CachedDataService {
-  private cacheManager = getCacheManager()
+  private cacheManager: ReturnType<typeof getCacheManager> | null = null
+
+  private getCacheManager(): ReturnType<typeof getCacheManager> {
+    if (this.cacheManager === null) {
+      // Only initialize cache manager in browser environment
+      if (typeof window !== 'undefined') {
+        this.cacheManager = getCacheManager()
+      } else {
+        // Return a mock cache manager for SSR
+        return {
+          get: async () => null,
+          set: async () => {},
+          invalidate: async () => {},
+          clear: async () => {},
+          invalidatePattern: async () => {},
+          invalidateWithCascade: async () => {},
+          invalidateUser: async () => {},
+          invalidateSession: async () => {},
+          isStale: async () => true,
+          validateFreshness: async () => false,
+          refreshStaleData: async () => {},
+          updateMetadata: async () => {},
+          invalidateByOperation: async () => {},
+          destroy: () => {},
+          // Add all required properties from CacheManager interface
+          config: {
+            defaultTTL: 5 * 60 * 1000,
+            maxCacheSize: 50 * 1024 * 1024,
+            cleanupInterval: 60 * 60 * 1000,
+            compressionEnabled: true,
+            storagePrefix: 'oth_cache_'
+          },
+          storage: {} as any,
+          cleanupTimer: null,
+          metadata: {
+            version: '1.0.0',
+            lastSync: Date.now(),
+            userId: '',
+            sessionId: '',
+            invalidationRules: []
+          }
+        } as unknown as ReturnType<typeof getCacheManager>
+      }
+    }
+    return this.cacheManager
+  }
 
   // Collections operations
   async fetchCollections(
@@ -70,7 +115,7 @@ export class CachedDataService {
     try {
       // Check cache first unless force refresh is requested
       if (useCache && !forceRefresh) {
-        const cached = await this.cacheManager.get<Collection[]>(cacheKey)
+        const cached = await this.getCacheManager().get<Collection[]>(cacheKey)
         if (cached) {
           console.log(`[CACHED_DATA] Cache hit for collections: ${cacheKey}`)
           return cached
@@ -83,7 +128,7 @@ export class CachedDataService {
 
       // Cache the result
       if (useCache) {
-        await this.cacheManager.set(cacheKey, collections, ttl)
+        await this.getCacheManager().set(cacheKey, collections, ttl)
       }
 
       return collections
@@ -92,7 +137,7 @@ export class CachedDataService {
 
       // Try to return stale cache data as fallback
       if (useCache) {
-        const staleData = await this.cacheManager.get<Collection[]>(cacheKey)
+        const staleData = await this.getCacheManager().get<Collection[]>(cacheKey)
         if (staleData) {
           console.warn('[CACHED_DATA] Returning stale cache data for collections')
           return staleData
@@ -109,7 +154,7 @@ export class CachedDataService {
 
       if (result) {
         // Invalidate collections cache
-        await this.cacheManager.invalidateByOperation('collection:create', userId, collection.id, 'collection')
+        await this.getCacheManager().invalidateByOperation('collection:create', userId, collection.id, 'collection')
       }
 
       return result
@@ -125,7 +170,7 @@ export class CachedDataService {
 
       if (result) {
         // Invalidate related cache entries
-        await this.cacheManager.invalidateByOperation('collection:update', userId, collectionId, 'collection')
+        await this.getCacheManager().invalidateByOperation('collection:update', userId, collectionId, 'collection')
       }
 
       return result
@@ -141,7 +186,7 @@ export class CachedDataService {
 
       if (result) {
         // Invalidate collections cache (both regular and archived views)
-        await this.cacheManager.invalidateByOperation('collection:archive', userId, collectionId, 'collection')
+        await this.getCacheManager().invalidateByOperation('collection:archive', userId, collectionId, 'collection')
       }
 
       return result
@@ -157,7 +202,7 @@ export class CachedDataService {
 
       if (result) {
         // Invalidate collections cache (both regular and archived views)
-        await this.cacheManager.invalidateByOperation('collection:unarchive', userId, collectionId, 'collection')
+        await this.getCacheManager().invalidateByOperation('collection:unarchive', userId, collectionId, 'collection')
       }
 
       return result
@@ -173,7 +218,7 @@ export class CachedDataService {
 
       if (result) {
         // Invalidate all related cache entries
-        await this.cacheManager.invalidateByOperation('collection:delete', userId, collectionId, 'collection')
+        await this.getCacheManager().invalidateByOperation('collection:delete', userId, collectionId, 'collection')
       }
 
       return result
@@ -190,11 +235,11 @@ export class CachedDataService {
 
       if (result) {
         // Invalidate collection and dots cache
-        await this.cacheManager.invalidateByOperation('dot:create', userId, dot.id, 'dot')
+        await this.getCacheManager().invalidateByOperation('dot:create', userId, dot.id, 'dot')
 
         // Also invalidate the specific collection cache
         const collectionCacheKey = CacheKeys.collection(userId, collectionId)
-        await this.cacheManager.invalidate(collectionCacheKey)
+        await this.getCacheManager().invalidate(collectionCacheKey)
       }
 
       return result
@@ -210,7 +255,7 @@ export class CachedDataService {
 
       if (result) {
         // Invalidate dot-related cache
-        await this.cacheManager.invalidateByOperation('dot:update', userId, dot.id, 'dot')
+        await this.getCacheManager().invalidateByOperation('dot:update', userId, dot.id, 'dot')
       }
 
       return result
@@ -226,7 +271,7 @@ export class CachedDataService {
 
       if (result.success) {
         // Invalidate dot-related cache
-        await this.cacheManager.invalidateByOperation('dot:delete', userId, dotId, 'dot')
+        await this.getCacheManager().invalidateByOperation('dot:delete', userId, dotId, 'dot')
       }
 
       return result
@@ -248,7 +293,7 @@ export class CachedDataService {
 
       if (result) {
         // Invalidate snapshots cache
-        await this.cacheManager.invalidateByOperation('snapshot:create', userId, collectionId, 'snapshot')
+        await this.getCacheManager().invalidateByOperation('snapshot:create', userId, collectionId, 'snapshot')
       }
 
       return result
@@ -265,7 +310,7 @@ export class CachedDataService {
     try {
       // Check cache first unless force refresh is requested
       if (useCache && !forceRefresh) {
-        const cached = await this.cacheManager.get<Snapshot[]>(cacheKey)
+        const cached = await this.getCacheManager().get<Snapshot[]>(cacheKey)
         if (cached) {
           console.log(`[CACHED_DATA] Cache hit for snapshots: ${cacheKey}`)
           return cached
@@ -278,7 +323,7 @@ export class CachedDataService {
 
       // Cache the result
       if (useCache) {
-        await this.cacheManager.set(cacheKey, snapshots, ttl)
+        await this.getCacheManager().set(cacheKey, snapshots, ttl)
       }
 
       return snapshots
@@ -287,7 +332,7 @@ export class CachedDataService {
 
       // Try to return stale cache data as fallback
       if (useCache) {
-        const staleData = await this.cacheManager.get<Snapshot[]>(cacheKey)
+        const staleData = await this.getCacheManager().get<Snapshot[]>(cacheKey)
         if (staleData) {
           console.warn('[CACHED_DATA] Returning stale cache data for snapshots')
           return staleData
@@ -315,7 +360,7 @@ export class CachedDataService {
 
       if (result) {
         // Invalidate snapshots cache
-        await this.cacheManager.invalidateByOperation('snapshot:delete', userId, snapshotId, 'snapshot')
+        await this.getCacheManager().invalidateByOperation('snapshot:delete', userId, snapshotId, 'snapshot')
       }
 
       return result
@@ -333,7 +378,7 @@ export class CachedDataService {
     try {
       // Check cache first unless force refresh is requested
       if (useCache && !forceRefresh) {
-        const cached = await this.cacheManager.get<UserPreferences>(cacheKey)
+        const cached = await this.getCacheManager().get<UserPreferences>(cacheKey)
         if (cached) {
           console.log(`[CACHED_DATA] Cache hit for user preferences: ${cacheKey}`)
           return cached
@@ -346,7 +391,7 @@ export class CachedDataService {
 
       // Cache the result
       if (useCache && preferences) {
-        await this.cacheManager.set<UserPreferences>(cacheKey, preferences, ttl)
+        await this.getCacheManager().set<UserPreferences>(cacheKey, preferences, ttl)
       }
 
       return preferences
@@ -355,7 +400,7 @@ export class CachedDataService {
 
       // Try to return stale cache data as fallback
       if (useCache) {
-        const staleData = await this.cacheManager.get<UserPreferences>(cacheKey)
+        const staleData = await this.getCacheManager().get<UserPreferences>(cacheKey)
         if (staleData) {
           console.warn('[CACHED_DATA] Returning stale cache data for user preferences')
           return staleData
@@ -373,7 +418,7 @@ export class CachedDataService {
 
       if (result.length > 0) {
         // Invalidate all user cache since import affects multiple entities
-        await this.cacheManager.invalidateUser(userId)
+        await this.getCacheManager().invalidateUser(userId)
       }
 
       return result
@@ -389,7 +434,7 @@ export class CachedDataService {
 
       if (result) {
         // Clear all user cache
-        await this.cacheManager.invalidateUser(userId)
+        await this.getCacheManager().invalidateUser(userId)
       }
 
       return result
@@ -405,7 +450,7 @@ export class CachedDataService {
       console.log(`[CACHED_DATA] Refreshing cache for user: ${userId}`)
 
       // Invalidate all user cache
-      await this.cacheManager.invalidateUser(userId)
+      await this.getCacheManager().invalidateUser(userId)
 
       // Pre-populate cache with fresh data
       await this.fetchCollections(userId, false, { forceRefresh: true })
@@ -421,7 +466,7 @@ export class CachedDataService {
 
   async clearUserCache(userId: string): Promise<void> {
     try {
-      await this.cacheManager.invalidateUser(userId)
+      await this.getCacheManager().invalidateUser(userId)
       console.log(`[CACHED_DATA] Cleared cache for user: ${userId}`)
     } catch (error) {
       console.error('[CACHED_DATA] Failed to clear user cache:', error)
@@ -436,9 +481,9 @@ export class CachedDataService {
   }> {
     try {
       const [collectionsValid, snapshotsValid, preferencesValid] = await Promise.all([
-        this.cacheManager.validateFreshness(CacheKeys.collections(userId)),
-        this.cacheManager.validateFreshness(CacheKeys.snapshots(userId)),
-        this.cacheManager.validateFreshness(CacheKeys.userPreferences(userId))
+        this.getCacheManager().validateFreshness(CacheKeys.collections(userId)),
+        this.getCacheManager().validateFreshness(CacheKeys.snapshots(userId)),
+        this.getCacheManager().validateFreshness(CacheKeys.userPreferences(userId))
       ])
 
       return {

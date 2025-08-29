@@ -26,7 +26,7 @@ import {
   fetchCollections,
   fetchSnapshots,
   fetchUserPreferences
-} from "@/lib/services/supabaseService"
+} from "@/lib/services/cachedDataService"
 import { supabase } from "@/lib/supabaseClient"
 
 interface PrivacySettingsProps {

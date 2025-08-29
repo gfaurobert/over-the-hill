@@ -4,6 +4,7 @@ import React, { useState, useEffect, useContext, useCallback, useRef } from 'rea
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabaseClient'; // Import the singleton instance
 import { sessionValidationService, ValidationResponse } from '@/lib/services/sessionValidationService';
+import { initializeCacheManager } from '@/lib/services/cacheService';
 
 // Create a context for authentication
 interface AuthContextType {
@@ -158,11 +159,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(newSession?.user ?? null);
         setLoading(false);
         
+        // Initialize cache manager when user logs in
+        if (newSession?.user) {
+            try {
+                initializeCacheManager(newSession.user.id, newSession.access_token);
+                console.log(`[AUTH_PROVIDER] Cache manager initialized for user: ${newSession.user.id}`);
+            } catch (error) {
+                console.error('[AUTH_PROVIDER] Failed to initialize cache manager:', error);
+            }
+        }
+        
         // Track recovery mode
         if (event === 'PASSWORD_RECOVERY') {
             setIsInRecoveryMode(true);
         } else if (event === 'SIGNED_OUT') {
             setIsInRecoveryMode(false);
+            // Clear cache when user logs out
+            try {
+                const { getCacheManager } = await import('@/lib/services/cacheService');
+                const cacheManager = getCacheManager();
+                await cacheManager.clear();
+                console.log('[AUTH_PROVIDER] Cache cleared on logout');
+            } catch (error) {
+                console.error('[AUTH_PROVIDER] Failed to clear cache on logout:', error);
+            }
         }
         
         if (newSession && event !== 'INITIAL_SESSION') {
