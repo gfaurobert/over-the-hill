@@ -54,6 +54,16 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // Skip caching for data-related requests (Supabase, auth, etc.)
+  if (event.request.url.includes('supabase.co') ||
+      event.request.url.includes('supabase.com') ||
+      event.request.url.includes('/auth/') ||
+      event.request.url.includes('/_next/data/') ||
+      event.request.url.includes('.json')) {
+    console.log('[SW] Skipping cache for data request:', event.request.url);
+    return;
+  }
+
   // Skip caching for the main page to ensure fresh data
   if (event.request.url === self.location.origin + '/' || 
       event.request.url === self.location.origin + '/index.html') {
@@ -136,6 +146,35 @@ self.addEventListener('message', (event) => {
             });
           });
         });
+      })
+    );
+  }
+  
+  // Handle selective cache invalidation
+  if (event.data && event.data.type === 'INVALIDATE_CACHE') {
+    console.log('[SW] Received INVALIDATE_CACHE message for pattern:', event.data.pattern);
+    event.waitUntil(
+      caches.open(CACHE_NAME).then((cache) => {
+        return cache.keys().then((requests) => {
+          const toDelete = requests.filter(request => {
+            // Invalidate cache entries matching the pattern
+            if (event.data.pattern) {
+              return request.url.includes(event.data.pattern);
+            }
+            // Invalidate all data-related cache entries
+            return request.url.includes('.json') || 
+                   request.url.includes('/_next/data/');
+          });
+          
+          return Promise.all(
+            toDelete.map(request => {
+              console.log('[SW] Invalidating cache for:', request.url);
+              return cache.delete(request);
+            })
+          );
+        });
+      }).then(() => {
+        console.log('[SW] Cache invalidation complete');
       })
     );
   }
