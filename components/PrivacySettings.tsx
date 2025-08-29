@@ -297,7 +297,7 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
           status: collection.status,
           archived_at: collection.archived_at,
           deleted_at: collection.deleted_at,
-          dots: collection.dots.map(dot => ({
+          dots: collection.dots.map((dot: Dot) => ({
             id: dot.id,
             label: dot.label,
             x: dot.x,
@@ -311,7 +311,7 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
           date: snapshot.date,
           collectionId: snapshot.collectionId,
           collectionName: snapshot.collectionName,
-          dots: snapshot.dots.map(dot => ({
+          dots: snapshot.dots.map((dot: Dot) => ({
             id: dot.id,
             label: dot.label,
             x: dot.x,
@@ -360,7 +360,7 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
           status: collection.status,
           archived_at: collection.archived_at,
           deleted_at: collection.deleted_at,
-          dots: collection.dots.map(dot => ({
+          dots: collection.dots.map((dot: Dot) => ({
             id: dot.id,
             label: dot.label,
             x: dot.x,
@@ -374,7 +374,7 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
           date: snapshot.date,
           collectionId: snapshot.collectionId,
           collectionName: snapshot.collectionName,
-          dots: snapshot.dots.map(dot => ({
+          dots: snapshot.dots.map((dot: Dot) => ({
             id: dot.id,
             label: dot.label,
             x: dot.x,

@@ -6,7 +6,7 @@
  */
 
 import * as supabaseService from './supabaseService'
-import type { Collection, Dot, Snapshot } from '@/types'
+import type { Collection, Dot, Snapshot } from '@/components/HillChartApp'
 
 export interface SimpleFetchOptions {
   // No caching options - always fresh
@@ -32,10 +32,8 @@ export class SimpleDataService {
     const collection: Collection = {
       id: crypto.randomUUID(),
       name,
-      user_id: userId,
       status: 'active',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      dots: []
     }
     return await supabaseService.addCollection(collection, userId)
   }
@@ -70,29 +68,23 @@ export class SimpleDataService {
 
   // Dots operations
 
-  async createDot(userId: string, collectionId: string, dot: Omit<Dot, 'id' | 'created_at' | 'updated_at'>): Promise<Dot | null> {
+  async createDot(userId: string, collectionId: string, dot: Omit<Dot, 'id'>): Promise<Dot | null> {
     console.log(`[SIMPLE_DATA] Creating new dot in collection: ${collectionId}`)
     const fullDot: Dot = {
       ...dot,
-      id: crypto.randomUUID(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
+      id: crypto.randomUUID()
     }
     return await supabaseService.addDot(fullDot, collectionId, userId)
   }
 
-  async addDot(userId: string, collectionId: string, dot: Omit<Dot, 'id' | 'created_at' | 'updated_at'>): Promise<Dot | null> {
+  async addDot(userId: string, collectionId: string, dot: Omit<Dot, 'id'>): Promise<Dot | null> {
     console.log(`[SIMPLE_DATA] Adding dot to collection: ${collectionId}`)
     return await this.createDot(userId, collectionId, dot)
   }
 
   async updateDot(dot: Dot, userId: string): Promise<Dot | null> {
     console.log(`[SIMPLE_DATA] Updating dot: ${dot.id}`)
-    const updatedDot: Dot = {
-      ...dot,
-      updated_at: new Date().toISOString()
-    }
-    return await supabaseService.updateDot(updatedDot, userId)
+    return await supabaseService.updateDot(dot, userId)
   }
 
   async deleteDot(userId: string, collectionId: string, dotId: string): Promise<boolean> {

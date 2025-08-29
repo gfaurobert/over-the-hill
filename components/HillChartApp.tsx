@@ -1263,7 +1263,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     setCollectionInput(trimmedName)
 
     // Update backend
-    const success = await updateCollection(editingCollectionId, trimmedName, user.id)
+    const success = await updateCollection(user.id, editingCollectionId, { name: trimmedName })
     
     if (!success) {
       // Revert on error
