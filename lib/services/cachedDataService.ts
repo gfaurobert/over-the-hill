@@ -103,6 +103,29 @@ export class CachedDataService {
     return this.cacheManager
   }
 
+  /**
+   * Invalidate Service Worker cache after data mutations
+   * This ensures fresh data is fetched when the app reloads
+   */
+  private async invalidateServiceWorkerCache(pattern?: string): Promise<void> {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+      return
+    }
+
+    try {
+      if (navigator.serviceWorker.controller) {
+        // Send message to service worker to invalidate cache
+        navigator.serviceWorker.controller.postMessage({
+          type: 'INVALIDATE_CACHE',
+          pattern: pattern
+        })
+        console.log('[CACHED_DATA] Service Worker cache invalidated for pattern:', pattern || 'all data')
+      }
+    } catch (error) {
+      console.error('[CACHED_DATA] Failed to invalidate Service Worker cache:', error)
+    }
+  }
+
   // Collections operations
   async fetchCollections(
     userId: string,
@@ -155,6 +178,8 @@ export class CachedDataService {
       if (result) {
         // Invalidate collections cache
         await this.getCacheManager().invalidateByOperation('collection:create', userId, collection.id, 'collection')
+        // Invalidate Service Worker cache for data
+        await this.invalidateServiceWorkerCache()
       }
 
       return result
@@ -171,6 +196,8 @@ export class CachedDataService {
       if (result) {
         // Invalidate related cache entries
         await this.getCacheManager().invalidateByOperation('collection:update', userId, collectionId, 'collection')
+        // Invalidate Service Worker cache for data
+        await this.invalidateServiceWorkerCache()
       }
 
       return result
@@ -187,6 +214,8 @@ export class CachedDataService {
       if (result) {
         // Invalidate collections cache (both regular and archived views)
         await this.getCacheManager().invalidateByOperation('collection:archive', userId, collectionId, 'collection')
+        // Invalidate Service Worker cache for data
+        await this.invalidateServiceWorkerCache()
       }
 
       return result
@@ -203,6 +232,8 @@ export class CachedDataService {
       if (result) {
         // Invalidate collections cache (both regular and archived views)
         await this.getCacheManager().invalidateByOperation('collection:unarchive', userId, collectionId, 'collection')
+        // Invalidate Service Worker cache for data
+        await this.invalidateServiceWorkerCache()
       }
 
       return result
@@ -219,6 +250,8 @@ export class CachedDataService {
       if (result) {
         // Invalidate all related cache entries
         await this.getCacheManager().invalidateByOperation('collection:delete', userId, collectionId, 'collection')
+        // Invalidate Service Worker cache for data
+        await this.invalidateServiceWorkerCache()
       }
 
       return result
@@ -240,6 +273,9 @@ export class CachedDataService {
         // Also invalidate the specific collection cache
         const collectionCacheKey = CacheKeys.collection(userId, collectionId)
         await this.getCacheManager().invalidate(collectionCacheKey)
+        
+        // Invalidate Service Worker cache for data
+        await this.invalidateServiceWorkerCache()
       }
 
       return result
@@ -256,6 +292,8 @@ export class CachedDataService {
       if (result) {
         // Invalidate dot-related cache
         await this.getCacheManager().invalidateByOperation('dot:update', userId, dot.id, 'dot')
+        // Invalidate Service Worker cache for data
+        await this.invalidateServiceWorkerCache()
       }
 
       return result
@@ -272,6 +310,8 @@ export class CachedDataService {
       if (result.success) {
         // Invalidate dot-related cache
         await this.getCacheManager().invalidateByOperation('dot:delete', userId, dotId, 'dot')
+        // Invalidate Service Worker cache for data
+        await this.invalidateServiceWorkerCache()
       }
 
       return result
