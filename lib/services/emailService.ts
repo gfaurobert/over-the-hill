@@ -15,10 +15,20 @@ interface SMTPConfig {
 
 class EmailService {
   private transporter: nodemailer.Transporter | null = null;
-  private config: SMTPConfig;
+  private config: SMTPConfig | null = null;
 
   constructor() {
-    this.config = this.loadSMTPConfig();
+    // Defer config loading until first use
+  }
+
+  /**
+   * Get SMTP configuration, loading it if necessary
+   */
+  private getConfig(): SMTPConfig {
+    if (!this.config) {
+      this.config = this.loadSMTPConfig();
+    }
+    return this.config;
   }
 
   /**
@@ -65,18 +75,19 @@ class EmailService {
    */
   private async createTransporter(): Promise<nodemailer.Transporter> {
     try {
-      console.log(`🔧 Creating fresh SMTP transporter for ${this.config.host}:${this.config.port}`);
+      const config = this.getConfig();
+      console.log(`🔧 Creating fresh SMTP transporter for ${config.host}:${config.port}`);
       
       // Add a small delay to avoid rapid authentication attempts
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       const transportConfig = {
-        host: this.config.host,
-        port: this.config.port,
-        secure: this.config.secure,
+        host: config.host,
+        port: config.port,
+        secure: config.secure,
         auth: {
-          user: this.config.auth.user,
-          pass: this.config.auth.pass,
+          user: config.auth.user,
+          pass: config.auth.pass,
         },
         // Add timeout configuration
         connectionTimeout: 15000, // 15 seconds
@@ -99,7 +110,8 @@ class EmailService {
         : 'Unknown transporter creation error';
         
       console.error('❌ Failed to create email transporter:', sanitizedError);
-      console.error(`📡 SMTP Host: ${this.config.host}:${this.config.port}`);
+      const config = this.getConfig();
+      console.error(`📡 SMTP Host: ${config.host}:${config.port}`);
       throw new Error('Failed to initialize email service');
     }
   }
@@ -115,7 +127,8 @@ class EmailService {
       const duration = Date.now() - startTime;
       
       console.log(`✅ SMTP connection validated successfully (${duration}ms)`);
-      console.log(`📡 Connected to: ${this.config.host}:${this.config.port} (secure: ${this.config.secure})`);
+      const config = this.getConfig();
+      console.log(`📡 Connected to: ${config.host}:${config.port} (secure: ${config.secure})`);
       return true;
     } catch (error) {
       const sanitizedError = error instanceof Error 
@@ -123,7 +136,8 @@ class EmailService {
         : 'Unknown SMTP error';
         
       console.error('❌ SMTP connection validation failed:', sanitizedError);
-      console.error(`📡 Failed to connect to: ${this.config.host}:${this.config.port}`);
+      const config = this.getConfig();
+      console.error(`📡 Failed to connect to: ${config.host}:${config.port}`);
       return false;
     }
   }
@@ -190,7 +204,8 @@ class EmailService {
     console.log(`- SMTP_SECURE: ${process.env.SMTP_SECURE}`);
     console.log(`- FROM_EMAIL: ${fromEmail}`);
     console.log(`- TO_EMAIL: ${toEmail}`);
-    console.log(`- Config loaded: host=${this.config.host}, port=${this.config.port}, user=${this.config.auth.user}`);
+    const config = this.getConfig();
+    console.log(`- Config loaded: host=${config.host}, port=${config.port}, user=${config.auth.user}`);
     
     try {
       // Validate and sanitize inputs
