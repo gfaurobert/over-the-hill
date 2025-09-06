@@ -1,0 +1,25 @@
+{
+  "enabled": true,
+  "name": "Build and Fix Errors",
+  "description": "Automatically runs pnpm build when source files change and fixes any compilation errors that occur",
+  "version": "1",
+  "when": {
+    "type": "userTriggered",
+    "patterns": [
+      "app/**/*.tsx",
+      "app/**/*.ts",
+      "components/**/*.tsx",
+      "components/**/*.ts",
+      "lib/**/*.ts",
+      "hooks/**/*.ts",
+      "middleware.ts",
+      "next.config.mjs",
+      "tsconfig.json",
+      "package.json"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Run `pnpm build` to build the project. If there are any TypeScript compilation errors, analyze them and fix the issues in the source code. Focus on type errors, missing imports, incorrect prop types, and other compilation issues. After fixing errors, run the build command again to verify the fixes work."
+  }
+}

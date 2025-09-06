@@ -26,19 +26,21 @@ print_color() {
 show_usage() {
     echo "Supabase Container Manager (sbContMan)"
     echo ""
-    echo "Usage: $0 [list|stop|delete] [container_name_pattern]"
+    echo "Usage: $0 [list|start|stop|delete] [container_name_pattern]"
     echo ""
     echo "Commands:"
     echo "  list   - List all Supabase containers with their status"
+    echo "  start  - Start containers matching the pattern"
     echo "  stop   - Stop containers matching the pattern"
     echo "  delete - Delete containers and volumes matching the pattern"
     echo ""
     echo "Examples:"
-    echo "  $0 list         - Show all Supabase containers"
-    echo "  $0 stop tim     - Stop all containers with 'tim' in the name"
-    echo "  $0 delete tim   - Delete all containers and volumes with 'tim' in the name"
+    echo "  $0 list              - Show all Supabase containers"
+    echo "  $0 start over-the-hill - Start all containers with 'over-the-hill' in the name"
+    echo "  $0 stop tim          - Stop all containers with 'tim' in the name"
+    echo "  $0 delete tim        - Delete all containers and volumes with 'tim' in the name"
     echo ""
-    echo "Note: For stop/delete commands, the script will search for containers containing the pattern in their names"
+    echo "Note: For start/stop/delete commands, the script will search for containers containing the pattern in their names"
 }
 
 # Function to find containers matching pattern
@@ -51,6 +53,32 @@ find_containers() {
 get_container_ids() {
     local pattern=$1
     docker ps -a --format "{{.Names}}" | grep -i "supabase" | awk -F'_' -v pattern="$pattern" '$NF == pattern' | xargs -I {} docker ps -aq --filter "name={}"
+}
+
+# Function to start containers
+start_containers() {
+    local pattern=$1
+    local containers=$(get_container_ids "$pattern")
+    
+    if [ -z "$containers" ]; then
+        print_color $YELLOW "No containers found matching pattern: $pattern"
+        return
+    fi
+    
+    print_color $BLUE "Found containers matching '$pattern':"
+    find_containers "$pattern"
+    echo ""
+    
+    print_color $YELLOW "Do you want to start these containers? (y/N): "
+    read -r response
+    
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        print_color $BLUE "Starting containers..."
+        echo "$containers" | xargs -r docker start
+        print_color $GREEN "Containers started successfully!"
+    else
+        print_color $YELLOW "Operation cancelled."
+    fi
 }
 
 # Function to stop containers
@@ -170,7 +198,7 @@ main() {
         exit 1
     fi
     
-    # For stop/delete commands, pattern is required
+    # For start/stop/delete commands, pattern is required
     if [ "$action" != "list" ] && [ $# -ne 2 ]; then
         print_color $RED "Error: '$action' command requires a container name pattern"
         echo ""
@@ -182,6 +210,10 @@ main() {
     case "$action" in
         "list")
             list_containers
+            ;;
+        "start")
+            print_color $BLUE "Starting containers matching pattern: $pattern"
+            start_containers "$pattern"
             ;;
         "stop")
             print_color $BLUE "Stopping containers matching pattern: $pattern"

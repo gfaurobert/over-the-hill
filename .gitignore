@@ -39,3 +39,7 @@ next-env.d.ts
 
 pnpm-lock.yaml
 coverage/
+
+supabase/config.toml
+supabase/.env
+supabase/.env.local
