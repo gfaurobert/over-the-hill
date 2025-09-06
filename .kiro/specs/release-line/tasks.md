@@ -12,7 +12,7 @@
   - Test migration on development database
   - _Requirements: 5.1, 5.2, 7.1_
 
-- [ ] 3. Extend privacy service for release line encryption
+- [x] 3. Extend privacy service for release line encryption
   - Add encryption methods for release line color and text data
   - Implement decryption methods for release line configuration
   - Create unit tests for encryption/decryption roundtrip
