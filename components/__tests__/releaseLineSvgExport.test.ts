@@ -46,7 +46,7 @@ describe('Release Line SVG Export', () => {
             {
               getAttribute: jest.fn((attr: string) => {
                 if (attr === 'fill') return '#ff00ff' // Release line text color
-                if (attr === 'transform') return 'rotate(90, 605, 90)' // Release line text transform
+                if (attr === 'transform') return 'rotate(90, 620, 10)' // Release line text transform
                 return null
               }),
               setAttribute: jest.fn(),
@@ -127,7 +127,7 @@ describe('Release Line SVG Export', () => {
       <svg width="800" height="360" viewBox="-50 0 700 180">
         <line x1="0" y1="80" x2="600" y2="80" stroke="#0a0a0a"/>
         <line x1="600" y1="-10" x2="600" y2="160" stroke="#ff00ff" stroke-width="3"/>
-        <text x="605" y="90" fill="#ff00ff" transform="rotate(90, 605, 90)" font-size="10px" font-weight="500">Q4 2024</text>
+        <text x="620" y="10" fill="#ff00ff" transform="rotate(90, 620, 10)" font-size="10px" font-weight="500">Q4 2024</text>
       </svg>
     `
 
@@ -141,7 +141,7 @@ describe('Release Line SVG Export', () => {
     expect(result).toContain('line x1="600"') // Release line
     expect(result).toContain('stroke="#ff00ff"') // Release line color
     expect(result).toContain('stroke-width="3"') // Release line width
-    expect(result).toContain('transform="rotate(90, 605, 90)"') // Release line text rotation
+    expect(result).toContain('transform="rotate(90, 620, 10)"') // Release line text rotation
     expect(result).toContain('Q4 2024') // Release line text content
   })
 

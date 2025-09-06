@@ -120,11 +120,11 @@ describe('ReleaseLineSettings', () => {
     })
   })
 
-  it('enforces 50 character limit for text input', () => {
+  it('enforces 12 character limit for text input', () => {
     const enabledConfig: ReleaseLineConfig = {
       ...defaultConfig,
       enabled: true,
-      text: 'This is a very long text that exceeds fifty chars',
+      text: 'Short text',
     }
 
     render(
@@ -132,11 +132,11 @@ describe('ReleaseLineSettings', () => {
     )
 
     const textInput = screen.getByTestId('text-input')
-    const longText = 'This is a very long text that definitely exceeds the fifty character limit'
+    const longText = 'This text exceeds twelve chars'
     
     fireEvent.change(textInput, { target: { value: longText } })
 
-    // Should not call onConfigChange because text exceeds 50 characters
+    // Should not call onConfigChange because text exceeds 12 characters
     expect(mockOnConfigChange).not.toHaveBeenCalled()
   })
 
@@ -151,7 +151,7 @@ describe('ReleaseLineSettings', () => {
       <ReleaseLineSettings config={enabledConfig} onConfigChange={mockOnConfigChange} />
     )
 
-    expect(screen.getByText('7/50 characters')).toBeInTheDocument()
+    expect(screen.getByText('7/12 characters')).toBeInTheDocument()
   })
 
   it('displays correct color value in both color picker and text input', () => {

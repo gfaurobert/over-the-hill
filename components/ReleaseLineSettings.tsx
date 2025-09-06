@@ -31,8 +31,8 @@ export const ReleaseLineSettings: React.FC<ReleaseLineSettingsProps> = ({
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const text = e.target.value
-    // Enforce 50 character limit as per requirements
-    if (text.length <= 50) {
+    // Enforce 12 character limit as per requirements
+    if (text.length <= 12) {
       onConfigChange({
         ...config,
         text,
@@ -96,11 +96,11 @@ export const ReleaseLineSettings: React.FC<ReleaseLineSettingsProps> = ({
                 onChange={handleTextChange}
                 placeholder="Q4 2024, Release Date, etc."
                 className="text-sm"
-                maxLength={50}
+                maxLength={12}
                 data-testid="text-input"
               />
               <div className="text-xs text-muted-foreground">
-                {config.text.length}/50 characters
+                {config.text.length}/12 characters
               </div>
             </div>
           </div>
