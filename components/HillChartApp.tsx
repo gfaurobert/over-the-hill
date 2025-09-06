@@ -517,6 +517,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       setSnapshots([])
       setSelectedCollection(null)
       setCollectionInput("")
+      setReleaseLineSettings({}) // Clear release line settings
       setIsLoadingCollections(false)
     }
     // Don't clear data when user is undefined (loading state)
@@ -734,6 +735,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             const remainingCollection = filteredCollections[0]
             setSelectedCollection(remainingCollection.id)
             setCollectionInput(remainingCollection.name)
+            // Load release line config for the remaining collection
+            loadReleaseLineConfig(remainingCollection.id)
           } else {
             setSelectedCollection(null)
             setCollectionInput("")
@@ -780,6 +783,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           const remainingCollection = filteredCollections[0]
           setSelectedCollection(remainingCollection.id)
           setCollectionInput(remainingCollection.name)
+          // Load release line config for the remaining collection
+          loadReleaseLineConfig(remainingCollection.id)
         } else {
           setSelectedCollection(null)
           setCollectionInput("")
@@ -810,6 +815,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       if (archivedCollection) {
         setSelectedCollection(archivedCollection.id)
         setCollectionInput(archivedCollection.name)
+        // Load release line config for the unarchived collection
+        loadReleaseLineConfig(archivedCollection.id)
       }
     }
   }
@@ -1225,6 +1232,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           setCollections(fetched)
           setSelectedCollection(fetched[0].id)
           setCollectionInput(fetched[0].name)
+          // Load release line config for the first imported collection
+          loadReleaseLineConfig(fetched[0].id)
 
           // Also fetch archived collections if any
           console.log('[HILL_CHART] Fetching archived collections...')
@@ -1464,8 +1473,17 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       setCurrentSnapshot(snapshotForDate)
       setIsViewingSnapshot(true)
       setSelectedSnapshot(dateString)
-      // Load release line config for the snapshot collection
-      loadReleaseLineConfig(snapshotCollection.id)
+      
+      // Use release line config from snapshot if available, otherwise load from database
+      if (snapshotForDate.releaseLineConfig) {
+        setReleaseLineSettings(prev => ({
+          ...prev,
+          [snapshotCollection.id]: snapshotForDate.releaseLineConfig!
+        }))
+      } else {
+        // Load release line config from database for the snapshot collection
+        loadReleaseLineConfig(snapshotCollection.id)
+      }
     } catch (error) {
       console.error("Error viewing snapshot:", error)
     }

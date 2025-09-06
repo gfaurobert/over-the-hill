@@ -60,7 +60,7 @@
   - Ensure proper positioning and styling in exports
   - _Requirements: 4.4, 6.1_
 
-- [ ] 10. Implement collection switching and persistence
+- [x] 10. Implement collection switching and persistence
   - Load appropriate release line settings when switching collections
   - Apply default settings for new collections
   - Persist settings changes to database
