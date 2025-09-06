@@ -37,6 +37,7 @@ import SignOutButton from "./SignOutButton"
 import { useAuth } from "./AuthProvider"
 import { PrivacySettings } from "./PrivacySettings"
 import { CacheStatusBadge } from "./CacheStatusBadge"
+import { ReleaseLineSettings } from "./ReleaseLineSettings"
 import {
   fetchCollections,
   addCollection,
@@ -52,6 +53,8 @@ import {
   fetchSnapshots,
   loadSnapshot,
   resetAllCollections,
+  updateCollectionReleaseLineConfig,
+  getCollectionReleaseLineConfig,
 } from "@/lib/services/simpleDataService"
 
 export interface Dot {
@@ -387,6 +390,82 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [showImportSuccess, setShowImportSuccess] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
 
+  // Release line state management
+  const [releaseLineSettings, setReleaseLineSettings] = useState<{
+    [collectionId: string]: ReleaseLineConfig
+  }>({})
+  const [isLoadingReleaseLineConfig, setIsLoadingReleaseLineConfig] = useState(false)
+
+  // Release line configuration functions
+  const loadReleaseLineConfig = useCallback(async (collectionId: string) => {
+    if (!user?.id) return
+    
+    try {
+      setIsLoadingReleaseLineConfig(true)
+      const config = await getCollectionReleaseLineConfig(user.id, collectionId)
+      
+      if (config) {
+        setReleaseLineSettings(prev => ({
+          ...prev,
+          [collectionId]: config
+        }))
+      } else {
+        // Set default config if none exists
+        const defaultConfig: ReleaseLineConfig = {
+          enabled: false,
+          color: "#ff00ff",
+          text: ""
+        }
+        setReleaseLineSettings(prev => ({
+          ...prev,
+          [collectionId]: defaultConfig
+        }))
+      }
+    } catch (error) {
+      console.error('[HILL_CHART] Failed to load release line config:', error)
+      // Set default config on error
+      const defaultConfig: ReleaseLineConfig = {
+        enabled: false,
+        color: "#ff00ff", 
+        text: ""
+      }
+      setReleaseLineSettings(prev => ({
+        ...prev,
+        [collectionId]: defaultConfig
+      }))
+    } finally {
+      setIsLoadingReleaseLineConfig(false)
+    }
+  }, [user?.id])
+
+  const updateReleaseLineConfig = useCallback(async (collectionId: string, config: ReleaseLineConfig) => {
+    if (!user?.id) return
+    
+    try {
+      // Update local state immediately for real-time updates
+      setReleaseLineSettings(prev => ({
+        ...prev,
+        [collectionId]: config
+      }))
+      
+      // Persist to database
+      const success = await updateCollectionReleaseLineConfig(user.id, collectionId, config)
+      
+      if (!success) {
+        console.error('[HILL_CHART] Failed to update release line config')
+        // Could revert local state here if needed
+      }
+    } catch (error) {
+      console.error('[HILL_CHART] Error updating release line config:', error)
+    }
+  }, [user?.id])
+
+  const handleReleaseLineConfigChange = useCallback((config: ReleaseLineConfig) => {
+    if (selectedCollection) {
+      updateReleaseLineConfig(selectedCollection, config)
+    }
+  }, [selectedCollection, updateReleaseLineConfig])
+
   useEffect(() => {
     if (user && user.id) {
       console.log('[HILL_CHART] Loading collections for user:', user.id)
@@ -398,8 +477,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         setCollections(activeCollections)
         setOriginalCollections(activeCollections)
         if (activeCollections.length > 0 && !selectedCollection) {
-          setSelectedCollection(activeCollections[0].id)
-          setCollectionInput(activeCollections[0].name)
+          const firstCollection = activeCollections[0]
+          setSelectedCollection(firstCollection.id)
+          setCollectionInput(firstCollection.name)
+          // Load release line config for the first collection
+          loadReleaseLineConfig(firstCollection.id)
         }
         setIsLoadingCollections(false)
       }).catch((error) => {
@@ -435,7 +517,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       setIsLoadingCollections(false)
     }
     // Don't clear data when user is undefined (loading state)
-  }, [user]) // Removed selectedCollection dependency to prevent unnecessary refetching
+  }, [user, selectedCollection, loadReleaseLineConfig]) // Added missing dependencies
 
   // Reset snapshot success state after 3 seconds
   useEffect(() => {
@@ -769,6 +851,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             setCollections((prev) => [...prev, added])
             setSelectedCollection(added.id)
             setCollectionInput(added.name)
+            // Load release line config for the new collection
+            loadReleaseLineConfig(added.id)
             // Clear the input after successful creation
             setCollectionInput("")
           } else {
@@ -830,6 +914,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         text.setAttribute("font-size", currentFontSize)
       } else {
         if (text.classList.contains("text-[8px]")) text.setAttribute("font-size", "8px")
+        else if (text.classList.contains("text-[10px]")) text.setAttribute("font-size", "10px")
         else if (text.classList.contains("text-sm")) text.setAttribute("font-size", "14px")
         else {
           const fontSizeAttr = text.getAttribute("fontSize")
@@ -837,6 +922,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         }
       }
       if (text.classList.contains("font-semibold")) text.setAttribute("font-weight", "600")
+      else if (text.classList.contains("font-medium")) text.setAttribute("font-weight", "500")
       else if (text.classList.contains("font-normal")) text.setAttribute("font-weight", "400")
     })
 
@@ -1228,6 +1314,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     setShowDropdown(false)
     setIsTyping(false)
     setSelectedSnapshot(null)
+    // Load release line config for the selected collection
+    loadReleaseLineConfig(collection.id)
   }
 
   // Start editing collection name
@@ -1300,6 +1388,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
   }
 
+
+
   // Snapshot functions
   const handleCreateSnapshot = async () => {
     if (!user || !currentCollection) return
@@ -1363,6 +1453,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       setCurrentSnapshot(snapshotForDate)
       setIsViewingSnapshot(true)
       setSelectedSnapshot(dateString)
+      // Load release line config for the snapshot collection
+      loadReleaseLineConfig(snapshotCollection.id)
     } catch (error) {
       console.error("Error viewing snapshot:", error)
     }
@@ -1371,11 +1463,16 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const handleViewLive = () => {
     // Restore original collections
     setCollections(originalCollections)
-    setSelectedCollection(originalCollections[0]?.id || null)
-    setCollectionInput(originalCollections[0]?.name || "")
+    const firstCollection = originalCollections[0]
+    setSelectedCollection(firstCollection?.id || null)
+    setCollectionInput(firstCollection?.name || "")
     setCurrentSnapshot(null)
     setIsViewingSnapshot(false)
     setSelectedSnapshot(null)
+    // Load release line config for the restored collection
+    if (firstCollection) {
+      loadReleaseLineConfig(firstCollection.id)
+    }
   }
 
   // Add tip handler function
@@ -1596,6 +1693,40 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                   <text x="570" y="160" textAnchor="middle" className="text-[8px] fill-muted-foreground">
                     Delivery
                   </text>
+
+                  {/* Release Line */}
+                  {(() => {
+                    const currentReleaseLineConfig = selectedCollection ? releaseLineSettings[selectedCollection] : null
+                    if (!currentReleaseLineConfig?.enabled) return null
+
+                    return (
+                      <g>
+                        {/* Vertical release line */}
+                        <line
+                          x1="600"
+                          y1="20"
+                          x2="600"
+                          y2="160"
+                          stroke={currentReleaseLineConfig.color}
+                          strokeWidth="2"
+                        />
+                        {/* Release line text */}
+                        {currentReleaseLineConfig.text && (
+                          <text
+                            x="605"
+                            y="90"
+                            textAnchor="start"
+                            className="text-[10px] font-medium"
+                            fill={currentReleaseLineConfig.color}
+                            transform="rotate(90, 605, 90)"
+                          >
+                            {currentReleaseLineConfig.text}
+                          </text>
+                        )}
+                      </g>
+                    )
+                  })()}
+
                   {/* Dots with Collision Detection */}
                   {(() => {
                     // Type definitions for collision detection
@@ -2242,6 +2373,30 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                 <label className="text-sm font-medium block">Snapshots</label>
                 {renderCalendar()}
               </div>
+
+              {/* Release Line Settings */}
+              {selectedCollection && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium block">Release Line</label>
+                  <div className="bg-muted/30 p-3 rounded-lg">
+                    {isLoadingReleaseLineConfig ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                        Loading settings...
+                      </div>
+                    ) : (
+                      <ReleaseLineSettings
+                        config={releaseLineSettings[selectedCollection] || {
+                          enabled: false,
+                          color: "#ff00ff",
+                          text: ""
+                        }}
+                        onConfigChange={handleReleaseLineConfigChange}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

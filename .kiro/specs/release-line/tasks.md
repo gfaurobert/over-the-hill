@@ -36,7 +36,7 @@
   - Implement text input field with validation for release line label
   - _Requirements: 1.1, 2.1, 3.1, 3.5_
 
-- [ ] 7. Integrate release line settings into HillChartApp
+- [x] 7. Integrate release line settings into HillChartApp
   - Add release line state management to main component
   - Integrate settings panel into existing collection controls
   - Implement real-time updates when settings change
