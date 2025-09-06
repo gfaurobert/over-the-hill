@@ -90,6 +90,7 @@ export interface Snapshot {
   collectionName: string
   dots: Dot[]
   timestamp: number
+  releaseLineConfig?: ReleaseLineConfig
 }
 
 export interface ExportData {
@@ -1139,7 +1140,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         color: dot.color,
         size: dot.size,
         archived: Boolean(dot.archived) // Ensure it's a boolean
-      }))
+      })),
+      // Include release line configuration if it exists
+      ...(releaseLineSettings[collection.id] && {
+        releaseLineConfig: releaseLineSettings[collection.id]
+      })
     }))
 
     // Clean snapshots data
@@ -1156,7 +1161,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         size: dot.size,
         archived: Boolean(dot.archived)
       })),
-      timestamp: snapshot.timestamp
+      timestamp: snapshot.timestamp,
+      // Include release line configuration if it exists in the snapshot
+      ...(snapshot.releaseLineConfig && {
+        releaseLineConfig: snapshot.releaseLineConfig
+      })
     }))
 
     const exportData: ExportData = {
@@ -1715,9 +1724,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         {/* Release line text */}
                         {currentReleaseLineConfig.text && (
                           <text
-                            x="505"
+                            x="605"
                             y="90"
-                            textAnchor="start"
+                            textAnchor="middle"
                             className="text-[10px] font-medium"
                             fill={currentReleaseLineConfig.color}
                             transform="rotate(90, 605, 90)"

@@ -54,7 +54,7 @@
   - Implement text rendering at the top of the release line
   - _Requirements: 4.1, 4.2, 4.3_
 
-- [ ] 9. Add release line to export functionality
+- [x] 9. Add release line to export functionality
   - Include release line in PNG export generation
   - Include release line in SVG export generation
   - Ensure proper positioning and styling in exports
