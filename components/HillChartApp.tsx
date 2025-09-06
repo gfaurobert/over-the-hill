@@ -30,6 +30,7 @@ import {
   Archive as ArchiveIcon,
   Undo2,
   Shield,
+  Rocket,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { useTheme } from "next-themes"
@@ -2051,7 +2052,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
                         disabled={!selectedCollection}
                       >
-                        <Edit2 className="w-4 h-4" /> Release Line
+                        <Rocket className="w-4 h-4" /> Release Line
                       </button>
                       <button
                         onClick={() => {
