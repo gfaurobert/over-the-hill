@@ -18,7 +18,7 @@
   - Create unit tests for encryption/decryption roundtrip
   - _Requirements: 7.1, 7.2, 7.3_
 
-- [ ] 4. Update Supabase service layer
+- [x] 4. Update Supabase service layer
   - Extend supabaseService to handle encrypted release line storage
   - Implement CRUD operations for release line configuration
   - Add error handling for invalid or missing release line data
