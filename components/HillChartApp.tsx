@@ -64,6 +64,12 @@ export interface Dot {
   archived: boolean // always present
 }
 
+export interface ReleaseLineConfig {
+  enabled: boolean
+  color: string
+  text: string
+}
+
 export interface Collection {
   id: string
   name: string
@@ -71,6 +77,7 @@ export interface Collection {
   archived_at?: string
   deleted_at?: string
   dots: Dot[]
+  releaseLineConfig?: ReleaseLineConfig
 }
 
 export interface Snapshot {
