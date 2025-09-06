@@ -38,14 +38,14 @@
 
 - [x] 7. Integrate release line settings into HillChartApp
   - Add release line state management to main component
-  - Integrate settings panel into existing collection controls
+  - Integrate settings panel into main ellipsis menu
   - Implement real-time updates when settings change
   - _Requirements: 1.2, 1.4, 2.2, 3.2_
 
 - [ ] 8. Implement release line SVG visualization
   - Add vertical line rendering to hill chart SVG
-  - Position line at right edge of chart area (x=600)
-  - Implement text rendering along the release line
+  - Position line at right edge of chart area (x=600) extending as high as the top of the hill
+  - Implement text rendering at the top of the release line
   - _Requirements: 4.1, 4.2, 4.3_
 
 - [ ] 9. Add release line to export functionality

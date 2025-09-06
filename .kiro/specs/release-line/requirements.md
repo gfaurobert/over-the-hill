@@ -12,7 +12,7 @@ The Release Line feature allows users to display a vertical line at the end of t
 
 #### Acceptance Criteria
 
-1. WHEN the user accesses the hill chart settings THEN the system SHALL provide a toggle control for the release line
+1. WHEN the user accesses the main ellipsis menu THEN the system SHALL provide a toggle control for the release line
 2. WHEN the release line toggle is enabled THEN the system SHALL display a vertical line at the right edge of the hill chart
 3. WHEN the release line toggle is disabled THEN the system SHALL hide the release line completely
 4. WHEN the toggle state changes THEN the system SHALL persist the setting for the current collection
@@ -23,7 +23,7 @@ The Release Line feature allows users to display a vertical line at the end of t
 
 #### Acceptance Criteria
 
-1. WHEN the release line is enabled THEN the system SHALL provide a color picker control for the release line
+1. WHEN the release line is enabled THEN the system SHALL provide a color picker control for the release line in the main ellipsis menu
 2. WHEN the user selects a new color THEN the system SHALL immediately update the release line color in the hill chart
 3. WHEN the user changes the color THEN the system SHALL persist the color setting for the current collection
 4. WHEN no custom color is set THEN the system SHALL use a default color that contrasts well with both light and dark themes
@@ -34,8 +34,8 @@ The Release Line feature allows users to display a vertical line at the end of t
 
 #### Acceptance Criteria
 
-1. WHEN the release line is enabled THEN the system SHALL provide a text input field for the release line label
-2. WHEN the user enters text THEN the system SHALL display the text vertically along or near the release line
+1. WHEN the release line is enabled THEN the system SHALL provide a text input field for the release line label in the main ellipsis menu
+2. WHEN the user enters text THEN the system SHALL display the text at the top of the release line
 3. WHEN the user updates the text THEN the system SHALL persist the text for the current collection
 4. WHEN no custom text is provided THEN the system SHALL display a default placeholder or no text
 5. WHEN the text is too long THEN the system SHALL handle text overflow gracefully (truncation or wrapping)
@@ -47,8 +47,8 @@ The Release Line feature allows users to display a vertical line at the end of t
 #### Acceptance Criteria
 
 1. WHEN the release line is displayed THEN the system SHALL position it at the right edge of the hill chart area
-2. WHEN the release line is displayed THEN the system SHALL ensure it extends the full height of the chart area
-3. WHEN the release line text is displayed THEN the system SHALL position it to avoid overlapping with existing dots or chart elements
+2. WHEN the release line is displayed THEN the system SHALL ensure it extends as high as the top of the hill
+3. WHEN the release line text is displayed THEN the system SHALL position it at the top of the line
 4. WHEN exporting the chart THEN the system SHALL include the release line in PNG and SVG exports if enabled
 5. WHEN the chart is resized THEN the system SHALL maintain the release line position and proportions
 

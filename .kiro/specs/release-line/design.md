@@ -54,7 +54,7 @@ Following the existing privacy patterns in the codebase:
 ### UI Components
 
 #### 1. Release Line Settings Panel
-Location: Integrated into the existing collection settings area in `HillChartApp.tsx`
+Location: Integrated into the main ellipsis menu in `HillChartApp.tsx`
 
 Components needed:
 - Toggle switch for enable/disable
@@ -66,8 +66,8 @@ Location: Added to the SVG rendering in the hill chart
 
 Visual specifications:
 - Vertical line positioned at x=600 (right edge of chart)
-- Line extends from y=20 to y=160 (full chart height)
-- Text positioned vertically along the line
+- Line extends as high as the top of the hill (y=20 to y=80)
+- Text positioned at the top of the line
 - Configurable stroke color and width
 
 ### State Management
