@@ -1706,16 +1706,16 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         {/* Vertical release line */}
                         <line
                           x1="600"
-                          y1="20"
+                          y1="-10"
                           x2="600"
                           y2="160"
                           stroke={currentReleaseLineConfig.color}
-                          strokeWidth="2"
+                          strokeWidth="3"
                         />
                         {/* Release line text */}
                         {currentReleaseLineConfig.text && (
                           <text
-                            x="605"
+                            x="505"
                             y="90"
                             textAnchor="start"
                             className="text-[10px] font-medium"
