@@ -24,7 +24,7 @@
   - Add error handling for invalid or missing release line data
   - _Requirements: 5.1, 5.2, 6.1, 7.1_
 
-- [ ] 5. Update simple data service
+- [x] 5. Update simple data service
   - Add updateCollectionReleaseLineConfig method
   - Add getCollectionReleaseLineConfig method
   - Integrate release line operations with existing collection methods

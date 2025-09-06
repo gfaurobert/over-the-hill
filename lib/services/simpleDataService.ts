@@ -6,7 +6,7 @@
  */
 
 import * as supabaseService from './supabaseService'
-import type { Collection, Dot, Snapshot } from '@/components/HillChartApp'
+import type { Collection, Dot, Snapshot, ReleaseLineConfig } from '@/components/HillChartApp'
 
 export interface SimpleFetchOptions {
   // No caching options - always fresh
@@ -165,6 +165,24 @@ export class SimpleDataService {
     console.log(`[SIMPLE_DATA] Resetting all collections for user: ${userId}`)
     return await supabaseService.resetAllCollections(userId)
   }
+
+  // Release line configuration operations
+  async updateCollectionReleaseLineConfig(
+    userId: string, 
+    collectionId: string, 
+    config: ReleaseLineConfig
+  ): Promise<boolean> {
+    console.log(`[SIMPLE_DATA] Updating release line config for collection: ${collectionId}`)
+    return await supabaseService.updateCollectionReleaseLineConfig(userId, collectionId, config)
+  }
+
+  async getCollectionReleaseLineConfig(
+    userId: string, 
+    collectionId: string
+  ): Promise<ReleaseLineConfig | null> {
+    console.log(`[SIMPLE_DATA] Getting release line config for collection: ${collectionId}`)
+    return await supabaseService.getCollectionReleaseLineConfig(userId, collectionId)
+  }
 }
 
 // Export singleton instance
@@ -187,3 +205,5 @@ export const deleteSnapshot = simpleDataService.deleteSnapshot.bind(simpleDataSe
 export const fetchUserPreferences = simpleDataService.fetchUserPreferences.bind(simpleDataService)
 export const importData = simpleDataService.importData.bind(simpleDataService)
 export const resetAllCollections = simpleDataService.resetAllCollections.bind(simpleDataService)
+export const updateCollectionReleaseLineConfig = simpleDataService.updateCollectionReleaseLineConfig.bind(simpleDataService)
+export const getCollectionReleaseLineConfig = simpleDataService.getCollectionReleaseLineConfig.bind(simpleDataService)
