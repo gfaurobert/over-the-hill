@@ -42,7 +42,7 @@
   - Implement real-time updates when settings change
   - _Requirements: 1.2, 1.4, 2.2, 3.2_
 
-- [ ] 7b. Update ellipsis menu to include release line settings
+- [x] 7b. Update ellipsis menu to include release line settings
   - Modify the main ellipsis menu component to include release line settings option
   - Ensure proper menu item ordering and accessibility
   - Implement menu state management for release line settings panel

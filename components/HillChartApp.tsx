@@ -373,6 +373,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   } | null>(null)
   const [showArchivedCollectionsModal, setShowArchivedCollectionsModal] = useState(false)
   const [showPrivacySettings, setShowPrivacySettings] = useState(false)
+  const [showReleaseLineSettings, setShowReleaseLineSettings] = useState(false)
 
   // Collection editing state
   const [isEditingCollection, setIsEditingCollection] = useState(false)
@@ -2044,6 +2045,16 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       </div>
                       <button
                         onClick={() => {
+                          setShowReleaseLineSettings(true)
+                          setShowEllipsisMenu(false)
+                        }}
+                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        disabled={!selectedCollection}
+                      >
+                        <Edit2 className="w-4 h-4" /> Release Line
+                      </button>
+                      <button
+                        onClick={() => {
                           setHideCollectionName(!hideCollectionName)
                           setShowEllipsisMenu(false)
                         }}
@@ -2374,29 +2385,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                 {renderCalendar()}
               </div>
 
-              {/* Release Line Settings */}
-              {selectedCollection && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium block">Release Line</label>
-                  <div className="bg-muted/30 p-3 rounded-lg">
-                    {isLoadingReleaseLineConfig ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                        Loading settings...
-                      </div>
-                    ) : (
-                      <ReleaseLineSettings
-                        config={releaseLineSettings[selectedCollection] || {
-                          enabled: false,
-                          color: "#ff00ff",
-                          text: ""
-                        }}
-                        onConfigChange={handleReleaseLineConfigChange}
-                      />
-                    )}
-                  </div>
-                </div>
-              )}
+
             </CardContent>
           </Card>
         </div>
@@ -2780,6 +2769,52 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       {/* Privacy Settings Modal */}
       {showPrivacySettings && (
         <PrivacySettings onClose={() => setShowPrivacySettings(false)} />
+      )}
+
+      {/* Release Line Settings Modal */}
+      {showReleaseLineSettings && selectedCollection && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Release Line</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowReleaseLineSettings(false)}
+                className="h-8 w-8 p-0"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            <div className="space-y-4">
+              {isLoadingReleaseLineConfig ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                  Loading settings...
+                </div>
+              ) : (
+                <ReleaseLineSettings
+                  config={releaseLineSettings[selectedCollection] || {
+                    enabled: false,
+                    color: "#ff00ff",
+                    text: ""
+                  }}
+                  onConfigChange={handleReleaseLineConfigChange}
+                />
+              )}
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowReleaseLineSettings(false)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
