@@ -6,7 +6,7 @@
   - Add validation schemas for release line configuration
   - _Requirements: 1.1, 2.1, 3.1, 5.1_
 
-- [ ] 2. Implement database schema and migration
+- [x] 2. Implement database schema and migration
   - Add release_line_config_encrypted column to collections table
   - Create database migration script for the new column
   - Test migration on development database
