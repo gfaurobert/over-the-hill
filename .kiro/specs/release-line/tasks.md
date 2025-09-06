@@ -30,7 +30,7 @@
   - Integrate release line operations with existing collection methods
   - _Requirements: 1.4, 2.3, 3.3, 5.1_
 
-- [ ] 6. Create release line settings UI components
+- [x] 6. Create release line settings UI components
   - Build toggle switch component for enable/disable functionality
   - Create color picker component for release line color selection
   - Implement text input field with validation for release line label
