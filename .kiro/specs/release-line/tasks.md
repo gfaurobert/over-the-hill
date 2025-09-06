@@ -42,6 +42,12 @@
   - Implement real-time updates when settings change
   - _Requirements: 1.2, 1.4, 2.2, 3.2_
 
+- [ ] 7b. Update ellipsis menu to include release line settings
+  - Modify the main ellipsis menu component to include release line settings option
+  - Ensure proper menu item ordering and accessibility
+  - Implement menu state management for release line settings panel
+  - _Requirements: 1.2, 3.2, 3.5_
+
 - [ ] 8. Implement release line SVG visualization
   - Add vertical line rendering to hill chart SVG
   - Position line at right edge of chart area (x=600) extending as high as the top of the hill
