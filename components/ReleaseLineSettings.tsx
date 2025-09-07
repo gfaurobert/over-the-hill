@@ -23,10 +23,14 @@ export const ReleaseLineSettings: React.FC<ReleaseLineSettingsProps> = ({
   }
 
   const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onConfigChange({
-      ...config,
-      color: e.target.value,
-    })
+    const color = e.target.value
+    // Validate hex color format
+    if (/^#[0-9A-Fa-f]{6}$/.test(color) || color === '') {
+      onConfigChange({
+        ...config,
+        color,
+      })
+    }
   }
 
   const handleTextChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -41,7 +45,12 @@ export const ReleaseLineSettings: React.FC<ReleaseLineSettingsProps> = ({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" role="group" aria-labelledby="release-line-settings-heading">
+      {/* Accessible heading for screen readers */}
+      <h3 id="release-line-settings-heading" className="sr-only">
+        Release Line Settings
+      </h3>
+      
       {/* Enable/Disable Toggle */}
       <div className="flex items-center justify-between">
         <Label htmlFor="release-line-toggle" className="text-sm font-medium">
@@ -51,12 +60,24 @@ export const ReleaseLineSettings: React.FC<ReleaseLineSettingsProps> = ({
           id="release-line-toggle"
           checked={config.enabled}
           onCheckedChange={handleToggleChange}
+          aria-describedby="release-line-toggle-description"
         />
+      </div>
+      <div id="release-line-toggle-description" className="sr-only">
+        Toggle to enable or disable the release line on your hill chart
       </div>
 
       {/* Color and Text Settings - Only show when enabled */}
       {config.enabled && (
-        <div className="space-y-3 pl-4 border-l-2 border-muted">
+        <div 
+          className="space-y-3 pl-4 border-l-2 border-muted"
+          role="group"
+          aria-labelledby="release-line-customization-heading"
+        >
+          <h4 id="release-line-customization-heading" className="sr-only">
+            Release Line Customization
+          </h4>
+          
           {/* Color Picker */}
           <div className="space-y-2">
             <Label htmlFor="release-line-color" className="text-sm">
@@ -68,8 +89,10 @@ export const ReleaseLineSettings: React.FC<ReleaseLineSettingsProps> = ({
                 type="color"
                 value={config.color}
                 onChange={handleColorChange}
-                className="w-8 h-8 rounded border border-input cursor-pointer"
+                className="w-8 h-8 rounded border border-input cursor-pointer focus:ring-2 focus:ring-ring focus:ring-offset-2"
                 title="Choose release line color"
+                aria-label="Release line color picker"
+                aria-describedby="color-picker-description"
                 data-testid="color-picker"
               />
               <Input
@@ -79,8 +102,16 @@ export const ReleaseLineSettings: React.FC<ReleaseLineSettingsProps> = ({
                 className="flex-1 text-sm font-mono"
                 maxLength={7}
                 pattern="^#[0-9A-Fa-f]{6}$"
+                aria-label="Release line color hex value"
+                aria-describedby="color-input-description"
                 data-testid="color-text-input"
               />
+            </div>
+            <div id="color-picker-description" className="sr-only">
+              Use the color picker or enter a hex color code to customize the release line color
+            </div>
+            <div id="color-input-description" className="sr-only">
+              Enter a valid hex color code starting with # followed by 6 characters
             </div>
           </div>
 
@@ -97,10 +128,18 @@ export const ReleaseLineSettings: React.FC<ReleaseLineSettingsProps> = ({
                 placeholder="Q4 2024, Release Date, etc."
                 className="text-sm"
                 maxLength={12}
+                aria-describedby="text-input-description text-length-counter"
                 data-testid="text-input"
               />
-              <div className="text-xs text-muted-foreground">
+              <div 
+                id="text-length-counter" 
+                className="text-xs text-muted-foreground"
+                aria-live="polite"
+              >
                 {config.text.length}/12 characters
+              </div>
+              <div id="text-input-description" className="sr-only">
+                Enter a label for your release line. Maximum 12 characters allowed.
               </div>
             </div>
           </div>

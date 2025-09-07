@@ -343,6 +343,20 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       return () => document.removeEventListener('mousedown', handleClick)
     }
   }, [showEllipsisMenu])
+
+  // Focus management for release line settings modal
+  useEffect(() => {
+    if (showReleaseLineSettings) {
+      // Focus the first interactive element in the modal
+      const modal = document.querySelector('[role="dialog"]')
+      if (modal) {
+        const firstFocusable = modal.querySelector('input, button, [tabindex]:not([tabindex="-1"])')
+        if (firstFocusable instanceof HTMLElement) {
+          firstFocusable.focus()
+        }
+      }
+    }
+  }, [showReleaseLineSettings])
   const svgRef = useRef<SVGSVGElement>(null)
   const [copyStatus, setCopyStatus] = useState<"idle" | "copying" | "success" | "error">("idle")
   const [copyFormat, setCopyFormat] = useState<"PNG" | "SVG">("PNG")
@@ -1619,18 +1633,18 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     <div className="min-h-screen p-4 bg-transparent" style={{ userSelect: isDragging ? "none" : "auto" }}>
       <div className="max-w-screen-2xl mx-auto space-y-6">
         {/* Main Chart Area */}
-        <div className="grid grid-cols-1 lg:grid-cols-[2.4fr_1.2fr] gap-6">
-          <div className="lg:col-span-1 space-y-6">
-            <Card className="h-[600px]">
+        <div className="grid grid-cols-1 xl:grid-cols-[2.4fr_1.2fr] gap-4 lg:gap-6">
+          <div className="xl:col-span-1 space-y-4 lg:space-y-6">
+            <Card className="h-[400px] sm:h-[500px] lg:h-[600px]">
               <CardHeader className="flex flex-row items-center justify-between">
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <Button variant="outline" size="sm" onClick={downloadChartAsPNG}>
                     <Download className="w-4 h-4 mr-1" />
-                    PNG
+                    <span className="hidden sm:inline">PNG</span>
                   </Button>
                   <Button variant="outline" size="sm" onClick={downloadChartAsSVG}>
                     <Download className="w-4 h-4 mr-1" />
-                    SVG
+                    <span className="hidden sm:inline">SVG</span>
                   </Button>
                   <Button
                     variant="outline"
@@ -1669,6 +1683,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                     viewBox="-50 -100 700 180" // Moved chart down by using negative Y offset
                     className="overflow-visible max-w-full"
                     style={{ userSelect: isDragging ? "none" : "auto" }}
+                    role="img"
+                    aria-label={`Hill chart for ${currentCollection?.name || 'collection'} showing project progress`}
+                    preserveAspectRatio="xMidYMid meet"
                   >
                     {/* Bell curve */}
                     <path
@@ -1729,33 +1746,66 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       const currentReleaseLineConfig = selectedCollection ? releaseLineSettings[selectedCollection] : null
                       if (!currentReleaseLineConfig?.enabled) return null
 
+                      // Responsive calculations
+                      const SVG_WIDTH = 600
+                      const SVG_HEIGHT = 180
+                      const CHART_TOP = -20
+                      const CHART_BOTTOM = 151
+                      const LINE_X = SVG_WIDTH // Position at right edge
+                      
+                      // Calculate responsive stroke width (scales with viewport but has min/max bounds)
+                      const baseStrokeWidth = 3
+                      const responsiveStrokeWidth = Math.max(2, Math.min(4, baseStrokeWidth))
+
                       return (
-                        <g>
+                        <g 
+                          role="img" 
+                          aria-label={`Release line: ${currentReleaseLineConfig.text || 'Milestone marker'}`}
+                        >
                           {/* Vertical release line */}
                           <line
-                            x1="600"
-                            y1="-20"
-                            x2="600"
-                            y2="151"
+                            x1={LINE_X}
+                            y1={CHART_TOP}
+                            x2={LINE_X}
+                            y2={CHART_BOTTOM}
                             stroke={currentReleaseLineConfig.color}
-                            strokeWidth="3"
+                            strokeWidth={responsiveStrokeWidth}
+                            aria-hidden="true"
                           />
+                          
                           {/* Release line text */}
                           {currentReleaseLineConfig.text && (() => {
                             const displayText = currentReleaseLineConfig.text.length > 12
                               ? currentReleaseLineConfig.text.substring(0, 12)
                               : currentReleaseLineConfig.text;
-                            // Dynamic X position: 1 char = 585, 12 chars = 650
-                            const dynamicX = 585 + (displayText.length - 1) * (65 / 11);
+                            
+                            // Responsive text positioning
+                            // Position text to be readable at different screen sizes
+                            const textY = CHART_TOP + 30 // Position from top with padding
+                            const textX = LINE_X - 8 // Offset from line for better readability
+                            
+                            // Calculate responsive font size
+                            const baseFontSize = 10
+                            const responsiveFontSize = Math.max(8, Math.min(12, baseFontSize))
                             
                             return (
                               <text
-                                x={dynamicX}
-                                y="10"
+                                x={textX}
+                                y={textY}
                                 textAnchor="end"
-                                className="text-[10px] font-medium"
+                                className="font-medium select-none"
                                 fill={currentReleaseLineConfig.color}
-                                transform={`rotate(90, 605, 12)`}
+                                fontSize={responsiveFontSize}
+                                transform={`rotate(-90, ${textX}, ${textY})`}
+                                aria-label={`Release milestone: ${displayText}`}
+                                style={{
+                                  // Ensure text remains readable across themes
+                                  filter: 'drop-shadow(0 0 2px rgba(255,255,255,0.8))',
+                                  paintOrder: 'stroke fill',
+                                  stroke: 'rgba(255,255,255,0.8)',
+                                  strokeWidth: '0.5px',
+                                  strokeLinejoin: 'round'
+                                }}
                               >
                                 {displayText}
                               </text>
@@ -1977,8 +2027,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
-            <Card className="h-[600px]">
+          <div className="space-y-4 lg:space-y-6">
+            <Card className="h-auto min-h-[400px] sm:min-h-[500px] lg:h-[600px]">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div className="flex flex-col">
                   <CardTitle className="text-lg">Over The Hill</CardTitle>
@@ -2810,15 +2860,33 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
       {/* Release Line Settings Modal */}
       {showReleaseLineSettings && selectedCollection && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="release-line-modal-title"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowReleaseLineSettings(false)
+            }
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              setShowReleaseLineSettings(false)
+            }
+          }}
+        >
+          <div className="bg-white dark:bg-card p-4 sm:p-6 rounded-lg shadow-lg max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Release Line</h3>
+              <h3 id="release-line-modal-title" className="text-lg font-semibold">
+                Release Line Settings
+              </h3>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => setShowReleaseLineSettings(false)}
                 className="h-8 w-8 p-0"
+                aria-label="Close release line settings"
               >
                 <X className="w-4 h-4" />
               </Button>
@@ -2842,10 +2910,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
               )}
             </div>
 
-            <div className="flex justify-end mt-6">
+            <div className="flex justify-end mt-6 pt-4 border-t border-border">
               <Button
                 variant="outline"
                 onClick={() => setShowReleaseLineSettings(false)}
+                autoFocus
               >
                 Close
               </Button>
