@@ -1,0 +1,93 @@
+{
+  "collections": [
+    {
+      "id": "test-collection-1",
+      "name": "Project Alpha with Release Line",
+      "status": "active",
+      "dots": [
+        {
+          "id": "dot-1",
+          "label": "Authentication System",
+          "x": 25,
+          "y": 45,
+          "color": "#3b82f6",
+          "size": 3,
+          "archived": false
+        },
+        {
+          "id": "dot-2",
+          "label": "User Dashboard",
+          "x": 75,
+          "y": 30,
+          "color": "#22c55e",
+          "size": 4,
+          "archived": false
+        }
+      ],
+      "releaseLineConfig": {
+        "enabled": true,
+        "color": "#ff0000",
+        "text": "Q1 2024 Release"
+      }
+    },
+    {
+      "id": "test-collection-2",
+      "name": "Project Beta without Release Line",
+      "status": "active",
+      "dots": [
+        {
+          "id": "dot-3",
+          "label": "API Integration",
+          "x": 50,
+          "y": 60,
+          "color": "#8b5cf6",
+          "size": 2,
+          "archived": false
+        }
+      ]
+    }
+  ],
+  "snapshots": [
+    {
+      "date": "2024-01-15",
+      "collectionId": "test-collection-1",
+      "collectionName": "Project Alpha with Release Line",
+      "dots": [
+        {
+          "id": "dot-1",
+          "label": "Authentication System",
+          "x": 20,
+          "y": 50,
+          "color": "#3b82f6",
+          "size": 3,
+          "archived": false
+        }
+      ],
+      "timestamp": 1705320000000,
+      "releaseLineConfig": {
+        "enabled": true,
+        "color": "#00ff00",
+        "text": "Snapshot Milestone"
+      }
+    },
+    {
+      "date": "2024-01-10",
+      "collectionId": "test-collection-2",
+      "collectionName": "Project Beta without Release Line",
+      "dots": [
+        {
+          "id": "dot-3",
+          "label": "API Integration",
+          "x": 45,
+          "y": 65,
+          "color": "#8b5cf6",
+          "size": 2,
+          "archived": false
+        }
+      ],
+      "timestamp": 1704888000000
+    }
+  ],
+  "exportDate": "2024-01-20T10:00:00Z",
+  "version": "1.0.0"
+}

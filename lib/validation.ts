@@ -382,13 +382,30 @@ export const validateImportData = (data: any): ExportData => {
           throw new ValidationError(`Snapshot ${index} is invalid`)
         }
         
-        validatedSnapshots.push({
+        // Validate release line config if present in snapshot
+        let releaseLineConfig: ReleaseLineConfig | undefined = undefined
+        if (snapshot.releaseLineConfig) {
+          try {
+            releaseLineConfig = validateReleaseLineConfig(snapshot.releaseLineConfig)
+          } catch (error) {
+            throw new ValidationError(`Invalid release line configuration in snapshot ${index}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+          }
+        }
+        
+        const validatedSnapshot: any = {
           date: sanitizeString(snapshot.date, 20),
           collectionId: sanitizeId(snapshot.collectionId),
           collectionName: sanitizeString(snapshot.collectionName, 100),
           dots: snapshot.dots.map((dot: any) => validateDot(dot)),
           timestamp: sanitizeNumber(snapshot.timestamp, 0)
-        })
+        }
+        
+        // Only include releaseLineConfig if it exists
+        if (releaseLineConfig) {
+          validatedSnapshot.releaseLineConfig = releaseLineConfig
+        }
+        
+        validatedSnapshots.push(validatedSnapshot)
       } catch (error) {
         throw new ValidationError(`Invalid snapshot at index ${index}: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }

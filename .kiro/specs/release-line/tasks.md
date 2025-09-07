@@ -72,7 +72,7 @@
   - Handle snapshots without release line data gracefully
   - _Requirements: 5.3, 5.4_
 
-- [ ] 12. Extend JSON export/import functionality
+- [x] 12. Extend JSON export/import functionality
   - Include release line config in JSON export format
   - Handle release line data during JSON import
   - Implement validation and error handling for imported release line data
