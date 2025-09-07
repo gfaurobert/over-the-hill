@@ -5,6 +5,8 @@
 import { validateImportData, validateReleaseLineConfig, ValidationError } from '../../lib/validation'
 import type { ExportData, ReleaseLineConfig } from '../HillChartApp'
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 describe('Release Line Import Functionality', () => {
   describe('validateReleaseLineConfig', () => {
     test('should validate valid release line configuration', () => {

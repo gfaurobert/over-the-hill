@@ -6,6 +6,8 @@
 
 import { validateReleaseLineConfig } from '@/lib/validation'
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 describe('Release Line Integration', () => {
   describe('End-to-end validation flow', () => {
     it('should handle complete release line configuration workflow', () => {

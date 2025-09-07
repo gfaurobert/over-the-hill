@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabaseClient"
-import { Collection, Dot, Snapshot, ExportData } from "@/components/HillChartApp"
+import { Collection, Dot, Snapshot, ExportData, ReleaseLineConfig } from "@/components/HillChartApp"
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { privacyService } from "./privacyService"
 import { 
   validateDot, 

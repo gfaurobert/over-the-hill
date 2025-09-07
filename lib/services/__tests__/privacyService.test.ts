@@ -1,5 +1,7 @@
 import { privacyService } from '../privacyService';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 // Mock environment variables for testing
 const originalEnv = process.env;
 

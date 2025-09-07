@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabaseClient"
-import { createHash, randomBytes, createHmac } from "crypto"
+import { createHash, createHmac } from "crypto"
 
 // Privacy service for handling encrypted data
 export class PrivacyService {

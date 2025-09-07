@@ -17,7 +17,7 @@ jest.mock('../lib/supabaseClient', () => ({
 }))
 
 // Get the mocked functions
-const { supabase } = require('../lib/supabaseClient')
+import { supabase } from '../lib/supabaseClient'
 beforeEach(() => {
   supabase.auth.signInWithPassword.mockImplementation(mockSignInWithPassword)
   supabase.auth.signInWithOtp.mockImplementation(mockSignInWithOtp)

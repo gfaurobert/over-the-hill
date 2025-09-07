@@ -7,6 +7,8 @@
 
 import { getCacheManager } from './cacheService'
 import * as supabaseService from './supabaseService'
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { Collection, Dot, Snapshot, ExportData, ReleaseLineConfig } from '@/components/HillChartApp'
 
 // User preferences interface

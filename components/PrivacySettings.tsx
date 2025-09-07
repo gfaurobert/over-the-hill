@@ -10,7 +10,7 @@ import {
   Shield, 
   Lock, 
   Eye, 
-  EyeOff, 
+
   Database, 
   Key, 
   AlertTriangle,
@@ -679,7 +679,7 @@ export const PrivacySettings: React.FC<PrivacySettingsProps> = ({ onClose }) => 
                 </div>
 
                 <div className="flex items-start gap-3">
-                  <Badge variant="secondary" className="mt-1">What We Don't Store</Badge>
+                  <Badge variant="secondary" className="mt-1">What We Don&apos;t Store</Badge>
                   <div className="text-sm">
                     <p>• Plain text content</p>
                     <p>• Personal identifying information</p>

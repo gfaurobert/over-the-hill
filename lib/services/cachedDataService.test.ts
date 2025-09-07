@@ -1,5 +1,7 @@
 // Simple cached data service tests - run with: node lib/services/cachedDataService.test.js (after compilation)
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { CachedDataService } from "./cachedDataService";
 
 // Mock browser APIs for Node.js environment

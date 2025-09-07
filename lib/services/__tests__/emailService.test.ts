@@ -1,5 +1,7 @@
 import { emailService } from '../emailService';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 // Mock environment variables for testing
 const originalEnv = process.env;
 
@@ -26,21 +28,20 @@ describe('EmailService', () => {
   describe('Configuration Loading', () => {
     it('should load SMTP configuration from environment variables', () => {
       // This test verifies that the service can be instantiated with proper env vars
-      expect(() => {
-        const { emailService } = require('../emailService');
+      expect(async () => {
+        const { emailService } = await import('../emailService');
         return emailService;
       }).not.toThrow();
     });
 
-    it('should throw error when required SMTP config is missing', () => {
+    it('should throw error when required SMTP config is missing', async () => {
       delete process.env.SMTP_HOST;
       
-      expect(() => {
-        // Clear the module cache to force re-instantiation
-        delete require.cache[require.resolve('../emailService')];
-        const { emailService } = require('../emailService');
+      await expect(async () => {
+        // Note: ES modules don't have cache clearing like CommonJS
+        const { emailService } = await import('../emailService');
         return emailService;
-      }).toThrow('Missing required SMTP configuration');
+      }).rejects.toThrow('Missing required SMTP configuration');
     });
   });
 
@@ -227,12 +228,11 @@ describe('EmailService', () => {
       const originalHost = process.env.SMTP_HOST;
       delete process.env.SMTP_HOST;
       
-      expect(() => {
-        // Clear the module cache to force re-instantiation
-        delete require.cache[require.resolve('../emailService')];
-        const { emailService } = require('../emailService');
+      expect(async () => {
+        // Note: ES modules don't have cache clearing like CommonJS
+        const { emailService } = await import('../emailService');
         return emailService;
-      }).toThrow('Missing required SMTP configuration');
+      }).rejects.toThrow('Missing required SMTP configuration');
       
       // Restore for other tests
       process.env.SMTP_HOST = originalHost;

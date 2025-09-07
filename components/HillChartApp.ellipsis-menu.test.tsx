@@ -2,16 +2,15 @@
  * @jest-environment jsdom
  */
 
-import React from 'react'
-import { render, screen } from '@testing-library/react'
+
 import '@testing-library/jest-dom'
 
 // Simple test to verify the ellipsis menu integration
 describe('HillChartApp Ellipsis Menu Integration', () => {
   it('should have Release Line Settings menu item in the correct location', () => {
     // Read the HillChartApp component source to verify the menu structure
-    const fs = require('fs')
-    const path = require('path')
+    import fs from 'fs'
+    import path from 'path'
     const componentPath = path.join(__dirname, 'HillChartApp.tsx')
     const componentSource = fs.readFileSync(componentPath, 'utf8')
     
@@ -30,8 +29,6 @@ describe('HillChartApp Ellipsis Menu Integration', () => {
   })
 
   it('should have proper state management for release line settings modal', () => {
-    const fs = require('fs')
-    const path = require('path')
     const componentPath = path.join(__dirname, 'HillChartApp.tsx')
     const componentSource = fs.readFileSync(componentPath, 'utf8')
     
@@ -43,8 +40,6 @@ describe('HillChartApp Ellipsis Menu Integration', () => {
   })
 
   it('should use Edit2 icon for Release Line Settings menu item', () => {
-    const fs = require('fs')
-    const path = require('path')
     const componentPath = path.join(__dirname, 'HillChartApp.tsx')
     const componentSource = fs.readFileSync(componentPath, 'utf8')
     
@@ -54,8 +49,6 @@ describe('HillChartApp Ellipsis Menu Integration', () => {
   })
 
   it('should integrate ReleaseLineSettings component in the modal', () => {
-    const fs = require('fs')
-    const path = require('path')
     const componentPath = path.join(__dirname, 'HillChartApp.tsx')
     const componentSource = fs.readFileSync(componentPath, 'utf8')
     

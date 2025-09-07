@@ -1,5 +1,7 @@
 import { Dot, Collection, Snapshot, ExportData, ReleaseLineConfig } from "@/components/HillChartApp"
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 // Validation error class
 export class ValidationError extends Error {
   constructor(message: string, public field?: string) {

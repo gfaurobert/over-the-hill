@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { useAuth } from './AuthProvider';

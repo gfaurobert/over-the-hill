@@ -204,6 +204,7 @@ function DotMenuDropdown({ anchorRef, onClose, onDelete, onArchive }: {
   )
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function DotRow({ dot, dotMenuOpen, setDotMenuOpen, setDeleteConfirm, updateDot, editingDotId, setEditingDotId }: any) {
   const menuButtonRef = React.useRef<HTMLDivElement>(null)
   return (
@@ -971,11 +972,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = "high"
-    // @ts-ignore
     ctx.letterSpacing = "0px"
-    // @ts-ignore
     ctx.wordSpacing = "0px"
-    // @ts-ignore
     ctx.fontKerning = "normal"
 
     ctx.scale(scale, scale)
@@ -1055,11 +1053,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     canvas.height = 360 * scale
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = "high"
-    // @ts-ignore
     ctx.letterSpacing = "0px"
-    // @ts-ignore
     ctx.wordSpacing = "0px"
-    // @ts-ignore
     ctx.fontKerning = "normal"
     ctx.scale(scale, scale)
     ctx.fillStyle = backgroundColor
@@ -2408,7 +2403,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         !collections.some((c) => c.name.toLowerCase() === collectionInput.toLowerCase()) && (
                           <div className="border-t border-border">
                             <div className="px-3 py-2 text-sm text-primary bg-primary/10">
-                              Press Enter to create "{collectionInput}"
+                              Press Enter to create &quot;{collectionInput}&quot;
                             </div>
                           </div>
                         )}
@@ -2529,7 +2524,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Delete Dot</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Are you sure you want to delete "{deleteConfirm.dotLabel}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{deleteConfirm.dotLabel}&quot;? This action cannot be undone.
             </p>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
@@ -2586,7 +2581,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Archive Collection</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Archive "{archiveConfirm.collectionName}"? You can restore it later from the archived collections section.
+              Archive &quot;{archiveConfirm.collectionName}&quot;? You can restore it later from the archived collections section.
             </p>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setArchiveConfirm(null)}>
@@ -2604,7 +2599,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2 text-destructive">Delete Collection</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
-              <strong>This action cannot be undone.</strong> Delete "{deleteCollectionConfirm.collectionName}" and all its dots, snapshots, and data?
+              <strong>This action cannot be undone.</strong> Delete &quot;{deleteCollectionConfirm.collectionName}&quot; and all its dots, snapshots, and data?
             </p>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setDeleteCollectionConfirm(null)}>
@@ -2624,7 +2619,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             {collectionNameConflict.type === 'active' ? (
               <div>
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
-                  A collection named "<strong>{collectionNameConflict.name}</strong>" already exists and is currently active.
+                  A collection named &quot;<strong>{collectionNameConflict.name}</strong>&quot; already exists and is currently active.
                 </p>
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={() => setCollectionNameConflict(null)}>
@@ -2635,7 +2630,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             ) : (
               <div>
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
-                  A collection named "<strong>{collectionNameConflict.name}</strong>" already exists but is currently archived.
+                  A collection named &quot;<strong>{collectionNameConflict.name}</strong>&quot; already exists but is currently archived.
                   Would you like to unarchive it instead?
                 </p>
                 <div className="flex gap-2 justify-end">

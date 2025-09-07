@@ -1,6 +1,8 @@
 import * as nodemailer from 'nodemailer';
 import { emailMonitoring } from './emailMonitoring';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 interface SMTPConfig {
   host: string;
   port: number;

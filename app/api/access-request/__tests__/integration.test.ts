@@ -1,5 +1,6 @@
 import { emailService } from '../../../../lib/services/emailService';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
 describe('Access Request Email Notification Integration', () => {
   describe('Email Content Verification', () => {
     it('should generate proper email content for different message types', async () => {

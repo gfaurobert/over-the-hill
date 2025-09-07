@@ -83,6 +83,7 @@ export async function POST(request: NextRequest) {
       // Log email errors but don't fail the request
       // Ensure we don't log sensitive SMTP credentials
       const sanitizedError = emailError instanceof Error 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ? { message: emailError.message, code: (emailError as any).code }
         : 'Unknown email error';
         

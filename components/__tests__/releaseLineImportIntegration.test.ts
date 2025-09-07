@@ -6,6 +6,8 @@
 import { validateImportData } from '../../lib/validation'
 import type { ExportData } from '../HillChartApp'
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 describe('Release Line Import Integration', () => {
   describe('Full Import Flow', () => {
     test('should handle complete export data with release line configurations', () => {

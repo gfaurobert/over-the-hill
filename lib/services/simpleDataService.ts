@@ -8,6 +8,9 @@
 import * as supabaseService from './supabaseService'
 import type { Collection, Dot, Snapshot, ReleaseLineConfig } from '@/components/HillChartApp'
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface SimpleFetchOptions {
   // No caching options - always fresh
 }

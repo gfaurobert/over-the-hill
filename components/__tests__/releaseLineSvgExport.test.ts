@@ -2,6 +2,8 @@
  * Test to verify that release line elements are properly included in SVG exports
  */
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 describe('Release Line SVG Export', () => {
   // Mock XMLSerializer
   const mockSerializeToString = jest.fn()
