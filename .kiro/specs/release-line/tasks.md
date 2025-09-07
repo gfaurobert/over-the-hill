@@ -78,7 +78,7 @@
   - Implement validation and error handling for imported release line data
   - _Requirements: 6.1, 6.2, 6.3, 6.4_
 
-- [x] 13. Add responsive design and accessibility features
+- [ ] 13. Add responsive design and accessibility features
   - Ensure release line scales properly with chart dimensions
   - Add ARIA labels and keyboard accessibility to settings
   - Test text positioning and readability across screen sizes
