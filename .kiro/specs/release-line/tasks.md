@@ -84,7 +84,7 @@
   - Test text positioning and readability across screen sizes
   - _Requirements: 4.5, 3.5_
 
-- [x] 14. Create comprehensive test suite
+- [ ] 14. Create comprehensive test suite
   - Write unit tests for release line configuration validation
   - Create integration tests for data persistence and encryption
   - Add visual tests for SVG rendering and export functionality
