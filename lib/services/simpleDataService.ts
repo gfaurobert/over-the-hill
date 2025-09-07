@@ -98,10 +98,11 @@ export class SimpleDataService {
     userId: string,
     collectionId: string,
     collectionName: string,
-    dots: Dot[]
+    dots: Dot[],
+    releaseLineConfig?: ReleaseLineConfig
   ): Promise<boolean> {
     console.log(`[SIMPLE_DATA] Creating snapshot for collection: ${collectionId}`)
-    return await supabaseService.createSnapshot(userId, collectionId, collectionName, dots)
+    return await supabaseService.createSnapshot(userId, collectionId, collectionName, dots, releaseLineConfig)
   }
 
   async fetchSnapshots(userId: string, options: SimpleFetchOptions = {}): Promise<Snapshot[]> {

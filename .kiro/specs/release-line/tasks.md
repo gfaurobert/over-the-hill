@@ -66,7 +66,7 @@
   - Persist settings changes to database
   - _Requirements: 5.1, 5.2, 1.4_
 
-- [ ] 11. Update snapshot functionality
+- [x] 11. Update snapshot functionality
   - Include release line configuration in snapshot data
   - Restore release line settings when loading snapshots
   - Handle snapshots without release line data gracefully

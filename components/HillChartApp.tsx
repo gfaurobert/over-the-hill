@@ -1420,12 +1420,16 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       archived: dot.archived // force boolean
     }))
 
+    // Get current release line configuration for this collection
+    const currentReleaseLineConfig = releaseLineSettings[currentCollection.id]
+
     try {
       const success = await createSnapshot(
         user.id,
         currentCollection.id,
         currentCollection.name,
-        dotsWithArchived
+        dotsWithArchived,
+        currentReleaseLineConfig
       )
 
       if (success) {

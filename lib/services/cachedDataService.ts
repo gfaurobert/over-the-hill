@@ -7,7 +7,7 @@
 
 import { getCacheManager } from './cacheService'
 import * as supabaseService from './supabaseService'
-import { Collection, Dot, Snapshot, ExportData } from '@/components/HillChartApp'
+import { Collection, Dot, Snapshot, ExportData, ReleaseLineConfig } from '@/components/HillChartApp'
 
 // User preferences interface
 export interface UserPreferences {
@@ -326,10 +326,11 @@ export class CachedDataService {
     userId: string,
     collectionId: string,
     collectionName: string,
-    dots: Dot[]
+    dots: Dot[],
+    releaseLineConfig?: ReleaseLineConfig
   ): Promise<boolean> {
     try {
-      const result = await supabaseService.createSnapshot(userId, collectionId, collectionName, dots)
+      const result = await supabaseService.createSnapshot(userId, collectionId, collectionName, dots, releaseLineConfig)
 
       if (result) {
         // Invalidate snapshots cache

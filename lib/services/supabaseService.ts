@@ -58,6 +58,7 @@ interface SnapshotRow {
   created_at: string
   snapshot_date: string
   dots_data_encrypted: string
+  release_line_config_encrypted?: string
 }
 
 // Enhanced error handling wrapper
@@ -540,7 +541,7 @@ export const deleteDot = async (dotId: string, userId: string): Promise<{ succes
 }
 
 // Create a snapshot of the current state
-export const createSnapshot = async (userId: string, collectionId: string, collectionName: string, dots: Dot[]): Promise<boolean> => {
+export const createSnapshot = async (userId: string, collectionId: string, collectionName: string, dots: Dot[], releaseLineConfig?: ReleaseLineConfig): Promise<boolean> => {
   try {
     const validatedUserId = validateUserId(userId)
     const validatedCollectionId = validateCollectionId(collectionId)
@@ -557,21 +558,41 @@ export const createSnapshot = async (userId: string, collectionId: string, colle
       throw new ValidationError('Too many dots in snapshot. Maximum 1000 allowed')
     }
 
+    // Validate release line config if provided
+    let validatedReleaseLineConfig: ReleaseLineConfig | undefined
+    if (releaseLineConfig) {
+      validatedReleaseLineConfig = validateReleaseLineConfig(releaseLineConfig)
+    }
+
     // Encrypt collection name and dots data
     const { encrypted: encryptedName } = await privacyService.encryptData(validatedCollectionName, validatedUserId)
     const { encrypted: encryptedDotsData } = await privacyService.encryptData(JSON.stringify(validatedDots), validatedUserId)
 
+    // Encrypt release line config if provided
+    let encryptedReleaseLineConfig: string | undefined
+    if (validatedReleaseLineConfig) {
+      const { encrypted } = await privacyService.encryptData(JSON.stringify(validatedReleaseLineConfig), validatedUserId)
+      encryptedReleaseLineConfig = encrypted
+    }
+
     const now = new Date()
+    const insertData: any = {
+      user_id: validatedUserId,
+      collection_id: validatedCollectionId,
+      collection_name_encrypted: encryptedName,
+      created_at: now.toISOString(),
+      snapshot_date: getLocalDateString(now),
+      dots_data_encrypted: encryptedDotsData
+    }
+
+    // Only include release_line_config_encrypted if we have data
+    if (encryptedReleaseLineConfig) {
+      insertData.release_line_config_encrypted = encryptedReleaseLineConfig
+    }
+
     const { error } = await supabase
       .from("snapshots")
-      .insert([{
-        user_id: validatedUserId,
-        collection_id: validatedCollectionId,
-        collection_name_encrypted: encryptedName,
-        created_at: now.toISOString(),
-        snapshot_date: getLocalDateString(now),
-        dots_data_encrypted: encryptedDotsData
-      }])
+      .insert([insertData])
 
     if (error) {
       throw error
@@ -614,14 +635,34 @@ export const fetchSnapshots = async (userId: string): Promise<Snapshot[]> => {
           console.warn(`[SNAPSHOT_PARSING] Skipping corrupted snapshot ${row.id} for user ${validatedUserId}`)
           dots = []
         }
+
+        // Decrypt release line config if present
+        let releaseLineConfig: ReleaseLineConfig | undefined
+        if (row.release_line_config_encrypted) {
+          try {
+            const decryptedReleaseLineConfig = await privacyService.decryptData(row.release_line_config_encrypted, validatedUserId)
+            releaseLineConfig = JSON.parse(decryptedReleaseLineConfig)
+          } catch (error) {
+            // If release line config parsing fails, log warning but continue without it
+            console.warn(`[SNAPSHOT_PARSING] Failed to parse release line config for snapshot ${row.id}, using default`)
+            releaseLineConfig = undefined
+          }
+        }
         
-        return {
+        const snapshot: Snapshot = {
           date: row.snapshot_date,
           collectionId: row.collection_id,
           collectionName: decryptedCollectionName,
           dots: dots,
           timestamp: new Date(row.created_at).getTime()
         }
+
+        // Only include releaseLineConfig if it exists
+        if (releaseLineConfig) {
+          snapshot.releaseLineConfig = releaseLineConfig
+        }
+
+        return snapshot
       })
     )
 
@@ -664,13 +705,33 @@ export const loadSnapshot = async (userId: string, snapshotId: string): Promise<
       handleJsonParseError(error, 'load snapshot', validatedUserId, data.id, data.dots_data_encrypted)
     }
 
-    return {
+    // Decrypt release line config if present
+    let releaseLineConfig: ReleaseLineConfig | undefined
+    if (data.release_line_config_encrypted) {
+      try {
+        const decryptedReleaseLineConfig = await privacyService.decryptData(data.release_line_config_encrypted, validatedUserId)
+        releaseLineConfig = JSON.parse(decryptedReleaseLineConfig)
+      } catch (error) {
+        // If release line config parsing fails, log warning but continue without it
+        console.warn(`[SNAPSHOT_PARSING] Failed to parse release line config for snapshot ${data.id}, using default`)
+        releaseLineConfig = undefined
+      }
+    }
+
+    const snapshot: Snapshot = {
       date: data.snapshot_date,
       collectionId: data.collection_id,
       collectionName: decryptedCollectionName,
       dots: dots,
       timestamp: new Date(data.created_at).getTime()
     }
+
+    // Only include releaseLineConfig if it exists
+    if (releaseLineConfig) {
+      snapshot.releaseLineConfig = releaseLineConfig
+    }
+
+    return snapshot
   } catch (error) {
     handleServiceError(error, 'load snapshot')
     return null
@@ -848,7 +909,14 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
             const { encrypted: encryptedCollectionName } = await privacyService.encryptData(snapshot.collectionName, validatedUserId)
             const { encrypted: encryptedDotsData } = await privacyService.encryptData(JSON.stringify(snapshot.dots), validatedUserId)
 
-            return {
+            // Encrypt release line config if present in snapshot
+            let encryptedReleaseLineConfig: string | undefined
+            if (snapshot.releaseLineConfig) {
+              const { encrypted } = await privacyService.encryptData(JSON.stringify(snapshot.releaseLineConfig), validatedUserId)
+              encryptedReleaseLineConfig = encrypted
+            }
+
+            const snapshotRow: any = {
               user_id: validatedUserId,
               collection_id: snapshot.collectionId,
               collection_name_encrypted: encryptedCollectionName,
@@ -856,6 +924,13 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
               snapshot_date: snapshot.date,
               dots_data_encrypted: encryptedDotsData,
             }
+
+            // Only include release_line_config_encrypted if we have data
+            if (encryptedReleaseLineConfig) {
+              snapshotRow.release_line_config_encrypted = encryptedReleaseLineConfig
+            }
+
+            return snapshotRow
           })
         )
 
