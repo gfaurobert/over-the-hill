@@ -13,3 +13,4 @@
 # Re-include safe-to-commit templates/artifacts (if you use them)
 !.env.example
 !.env.vault
+config.toml
