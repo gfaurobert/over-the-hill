@@ -41,10 +41,7 @@ pnpm-lock.yaml
 coverage/
 
 /supabase/config.toml
-<<<<<<< HEAD
 /supabase/congig.toml.bck
 
-=======
 /supabase/.env
 /supabase/.env.local
->>>>>>> 766139159451615f7b4eb1f928982c0d5b35c764
