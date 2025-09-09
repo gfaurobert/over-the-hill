@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabaseClient"
-import { createHash, randomBytes, createHmac } from "crypto"
+import { createHash, createHmac } from "crypto"
 
 // Privacy service for handling encrypted data
 export class PrivacyService {
@@ -449,6 +449,46 @@ export class PrivacyService {
     }
 
     return data?.map(c => c.id) || []
+  }
+
+  // Encrypt release line configuration
+  async encryptReleaseLineConfig(config: { enabled: boolean; color: string; text: string }, userId: string) {
+    console.log('[PRIVACY_SERVICE] Encrypting release line config:', { enabled: config.enabled, hasColor: !!config.color, hasText: !!config.text, userId })
+    
+    // Boolean doesn't need encryption
+    const enabled = config.enabled
+    
+    // Encrypt color and text data
+    const { encrypted: colorEncrypted } = await this.encryptData(config.color, userId)
+    const { encrypted: textEncrypted } = await this.encryptData(config.text, userId)
+    
+    console.log('[PRIVACY_SERVICE] Release line config encryption successful:', { enabled, hasColorEncrypted: !!colorEncrypted, hasTextEncrypted: !!textEncrypted })
+    
+    return {
+      enabled,
+      color_encrypted: colorEncrypted,
+      text_encrypted: textEncrypted
+    }
+  }
+
+  // Decrypt release line configuration
+  async decryptReleaseLineConfig(encryptedConfig: { enabled: boolean; color_encrypted: string; text_encrypted: string }, userId: string) {
+    console.log('[PRIVACY_SERVICE] Decrypting release line config:', { enabled: encryptedConfig.enabled, hasColorEncrypted: !!encryptedConfig.color_encrypted, hasTextEncrypted: !!encryptedConfig.text_encrypted, userId })
+    
+    // Boolean doesn't need decryption
+    const enabled = encryptedConfig.enabled
+    
+    // Decrypt color and text data
+    const color = await this.decryptData(encryptedConfig.color_encrypted, userId)
+    const text = await this.decryptData(encryptedConfig.text_encrypted, userId)
+    
+    console.log('[PRIVACY_SERVICE] Release line config decryption successful:', { enabled, color, text })
+    
+    return {
+      enabled,
+      color,
+      text
+    }
   }
 
   // Clear user key (for logout)

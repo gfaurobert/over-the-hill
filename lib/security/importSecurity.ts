@@ -1,5 +1,7 @@
 import { ValidationError } from '@/lib/validation';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 // Security configuration for imports
 const IMPORT_SECURITY_CONFIG = {
   MAX_JSON_SIZE: 10 * 1024 * 1024, // 10MB max JSON size

@@ -30,6 +30,7 @@ import {
   Archive as ArchiveIcon,
   Undo2,
   Shield,
+  Rocket,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { useTheme } from "next-themes"
@@ -37,6 +38,7 @@ import SignOutButton from "./SignOutButton"
 import { useAuth } from "./AuthProvider"
 import { PrivacySettings } from "./PrivacySettings"
 import { CacheStatusBadge } from "./CacheStatusBadge"
+import { ReleaseLineSettings } from "./ReleaseLineSettings"
 import {
   fetchCollections,
   addCollection,
@@ -52,6 +54,8 @@ import {
   fetchSnapshots,
   loadSnapshot,
   resetAllCollections,
+  updateCollectionReleaseLineConfig,
+  getCollectionReleaseLineConfig,
 } from "@/lib/services/simpleDataService"
 
 export interface Dot {
@@ -64,6 +68,12 @@ export interface Dot {
   archived: boolean // always present
 }
 
+export interface ReleaseLineConfig {
+  enabled: boolean
+  color: string
+  text: string
+}
+
 export interface Collection {
   id: string
   name: string
@@ -71,6 +81,7 @@ export interface Collection {
   archived_at?: string
   deleted_at?: string
   dots: Dot[]
+  releaseLineConfig?: ReleaseLineConfig
 }
 
 export interface Snapshot {
@@ -79,6 +90,7 @@ export interface Snapshot {
   collectionName: string
   dots: Dot[]
   timestamp: number
+  releaseLineConfig?: ReleaseLineConfig
 }
 
 export interface ExportData {
@@ -192,6 +204,7 @@ function DotMenuDropdown({ anchorRef, onClose, onDelete, onArchive }: {
   )
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function DotRow({ dot, dotMenuOpen, setDotMenuOpen, setDeleteConfirm, updateDot, editingDotId, setEditingDotId }: any) {
   const menuButtonRef = React.useRef<HTMLDivElement>(null)
   return (
@@ -315,7 +328,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false)
   const { theme, setTheme } = useTheme()
   const ellipsisMenuRef = useRef<HTMLDivElement>(null)
-  
+
   // Add click-outside-to-close behavior for main ellipsis menu
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -344,7 +357,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [draggingDot, setDraggingDot] = useState<{ id: string; x: number; y: number } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null)
-  
+
   // Snapshot state management
   const [isViewingSnapshot, setIsViewingSnapshot] = useState(false)
   const [currentSnapshot, setCurrentSnapshot] = useState<Snapshot | null>(null)
@@ -356,13 +369,14 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [archivedCollections, setArchivedCollections] = useState<Collection[]>([])
   const [archiveConfirm, setArchiveConfirm] = useState<{ collectionId: string; collectionName: string } | null>(null)
   const [deleteCollectionConfirm, setDeleteCollectionConfirm] = useState<{ collectionId: string; collectionName: string } | null>(null)
-  const [collectionNameConflict, setCollectionNameConflict] = useState<{ 
-    name: string; 
-    type: 'active' | 'archived'; 
-    archivedCollectionId?: string 
+  const [collectionNameConflict, setCollectionNameConflict] = useState<{
+    name: string;
+    type: 'active' | 'archived';
+    archivedCollectionId?: string
   } | null>(null)
   const [showArchivedCollectionsModal, setShowArchivedCollectionsModal] = useState(false)
   const [showPrivacySettings, setShowPrivacySettings] = useState(false)
+  const [showReleaseLineSettings, setShowReleaseLineSettings] = useState(false)
 
   // Collection editing state
   const [isEditingCollection, setIsEditingCollection] = useState(false)
@@ -380,26 +394,105 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [showImportSuccess, setShowImportSuccess] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
 
+  // Release line state management
+  const [releaseLineSettings, setReleaseLineSettings] = useState<{
+    [collectionId: string]: ReleaseLineConfig
+  }>({})
+  const [isLoadingReleaseLineConfig, setIsLoadingReleaseLineConfig] = useState(false)
+
+  // Release line configuration functions
+  const loadReleaseLineConfig = useCallback(async (collectionId: string) => {
+    if (!user?.id) return
+
+    try {
+      setIsLoadingReleaseLineConfig(true)
+      const config = await getCollectionReleaseLineConfig(user.id, collectionId)
+
+      if (config) {
+        setReleaseLineSettings(prev => ({
+          ...prev,
+          [collectionId]: config
+        }))
+      } else {
+        // Set default config if none exists
+        const defaultConfig: ReleaseLineConfig = {
+          enabled: false,
+          color: "#ff00ff",
+          text: ""
+        }
+        setReleaseLineSettings(prev => ({
+          ...prev,
+          [collectionId]: defaultConfig
+        }))
+      }
+    } catch (error) {
+      console.error('[HILL_CHART] Failed to load release line config:', error)
+      // Set default config on error
+      const defaultConfig: ReleaseLineConfig = {
+        enabled: false,
+        color: "#ff00ff",
+        text: ""
+      }
+      setReleaseLineSettings(prev => ({
+        ...prev,
+        [collectionId]: defaultConfig
+      }))
+    } finally {
+      setIsLoadingReleaseLineConfig(false)
+    }
+  }, [user?.id])
+
+  const updateReleaseLineConfig = useCallback(async (collectionId: string, config: ReleaseLineConfig) => {
+    if (!user?.id) return
+
+    try {
+      // Update local state immediately for real-time updates
+      setReleaseLineSettings(prev => ({
+        ...prev,
+        [collectionId]: config
+      }))
+
+      // Persist to database
+      const success = await updateCollectionReleaseLineConfig(user.id, collectionId, config)
+
+      if (!success) {
+        console.error('[HILL_CHART] Failed to update release line config')
+        // Could revert local state here if needed
+      }
+    } catch (error) {
+      console.error('[HILL_CHART] Error updating release line config:', error)
+    }
+  }, [user?.id])
+
+  const handleReleaseLineConfigChange = useCallback((config: ReleaseLineConfig) => {
+    if (selectedCollection) {
+      updateReleaseLineConfig(selectedCollection, config)
+    }
+  }, [selectedCollection, updateReleaseLineConfig])
+
   useEffect(() => {
     if (user && user.id) {
       console.log('[HILL_CHART] Loading collections for user:', user.id)
       setIsLoadingCollections(true)
-      
+
       // Fetch active collections with force refresh on login
       fetchCollections(user.id, false).then((activeCollections) => {
         console.log('[HILL_CHART] Loaded active collections:', activeCollections.length)
         setCollections(activeCollections)
         setOriginalCollections(activeCollections)
         if (activeCollections.length > 0 && !selectedCollection) {
-          setSelectedCollection(activeCollections[0].id)
-          setCollectionInput(activeCollections[0].name)
+          const firstCollection = activeCollections[0]
+          setSelectedCollection(firstCollection.id)
+          setCollectionInput(firstCollection.name)
+          // Load release line config for the first collection
+          loadReleaseLineConfig(firstCollection.id)
         }
         setIsLoadingCollections(false)
       }).catch((error) => {
         console.error('[HILL_CHART] Failed to fetch active collections:', error)
         setIsLoadingCollections(false)
       })
-      
+
       // Fetch archived collections with force refresh on login
       fetchCollections(user.id, true).then((allCollections) => {
         const archived = allCollections.filter(c => c.status === 'archived')
@@ -408,7 +501,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       }).catch((error) => {
         console.error('[HILL_CHART] Failed to fetch archived collections:', error)
       })
-      
+
       // Fetch snapshots with force refresh on login
       fetchSnapshots(user.id).then((fetchedSnapshots) => {
         console.log('[HILL_CHART] Loaded snapshots:', fetchedSnapshots.length)
@@ -425,10 +518,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       setSnapshots([])
       setSelectedCollection(null)
       setCollectionInput("")
+      setReleaseLineSettings({}) // Clear release line settings
       setIsLoadingCollections(false)
     }
     // Don't clear data when user is undefined (loading state)
-  }, [user]) // Removed selectedCollection dependency to prevent unnecessary refetching
+  }, [user, selectedCollection, loadReleaseLineConfig]) // Added missing dependencies
 
   // Reset snapshot success state after 3 seconds
   useEffect(() => {
@@ -461,14 +555,14 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             fetchCollections(user.id, true),
             fetchSnapshots(user.id)
           ])
-          
+
           setCollections(activeCollections)
           setOriginalCollections(activeCollections)
-          
+
           const archived = allCollections.filter(c => c.status === 'archived')
           setArchivedCollections(archived)
           setSnapshots(snapshots)
-          
+
           console.log('[HILL_CHART] Data refreshed successfully after visibility change')
         } catch (error) {
           console.error('[HILL_CHART] Failed to refresh data on visibility change:', error)
@@ -510,24 +604,24 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   const handleDotDrag = useCallback((dotId: string, clientX: number, clientY: number) => {
     if (!svgRef.current) return
-    
+
     const svgRect = svgRef.current.getBoundingClientRect()
     const svgWidth = svgRect.width
     const svgHeight = svgRect.height
-    
+
     // Calculate relative position within SVG
     const relativeX = clientX - svgRect.left
     const relativeY = clientY - svgRect.top
-    
+
     // Convert to SVG coordinates (viewBox is "-50 0 700 180")
     const svgX = (relativeX / svgWidth) * 700 - 50
     const svgY = (relativeY / svgHeight) * 180
-    
+
     // Constrain to chart area (0 to 600 in SVG coordinates)
     const constrainedX = Math.max(0, Math.min(600, svgX))
     const xPercent = (constrainedX / 600) * 100
     const y = getHillY(xPercent)
-    
+
     // Update immediate visual feedback
     setDraggingDot({ id: dotId, x: xPercent, y })
   }, [])
@@ -537,7 +631,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     e.stopPropagation()
     setIsDragging(dotId)
     setDragStartPos({ x: e.clientX, y: e.clientY })
-    
+
     // Set initial dragging dot position
     handleDotDrag(dotId, e.clientX, e.clientY)
   }, [handleDotDrag])
@@ -573,9 +667,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   const addDot = async () => {
     if (!newDotLabel.trim() || !selectedCollection || !user) return
-    
+
     console.log('[HILL_CHART] Adding dot:', { label: newDotLabel, collectionId: selectedCollection })
-    
+
     const newDot = {
       id: Date.now().toString(),
       label: newDotLabel,
@@ -585,7 +679,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       size: 3,
       archived: false,
     }
-    
+
     try {
       const addedDot = await addDotService(user.id, selectedCollection, newDot)
       if (addedDot) {
@@ -620,20 +714,20 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   // Archive operation handlers
   const handleArchiveCollection = async (collectionId: string) => {
     if (!user) return
-    
+
     const success = await archiveCollection(collectionId, user.id)
     if (success) {
       // Move collection from active to archived
       const collectionToArchive = collections.find(c => c.id === collectionId)
       if (collectionToArchive) {
-        const archivedCollection = { 
-          ...collectionToArchive, 
+        const archivedCollection = {
+          ...collectionToArchive,
           status: 'archived' as const,
           archived_at: new Date().toISOString()
         }
         setCollections(prev => prev.filter(c => c.id !== collectionId))
         setArchivedCollections(prev => [...prev, archivedCollection])
-        
+
         // If this was the selected collection, select another one
         if (selectedCollection === collectionId) {
           // Filter out the deleted collection first
@@ -642,6 +736,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             const remainingCollection = filteredCollections[0]
             setSelectedCollection(remainingCollection.id)
             setCollectionInput(remainingCollection.name)
+            // Load release line config for the remaining collection
+            loadReleaseLineConfig(remainingCollection.id)
           } else {
             setSelectedCollection(null)
             setCollectionInput("")
@@ -654,14 +750,14 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   const handleUnarchiveCollection = async (collectionId: string) => {
     if (!user) return
-    
+
     const success = await unarchiveCollection(collectionId, user.id)
     if (success) {
       // Move collection from archived to active
       const collectionToUnarchive = archivedCollections.find(c => c.id === collectionId)
       if (collectionToUnarchive) {
-        const activeCollection = { 
-          ...collectionToUnarchive, 
+        const activeCollection = {
+          ...collectionToUnarchive,
           status: 'active' as const,
           archived_at: undefined
         }
@@ -673,13 +769,13 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   const handleDeleteCollection = async (collectionId: string) => {
     if (!user) return
-    
+
     const success = await deleteCollection(collectionId, user.id)
     if (success) {
       // Remove collection from both active and archived lists
       setCollections(prev => prev.filter(c => c.id !== collectionId))
       setArchivedCollections(prev => prev.filter(c => c.id !== collectionId))
-      
+
       // If this was the selected collection, select another one
       if (selectedCollection === collectionId) {
         // Filter out the deleted collection first
@@ -688,6 +784,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           const remainingCollection = filteredCollections[0]
           setSelectedCollection(remainingCollection.id)
           setCollectionInput(remainingCollection.name)
+          // Load release line config for the remaining collection
+          loadReleaseLineConfig(remainingCollection.id)
         } else {
           setSelectedCollection(null)
           setCollectionInput("")
@@ -718,6 +816,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       if (archivedCollection) {
         setSelectedCollection(archivedCollection.id)
         setCollectionInput(archivedCollection.name)
+        // Load release line config for the unarchived collection
+        loadReleaseLineConfig(archivedCollection.id)
       }
     }
   }
@@ -725,11 +825,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const handleCollectionInputKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && collectionInput.trim() && user) {
       e.preventDefault()
-      
+
       const trimmedName = collectionInput.trim()
       const nameExists = collections.some((c) => c.name.toLowerCase() === trimmedName.toLowerCase())
       const archivedExists = archivedCollections.find((c) => c.name.toLowerCase() === trimmedName.toLowerCase())
-      
+
       if (nameExists) {
         // Active collection with this name already exists
         setCollectionNameConflict({
@@ -745,15 +845,15 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         })
       } else {
         // Name is available, create new collection
-        const newCollection = { 
-          id: Date.now().toString(), 
-          name: trimmedName, 
+        const newCollection = {
+          id: Date.now().toString(),
+          name: trimmedName,
           status: 'active' as const,
           archived_at: undefined,
           deleted_at: undefined,
-          dots: [] 
+          dots: []
         }
-        
+
         try {
           const added = await addCollection(user.id, newCollection.name)
           if (added) {
@@ -762,6 +862,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             setCollections((prev) => [...prev, added])
             setSelectedCollection(added.id)
             setCollectionInput(added.name)
+            // Load release line config for the new collection
+            loadReleaseLineConfig(added.id)
             // Clear the input after successful creation
             setCollectionInput("")
           } else {
@@ -780,7 +882,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           })
         }
       }
-      
+
       setShowDropdown(false)
       setIsTyping(false)
     }
@@ -823,6 +925,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         text.setAttribute("font-size", currentFontSize)
       } else {
         if (text.classList.contains("text-[8px]")) text.setAttribute("font-size", "8px")
+        else if (text.classList.contains("text-[10px]")) text.setAttribute("font-size", "10px")
         else if (text.classList.contains("text-sm")) text.setAttribute("font-size", "14px")
         else {
           const fontSizeAttr = text.getAttribute("fontSize")
@@ -830,6 +933,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         }
       }
       if (text.classList.contains("font-semibold")) text.setAttribute("font-weight", "600")
+      else if (text.classList.contains("font-medium")) text.setAttribute("font-weight", "500")
       else if (text.classList.contains("font-normal")) text.setAttribute("font-weight", "400")
     })
 
@@ -868,11 +972,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = "high"
-    // @ts-ignore
     ctx.letterSpacing = "0px"
-    // @ts-ignore
     ctx.wordSpacing = "0px"
-    // @ts-ignore
     ctx.fontKerning = "normal"
 
     ctx.scale(scale, scale)
@@ -952,11 +1053,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     canvas.height = 360 * scale
     ctx.imageSmoothingEnabled = true
     ctx.imageSmoothingQuality = "high"
-    // @ts-ignore
     ctx.letterSpacing = "0px"
-    // @ts-ignore
     ctx.wordSpacing = "0px"
-    // @ts-ignore
     ctx.fontKerning = "normal"
     ctx.scale(scale, scale)
     ctx.fillStyle = backgroundColor
@@ -1044,7 +1142,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         color: dot.color,
         size: dot.size,
         archived: Boolean(dot.archived) // Ensure it's a boolean
-      }))
+      })),
+      // Include release line configuration if it exists
+      ...(releaseLineSettings[collection.id] && {
+        releaseLineConfig: releaseLineSettings[collection.id]
+      })
     }))
 
     // Clean snapshots data
@@ -1061,7 +1163,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         size: dot.size,
         archived: Boolean(dot.archived)
       })),
-      timestamp: snapshot.timestamp
+      timestamp: snapshot.timestamp,
+      // Include release line configuration if it exists in the snapshot
+      ...(snapshot.releaseLineConfig && {
+        releaseLineConfig: snapshot.releaseLineConfig
+      })
     }))
 
     const exportData: ExportData = {
@@ -1089,76 +1195,78 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     if (!file || !user) return
 
     console.log('[HILL_CHART] Starting import process for file:', file.name)
-    
+
     const reader = new FileReader()
     reader.onload = async (e) => {
       try {
         const fileContent = e.target?.result as string
         const data = JSON.parse(fileContent) as ExportData
-        
-        console.log('[HILL_CHART] Parsed import data:', { 
-          collections: data.collections?.length || 0, 
-          snapshots: data.snapshots?.length || 0 
+
+        console.log('[HILL_CHART] Parsed import data:', {
+          collections: data.collections?.length || 0,
+          snapshots: data.snapshots?.length || 0
         })
-        
+
         // Import the data
         const importedCollections = await importData(user.id, data)
         console.log('[HILL_CHART] Import completed, imported collections:', importedCollections.length)
-        
+
         // Add a small delay to ensure database operations are complete
         await new Promise(resolve => setTimeout(resolve, 1000))
-        
+
         // Fetch fresh data from database to ensure state is synchronized
         console.log('[HILL_CHART] Fetching fresh collections after import...')
         const fetched = await fetchCollections(user.id, false) // Only active collections
-        
+
         console.log('[HILL_CHART] Raw fetched data:', fetched)
-        
+
         if (fetched && fetched.length > 0) {
           console.log('[HILL_CHART] Successfully fetched collections after import:', fetched.length)
           console.log('[HILL_CHART] First collection details:', fetched[0])
-          
+
           setCollections(fetched)
           setSelectedCollection(fetched[0].id)
           setCollectionInput(fetched[0].name)
-          
+          // Load release line config for the first imported collection
+          loadReleaseLineConfig(fetched[0].id)
+
           // Also fetch archived collections if any
           console.log('[HILL_CHART] Fetching archived collections...')
           const allCollections = await fetchCollections(user.id, true)
           const archived = allCollections.filter(c => c.status === 'archived')
           setArchivedCollections(archived)
-          
+
           console.log('[HILL_CHART] State updated successfully after import')
           console.log('[HILL_CHART] Current collections state:', fetched)
         } else {
           console.warn('[HILL_CHART] No collections found after import, this might indicate an issue')
           console.warn('[HILL_CHART] Fetched data:', fetched)
           console.warn('[HILL_CHART] User ID:', user.id)
-          
+
           // Force a refresh of the collections state
           setCollections([])
           setSelectedCollection(null)
           setCollectionInput("")
         }
-        
+
         setShowImportSuccess(true)
-        
+
         // Clear any previous errors
         setImportError(null)
-        
+
       } catch (error) {
         console.error("[HILL_CHART] Import error:", error)
         setImportError(error instanceof Error ? error.message : String(error))
         setShowImportSuccess(false)
       }
     }
-    
+
     reader.onerror = () => {
       console.error('[HILL_CHART] File reading error')
       setImportError('Failed to read file')
       setShowImportSuccess(false)
     }
-    
+
     reader.readAsText(file)
     setShowEllipsisMenu(false)
     event.target.value = ""
@@ -1221,6 +1329,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     setShowDropdown(false)
     setIsTyping(false)
     setSelectedSnapshot(null)
+    // Load release line config for the selected collection
+    loadReleaseLineConfig(collection.id)
   }
 
   // Start editing collection name
@@ -1239,12 +1349,12 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
 
     const trimmedName = editingCollectionName.trim()
-    
+
     // Check for duplicate names
     const isDuplicate = collections.some(
       c => c.id !== editingCollectionId && c.name.toLowerCase() === trimmedName.toLowerCase()
     )
-    
+
     if (isDuplicate) {
       console.error("Collection name already exists")
       cancelCollectionEdit()
@@ -1253,9 +1363,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
     // Optimistically update UI
     const originalCollections = [...collections]
-    setCollections(prev => 
-      prev.map(c => 
-        c.id === editingCollectionId 
+    setCollections(prev =>
+      prev.map(c =>
+        c.id === editingCollectionId
           ? { ...c, name: trimmedName }
           : c
       )
@@ -1264,7 +1374,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
     // Update backend
     const success = await updateCollection(user.id, editingCollectionId, { name: trimmedName })
-    
+
     if (!success) {
       // Revert on error
       setCollections(originalCollections)
@@ -1293,6 +1403,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
   }
 
+
+
   // Snapshot functions
   const handleCreateSnapshot = async () => {
     if (!user || !currentCollection) return
@@ -1303,14 +1415,18 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       archived: dot.archived // force boolean
     }))
 
+    // Get current release line configuration for this collection
+    const currentReleaseLineConfig = releaseLineSettings[currentCollection.id]
+
     try {
       const success = await createSnapshot(
         user.id,
         currentCollection.id,
         currentCollection.name,
-        dotsWithArchived
+        dotsWithArchived,
+        currentReleaseLineConfig
       )
-      
+
       if (success) {
         // Refresh snapshots
         const updatedSnapshots = await fetchSnapshots(user.id)
@@ -1328,17 +1444,17 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   const handleViewSnapshot = async (dateString: string) => {
     if (!user) return
-    
+
     try {
       const snapshotForDate = snapshots.find(s => s.date === dateString)
       if (!snapshotForDate) {
         console.error("Snapshot not found for date:", dateString)
         return
       }
-      
+
       // Store original collections before switching to snapshot
       setOriginalCollections(collections)
-      
+
       // Create snapshot collections with the snapshot data
       const snapshotCollection: Collection = {
         id: snapshotForDate.collectionId,
@@ -1348,7 +1464,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         deleted_at: undefined,
         dots: snapshotForDate.dots
       }
-      
+
       setSnapshotCollections([snapshotCollection])
       setCollections([snapshotCollection])
       setSelectedCollection(snapshotCollection.id)
@@ -1356,6 +1472,17 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       setCurrentSnapshot(snapshotForDate)
       setIsViewingSnapshot(true)
       setSelectedSnapshot(dateString)
+      
+      // Use release line config from snapshot if available, otherwise load from database
+      if (snapshotForDate.releaseLineConfig) {
+        setReleaseLineSettings(prev => ({
+          ...prev,
+          [snapshotCollection.id]: snapshotForDate.releaseLineConfig!
+        }))
+      } else {
+        // Load release line config from database for the snapshot collection
+        loadReleaseLineConfig(snapshotCollection.id)
+      }
     } catch (error) {
       console.error("Error viewing snapshot:", error)
     }
@@ -1364,11 +1491,16 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const handleViewLive = () => {
     // Restore original collections
     setCollections(originalCollections)
-    setSelectedCollection(originalCollections[0]?.id || null)
-    setCollectionInput(originalCollections[0]?.name || "")
+    const firstCollection = originalCollections[0]
+    setSelectedCollection(firstCollection?.id || null)
+    setCollectionInput(firstCollection?.name || "")
     setCurrentSnapshot(null)
     setIsViewingSnapshot(false)
     setSelectedSnapshot(null)
+    // Load release line config for the restored collection
+    if (firstCollection) {
+      loadReleaseLineConfig(firstCollection.id)
+    }
   }
 
   // Add tip handler function
@@ -1406,10 +1538,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           <button
             onClick={() => (hasSnapshot ? handleViewSnapshot(dateString) : null)}
             className={`w-8 h-8 rounded-full text-sm flex items-center justify-center transition-colors
-              ${
-                isSelected
-                  ? "bg-primary text-primary-foreground"
-                  : hasSnapshot
+              ${isSelected
+                ? "bg-primary text-primary-foreground"
+                : hasSnapshot
                   ? "bg-accent text-accent-foreground hover:bg-accent/80"
                   : "text-muted-foreground"
               }
@@ -1460,11 +1591,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             <Button
               size="sm"
               variant="outline"
-              className={`w-full flex items-center gap-2 transition-all duration-300 ${
-                snapshotSuccess
-                  ? "border-green-500 bg-green-500/10 text-green-600 hover:bg-green-500/20 dark:border-green-400 dark:bg-green-400/10 dark:text-green-400 dark:hover:bg-green-400/20"
-                  : ""
-              }`}
+              className={`w-full flex items-center gap-2 transition-all duration-300 ${snapshotSuccess
+                ? "border-green-500 bg-green-500/10 text-green-600 hover:bg-green-500/20 dark:border-green-400 dark:bg-green-400/10 dark:text-green-400 dark:hover:bg-green-400/20"
+                : ""
+                }`}
               onClick={handleCreateSnapshot}
             >
               <Camera className="w-4 h-4" />
@@ -1487,758 +1617,811 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         <div className="grid grid-cols-1 lg:grid-cols-[2.4fr_1.2fr] gap-6">
           <div className="lg:col-span-1 space-y-6">
             <Card className="h-[600px]">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={downloadChartAsPNG}>
-                  <Download className="w-4 h-4 mr-1" />
-                  PNG
-                </Button>
-                <Button variant="outline" size="sm" onClick={downloadChartAsSVG}>
-                  <Download className="w-4 h-4 mr-1" />
-                  SVG
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyToClipboard}
-                  disabled={copyStatus === "copying"}
-                  className={`transition-colors ${
-                    copyStatus === "success"
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={downloadChartAsPNG}>
+                    <Download className="w-4 h-4 mr-1" />
+                    PNG
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={downloadChartAsSVG}>
+                    <Download className="w-4 h-4 mr-1" />
+                    SVG
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCopyToClipboard}
+                    disabled={copyStatus === "copying"}
+                    className={`transition-colors ${copyStatus === "success"
                       ? "border-green-500 bg-green-500/10 text-green-600 hover:bg-green-500/20 dark:border-green-400 dark:bg-green-400/10 dark:text-green-400 dark:hover:bg-green-400/20"
                       : copyStatus === "error"
-                      ? "border-red-500 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:border-red-400 dark:bg-red-400/10 dark:text-red-400 dark:hover:bg-red-400/20"
-                      : ""
-                  }`}
-                >
-                  {getCopyButtonContent()}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent className="p-2">
-              {/* Loading overlay */}
-              {isLoadingCollections && (
-                <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg">
-                  <div className="flex flex-col items-center gap-4">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    <div className="text-sm text-muted-foreground">
-                      <div>Loading collections...</div>
-                      <div className="text-xs mt-1">Decrypting your data</div>
+                        ? "border-red-500 bg-red-500/10 text-red-600 hover:bg-red-500/20 dark:border-red-400 dark:bg-red-400/10 dark:text-red-400 dark:hover:bg-red-400/20"
+                        : ""
+                      }`}
+                  >
+                    {getCopyButtonContent()}
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="p-2">
+                {/* Loading overlay */}
+                {isLoadingCollections && (
+                  <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                      <div className="text-sm text-muted-foreground">
+                        <div>Loading collections...</div>
+                        <div className="text-xs mt-1">Decrypting your data</div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-              <div className="relative w-full h-full bg-background -m-2 flex items-center justify-center">
-                <svg
-                  ref={svgRef}
-                  width="100%"
-                  height="100%"
-                  viewBox="-50 -100 700 180" // Moved chart down by using negative Y offset
-                  className="overflow-visible max-w-full"
-                  style={{ userSelect: isDragging ? "none" : "auto" }}
-                >
-                  {/* Bell curve */}
-                  <path
-                    className="bg-transparent shadow-none leading-9"
-                    d={generateBellCurvePath(600, 150, 300)}
-                    stroke="currentColor"
-                    strokeWidth="1"
-                    fill="none"
-                  />
-
-                  {/* Base line */}
-                  <line
-                    className="leading-3"
-                    x1="0"
-                    y1="150"
-                    x2="600"
-                    y2="150"
-                    stroke="currentColor"
-                    strokeWidth="1"
-                  />
-
-                  {/* Center divider */}
-                  <line
-                    x1="300"
-                    y1="-5"
-                    x2="300"
-                    y2="150"
-                    stroke="hsl(var(--muted-foreground))"
-                    strokeWidth="1"
-                    strokeDasharray="5,5"
-                  />
-
-                  {/* Labels */}
-                  <text
-                    x="30"
-                    y="160"
-                    textAnchor="middle"
-                    className="text-[8px] fill-muted-foreground font-normal leading-4"
+                )}
+                <div className="relative w-full h-full bg-background -m-2 flex items-center justify-center">
+                  <svg
+                    ref={svgRef}
+                    width="100%"
+                    height="100%"
+                    viewBox="-50 -100 700 180" // Moved chart down by using negative Y offset
+                    className="overflow-visible max-w-full"
+                    style={{ userSelect: isDragging ? "none" : "auto" }}
                   >
-                    Discovery
-                  </text>
-                  {!hideCollectionName && (
+                    {/* Bell curve */}
+                    <path
+                      className="bg-transparent shadow-none leading-9"
+                      d={generateBellCurvePath(600, 150, 300)}
+                      stroke="currentColor"
+                      strokeWidth="1"
+                      fill="none"
+                    />
+
+                    {/* Base line */}
+                    <line
+                      className="leading-3"
+                      x1="0"
+                      y1="150"
+                      x2="600"
+                      y2="150"
+                      stroke="currentColor"
+                      strokeWidth="1"
+                    />
+
+                    {/* Center divider */}
+                    <line
+                      x1="300"
+                      y1="-5"
+                      x2="300"
+                      y2="150"
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeWidth="1"
+                      strokeDasharray="5,5"
+                    />
+
+                    {/* Labels */}
                     <text
-                      x="300"
-                      y="175"
+                      x="30"
+                      y="160"
                       textAnchor="middle"
-                      className="font-semibold text-sm fill-foreground"
+                      className="text-[8px] fill-muted-foreground font-normal leading-4"
                     >
-                      {currentCollection?.name}
+                      Discovery
                     </text>
-                  )}
-                  <text x="570" y="160" textAnchor="middle" className="text-[8px] fill-muted-foreground">
-                    Delivery
-                  </text>
-                  {/* Dots with Collision Detection */}
-                  {(() => {
-                    // Type definitions for collision detection
-                    interface LabelPosition {
-                      id: string;
-                      x: number;
-                      y: number;
-                      width: number;
-                      height: number;
-                      originalDotY: number;
-                      displayX: number;
-                      displayY: number;
-                      fontSize: number;
-                      stackLevel: number;
-                      stackDirection?: number;
-                      textCenterX: number; // Added for text centering
-                    }
+                    {!hideCollectionName && (
+                      <text
+                        x="300"
+                        y="175"
+                        textAnchor="middle"
+                        className="font-semibold text-sm fill-foreground"
+                      >
+                        {currentCollection?.name}
+                      </text>
+                    )}
+                    <text x="570" y="160" textAnchor="middle" className="text-[8px] fill-muted-foreground">
+                      Delivery
+                    </text>
 
-                    // Collision detection and label stacking functions
-                    const calculateLabelPositions = (dots: Dot[]): Record<string, LabelPosition> => {
-                      if (!dots || dots.length === 0) return {};
-                      
-                      const positions: Record<string, LabelPosition> = {};
-                      const SVG_WIDTH = 600;
-                      
-                      // Calculate initial positions and dimensions for all labels
-                      dots.forEach(dot => {
-                        const dotX = (dot.x / 100) * SVG_WIDTH;
-                        const fontSize = 8 + dot.size * 1;
-                        const textWidth = dot.label.length * (fontSize * 0.6) + 16;
-                        const textHeight = fontSize + 12;
-                        
-                        // Handle dragging with null safety
-                        const isBeingDragged = draggingDot?.id === dot.id;
-                        const displayX = isBeingDragged && draggingDot ? (draggingDot.x / 100) * SVG_WIDTH : dotX;
-                        const displayY = isBeingDragged && draggingDot ? draggingDot.y : dot.y;
-                        
-                        // Clamp label X so it never overflows left or right edge
-                        let labelX = displayX - textWidth / 2;
-                        if (labelX < 0) labelX = 0;
-                        if (labelX + textWidth > SVG_WIDTH) labelX = SVG_WIDTH - textWidth;
-
-                        // Calculate the text's actual X so it stays centered above the dot, but never outside the label background
-                        let textCenterX = displayX;
-                        if (textCenterX < labelX + textWidth / 2) textCenterX = Math.max(labelX + textWidth / 2, textCenterX);
-                        if (textCenterX > labelX + textWidth / 2) textCenterX = Math.min(labelX + textWidth / 2, textCenterX);
-                        // If the dot is near the edge, clamp the text center to the middle of the label background
-                        if (displayX < labelX) textCenterX = labelX + textWidth / 2;
-                        if (displayX > labelX + textWidth) textCenterX = labelX + textWidth / 2;
-
-                        positions[dot.id] = {
-                          id: dot.id,
-                          x: labelX,
-                          y: displayY - 35,
-                          width: textWidth,
-                          height: textHeight,
-                          originalDotY: displayY,
-                          displayX,
-                          displayY,
-                          fontSize,
-                          stackLevel: 0,
-                          textCenterX
-                        };
-                      });
-                      
-                      return positions;
-                    };
-
-                    const detectCollisions = (label1: LabelPosition, label2: LabelPosition): boolean => {
-                      return !(
-                        label1.x + label1.width < label2.x ||
-                        label2.x + label2.width < label1.x ||
-                        label1.y + label1.height < label2.y ||
-                        label2.y + label2.height < label1.y
-                      );
-                    };
-
-                    const resolveCollisions = (labelPositions: Record<string, LabelPosition>): Record<string, LabelPosition> => {
-                      const resolved: Record<string, LabelPosition> = {};
-                      const positionsArray = Object.values(labelPositions);
-                      
-                      // Sort by X position for left-to-right processing
-                      positionsArray.sort((a: LabelPosition, b: LabelPosition) => a.x - b.x);
-                      
-                      // Define viewBox boundaries with padding
-                      const MIN_Y = 10; // Top boundary with padding
-                      const MAX_Y = 160; // Bottom boundary (leave space for chart labels)
-                      const MAX_STACK_ATTEMPTS = 50; // Safeguard: max attempts to resolve collision
-                      
-                      positionsArray.forEach((current: LabelPosition) => {
-                        let testY = current.y;
-                        let stackLevel = 0;
-                        let hasCollision = true;
-                        let stackDirection = -1; // -1 for upward, 1 for downward
-                        let attempts = 0;
-                        while (hasCollision && attempts < MAX_STACK_ATTEMPTS) {
-                          hasCollision = Object.values(resolved).some((placed: LabelPosition) => 
-                            detectCollisions({...current, y: testY}, placed)
-                          );
-                          if (hasCollision) {
-                            stackLevel++;
-                            
-                            // Calculate potential new position
-                            let newY: number;
-                            if (stackDirection === -1) {
-                              // Try stacking upward first
-                              newY = current.originalDotY - 35 - (stackLevel * (current.height + 8));
-                              
-                              // Check if upward stacking would overflow top boundary
-                              if (newY < MIN_Y) {
-                                // Switch to downward stacking
-                                stackDirection = 1;
-                                stackLevel = 1; // Reset stack level for downward direction
-                                newY = current.originalDotY - 35 + (stackLevel * (current.height + 8));
-                              }
-                            } else {
-                              // Stack downward
-                              newY = current.originalDotY - 35 + (stackLevel * (current.height + 8));
-                              
-                              // Check if downward stacking would overflow bottom boundary
-                              if (newY + current.height > MAX_Y) {
-                                // Clamp to bottom boundary
-                                newY = MAX_Y - current.height;
-                              }
-                            }
-                            
-                            testY = newY;
-                          }
-                          attempts++;
-                        }
-                        
-                        // If max attempts reached, just place at last tried position
-                        resolved[current.id] = {
-                          ...current,
-                          y: testY,
-                          stackLevel,
-                          stackDirection
-                        };
-                      });
-                      
-                      return resolved;
-                    };
-
-                    // Calculate label positions with collision detection
-                    const initialLabelPositions = calculateLabelPositions((currentCollection?.dots || []).filter(dot => !dot.archived));
-                    const labelPositions = resolveCollisions(initialLabelPositions);
-
-                    // Render dots with collision-free labels
-                    return (currentCollection?.dots || []).filter(dot => !dot.archived).map((dot) => {
-                      const dotX = (dot.x / 100) * 600;
-                      const dotRadius = 4 + dot.size * 2;
-                      
-                      // Use draggingDot for immediate feedback if this dot is being dragged with null safety
-                      const isBeingDragged = draggingDot?.id === dot.id;
-                      const displayX = isBeingDragged && draggingDot ? (draggingDot.x / 100) * 600 : dotX;
-                      const displayY = isBeingDragged && draggingDot ? draggingDot.y : dot.y;
-
-                      // Get calculated label position
-                      const labelPos = labelPositions[dot.id];
-                      if (!labelPos) return null;
-
-                      // Calculate visual hierarchy opacity
-                      const opacity = Math.max(0.95, 1.0 - (labelPos.stackLevel * 0.025));
+                    {/* Release Line */}
+                    {(() => {
+                      const currentReleaseLineConfig = selectedCollection ? releaseLineSettings[selectedCollection] : null
+                      if (!currentReleaseLineConfig?.enabled) return null
 
                       return (
-                        <g key={dot.id}>
-                          <circle
-                            cx={displayX}
-                            cy={displayY}
-                            r={dotRadius}
-                            fill={dot.color}
-                            stroke="#fff"
-                            strokeWidth="2"
-                            className={`cursor-pointer hover:opacity-80 ${isBeingDragged ? '' : 'transition-all'}`}
-                            onMouseDown={(e) => handleDotMouseDown(e, dot.id)}
+                        <g>
+                          {/* Vertical release line */}
+                          <line
+                            x1="600"
+                            y1="-20"
+                            x2="600"
+                            y2="151"
+                            stroke={currentReleaseLineConfig.color}
+                            strokeWidth="3"
                           />
-                          <rect
-                            x={labelPos.x}
-                            y={labelPos.y}
-                            width={labelPos.width}
-                            height={labelPos.height}
-                            rx="8"
-                            ry="8"
-                            fill="hsl(var(--background))"
-                            stroke="hsl(var(--border))"
-                            strokeWidth="1"
-                            opacity={opacity}
-                            className="pointer-events-none"
-                          />
-                          <text
-                            x={labelPos.textCenterX}
-                            y={labelPos.y + labelPos.height / 2}
-                            textAnchor="middle"
-                            className="fill-foreground pointer-events-none select-none"
-                            dominantBaseline="central"
-                            fontSize={labelPos.fontSize}
-                            opacity={opacity}
-                            style={{ userSelect: "none" }}
-                          >
-                            {dot.label}
-                          </text>
+                          {/* Release line text */}
+                          {currentReleaseLineConfig.text && (() => {
+                            const displayText = currentReleaseLineConfig.text.length > 12
+                              ? currentReleaseLineConfig.text.substring(0, 12)
+                              : currentReleaseLineConfig.text;
+                            // Dynamic X position: 1 char = 585, 12 chars = 650
+                            const dynamicX = 585 + (displayText.length - 1) * (65 / 11);
+                            
+                            return (
+                              <text
+                                x={dynamicX}
+                                y="10"
+                                textAnchor="end"
+                                className="text-[10px] font-medium"
+                                fill={currentReleaseLineConfig.color}
+                                transform={`rotate(90, 605, 12)`}
+                              >
+                                {displayText}
+                              </text>
+                            );
+                          })()}
                         </g>
-                      );
-                    });
-                  })()}
-                </svg>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                      )
+                    })()}
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          <Card className="h-[600px]">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div className="flex flex-col">
-                <CardTitle className="text-lg">Over The Hill</CardTitle>
-                <div className="flex items-center gap-1 mt-1">
-                  <span className="text-sm text-muted-foreground">
-                    Inspired by{" "}
-                    <a
-                      href="https://37signals.com/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 dark:text-blue-400 hover:underline"
+                    {/* Dots with Collision Detection */}
+                    {(() => {
+                      // Type definitions for collision detection
+                      interface LabelPosition {
+                        id: string;
+                        x: number;
+                        y: number;
+                        width: number;
+                        height: number;
+                        originalDotY: number;
+                        displayX: number;
+                        displayY: number;
+                        fontSize: number;
+                        stackLevel: number;
+                        stackDirection?: number;
+                        textCenterX: number; // Added for text centering
+                      }
+
+                      // Collision detection and label stacking functions
+                      const calculateLabelPositions = (dots: Dot[]): Record<string, LabelPosition> => {
+                        if (!dots || dots.length === 0) return {};
+
+                        const positions: Record<string, LabelPosition> = {};
+                        const SVG_WIDTH = 600;
+
+                        // Calculate initial positions and dimensions for all labels
+                        dots.forEach(dot => {
+                          const dotX = (dot.x / 100) * SVG_WIDTH;
+                          const fontSize = 8 + dot.size * 1;
+                          const textWidth = dot.label.length * (fontSize * 0.6) + 16;
+                          const textHeight = fontSize + 12;
+
+                          // Handle dragging with null safety
+                          const isBeingDragged = draggingDot?.id === dot.id;
+                          const displayX = isBeingDragged && draggingDot ? (draggingDot.x / 100) * SVG_WIDTH : dotX;
+                          const displayY = isBeingDragged && draggingDot ? draggingDot.y : dot.y;
+
+                          // Clamp label X so it never overflows left or right edge
+                          let labelX = displayX - textWidth / 2;
+                          if (labelX < 0) labelX = 0;
+                          if (labelX + textWidth > SVG_WIDTH) labelX = SVG_WIDTH - textWidth;
+
+                          // Calculate the text's actual X so it stays centered above the dot, but never outside the label background
+                          let textCenterX = displayX;
+                          if (textCenterX < labelX + textWidth / 2) textCenterX = Math.max(labelX + textWidth / 2, textCenterX);
+                          if (textCenterX > labelX + textWidth / 2) textCenterX = Math.min(labelX + textWidth / 2, textCenterX);
+                          // If the dot is near the edge, clamp the text center to the middle of the label background
+                          if (displayX < labelX) textCenterX = labelX + textWidth / 2;
+                          if (displayX > labelX + textWidth) textCenterX = labelX + textWidth / 2;
+
+                          positions[dot.id] = {
+                            id: dot.id,
+                            x: labelX,
+                            y: displayY - 35,
+                            width: textWidth,
+                            height: textHeight,
+                            originalDotY: displayY,
+                            displayX,
+                            displayY,
+                            fontSize,
+                            stackLevel: 0,
+                            textCenterX
+                          };
+                        });
+
+                        return positions;
+                      };
+
+                      const detectCollisions = (label1: LabelPosition, label2: LabelPosition): boolean => {
+                        return !(
+                          label1.x + label1.width < label2.x ||
+                          label2.x + label2.width < label1.x ||
+                          label1.y + label1.height < label2.y ||
+                          label2.y + label2.height < label1.y
+                        );
+                      };
+
+                      const resolveCollisions = (labelPositions: Record<string, LabelPosition>): Record<string, LabelPosition> => {
+                        const resolved: Record<string, LabelPosition> = {};
+                        const positionsArray = Object.values(labelPositions);
+
+                        // Sort by X position for left-to-right processing
+                        positionsArray.sort((a: LabelPosition, b: LabelPosition) => a.x - b.x);
+
+                        // Define viewBox boundaries with padding
+                        const MIN_Y = 10; // Top boundary with padding
+                        const MAX_Y = 160; // Bottom boundary (leave space for chart labels)
+                        const MAX_STACK_ATTEMPTS = 50; // Safeguard: max attempts to resolve collision
+
+                        positionsArray.forEach((current: LabelPosition) => {
+                          let testY = current.y;
+                          let stackLevel = 0;
+                          let hasCollision = true;
+                          let stackDirection = -1; // -1 for upward, 1 for downward
+                          let attempts = 0;
+                          while (hasCollision && attempts < MAX_STACK_ATTEMPTS) {
+                            hasCollision = Object.values(resolved).some((placed: LabelPosition) =>
+                              detectCollisions({ ...current, y: testY }, placed)
+                            );
+                            if (hasCollision) {
+                              stackLevel++;
+
+                              // Calculate potential new position
+                              let newY: number;
+                              if (stackDirection === -1) {
+                                // Try stacking upward first
+                                newY = current.originalDotY - 35 - (stackLevel * (current.height + 8));
+
+                                // Check if upward stacking would overflow top boundary
+                                if (newY < MIN_Y) {
+                                  // Switch to downward stacking
+                                  stackDirection = 1;
+                                  stackLevel = 1; // Reset stack level for downward direction
+                                  newY = current.originalDotY - 35 + (stackLevel * (current.height + 8));
+                                }
+                              } else {
+                                // Stack downward
+                                newY = current.originalDotY - 35 + (stackLevel * (current.height + 8));
+
+                                // Check if downward stacking would overflow bottom boundary
+                                if (newY + current.height > MAX_Y) {
+                                  // Clamp to bottom boundary
+                                  newY = MAX_Y - current.height;
+                                }
+                              }
+
+                              testY = newY;
+                            }
+                            attempts++;
+                          }
+
+                          // If max attempts reached, just place at last tried position
+                          resolved[current.id] = {
+                            ...current,
+                            y: testY,
+                            stackLevel,
+                            stackDirection
+                          };
+                        });
+
+                        return resolved;
+                      };
+
+                      // Calculate label positions with collision detection
+                      const initialLabelPositions = calculateLabelPositions((currentCollection?.dots || []).filter(dot => !dot.archived));
+                      const labelPositions = resolveCollisions(initialLabelPositions);
+
+                      // Render dots with collision-free labels
+                      return (currentCollection?.dots || []).filter(dot => !dot.archived).map((dot) => {
+                        const dotX = (dot.x / 100) * 600;
+                        const dotRadius = 4 + dot.size * 2;
+
+                        // Use draggingDot for immediate feedback if this dot is being dragged with null safety
+                        const isBeingDragged = draggingDot?.id === dot.id;
+                        const displayX = isBeingDragged && draggingDot ? (draggingDot.x / 100) * 600 : dotX;
+                        const displayY = isBeingDragged && draggingDot ? draggingDot.y : dot.y;
+
+                        // Get calculated label position
+                        const labelPos = labelPositions[dot.id];
+                        if (!labelPos) return null;
+
+                        // Calculate visual hierarchy opacity
+                        const opacity = Math.max(0.95, 1.0 - (labelPos.stackLevel * 0.025));
+
+                        return (
+                          <g key={dot.id}>
+                            <circle
+                              cx={displayX}
+                              cy={displayY}
+                              r={dotRadius}
+                              fill={dot.color}
+                              stroke="#fff"
+                              strokeWidth="2"
+                              className={`cursor-pointer hover:opacity-80 ${isBeingDragged ? '' : 'transition-all'}`}
+                              onMouseDown={(e) => handleDotMouseDown(e, dot.id)}
+                            />
+                            <rect
+                              x={labelPos.x}
+                              y={labelPos.y}
+                              width={labelPos.width}
+                              height={labelPos.height}
+                              rx="8"
+                              ry="8"
+                              fill="hsl(var(--background))"
+                              stroke="hsl(var(--border))"
+                              strokeWidth="1"
+                              opacity={opacity}
+                              className="pointer-events-none"
+                            />
+                            <text
+                              x={labelPos.textCenterX}
+                              y={labelPos.y + labelPos.height / 2}
+                              textAnchor="middle"
+                              className="fill-foreground pointer-events-none select-none"
+                              dominantBaseline="central"
+                              fontSize={labelPos.fontSize}
+                              opacity={opacity}
+                              style={{ userSelect: "none" }}
+                            >
+                              {dot.label}
+                            </text>
+                          </g>
+                        );
+                      });
+                    })()}
+                  </svg>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Sidebar */}
+          <div className="space-y-6">
+            <Card className="h-[600px]">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div className="flex flex-col">
+                  <CardTitle className="text-lg">Over The Hill</CardTitle>
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="text-sm text-muted-foreground">
+                      Inspired by{" "}
+                      <a
+                        href="https://37signals.com/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        37signals
+                      </a>{" "}
+                      Hill Chart
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowInfoModal(true)}
+                      className="h-4 w-4 p-0 hover:bg-accent rounded-full"
                     >
-                      37signals
-                    </a>{" "}
-                    Hill Chart
-                  </span>
+                      <Info className="w-3 h-3 text-muted-foreground" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="relative" ref={ellipsisMenuRef}>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowInfoModal(true)}
-                    className="h-4 w-4 p-0 hover:bg-accent rounded-full"
+                    onClick={() => setShowEllipsisMenu(!showEllipsisMenu)}
+                    className="h-8 w-8 p-0"
                   >
-                    <Info className="w-3 h-3 text-muted-foreground" />
+                    <MoreHorizontal className="w-4 h-4" />
                   </Button>
-                </div>
-              </div>
-              <div className="relative" ref={ellipsisMenuRef}>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowEllipsisMenu(!showEllipsisMenu)}
-                  className="h-8 w-8 p-0"
-                >
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
 
-                {showEllipsisMenu && (
-                  <div className="absolute right-0 top-8 w-56 bg-background border border-border rounded-md shadow-lg z-50">
-                    <div className="py-1">
-                      {/* Theme Section */}
-                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
-                        Theme
-                      </div>
-                      <button
-                        onClick={() => {
-                          setTheme("light")
-                          setShowEllipsisMenu(false)
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                      >
-                        <Sun className="w-4 h-4" /> Light {theme === "light" && <Check className="w-4 h-4 ml-auto" />}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setTheme("dark")
-                          setShowEllipsisMenu(false)
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                      >
-                        <Moon className="w-4 h-4" /> Dark {theme === "dark" && <Check className="w-4 h-4 ml-auto" />}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setTheme("system")
-                          setShowEllipsisMenu(false)
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                      >
-                        <Monitor className="w-4 h-4" /> Follow Browser{" "}
-                        {theme === "system" && <Check className="w-4 h-4 ml-auto" />}
-                      </button>
-
-                      {/* Export Section */}
-                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                        Export Clipboard Format
-                      </div>
-                      <button
-                        onClick={() => {
-                          setCopyFormat("PNG")
-                          setShowEllipsisMenu(false)
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                      >
-                        <FileImage className="w-4 h-4" /> Copy as PNG{" "}
-                        {copyFormat === "PNG" && <Check className="w-4 h-4 ml-auto" />}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setCopyFormat("SVG")
-                          setShowEllipsisMenu(false)
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                      >
-                        <FileCode2 className="w-4 h-4" /> Copy as SVG{" "}
-                        {copyFormat === "SVG" && <Check className="w-4 h-4 ml-auto" />}
-                      </button>
-
-                      {/* Chart Settings Section */}
-                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                        Chart Settings
-                      </div>
-                      <button
-                        onClick={() => {
-                          setHideCollectionName(!hideCollectionName)
-                          setShowEllipsisMenu(false)
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                      >
-                        <Monitor className="w-4 h-4" /> Hide Collection Name{" "}
-                        {hideCollectionName && <Check className="w-4 h-4 ml-auto" />}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setShowResetConfirm(true)
-                          setShowEllipsisMenu(false)
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                      >
-                        <Trash2 className="w-4 h-4" /> Reset Collections
-                      </button>
-
-                      {/* Collections Section */}
-                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                        Collections
-                      </div>
-                      <button
-                        onClick={() => {
-                          setShowArchivedCollectionsModal(true)
-                          setShowEllipsisMenu(false)
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                      >
-                        <ArchiveIcon className="w-4 h-4" /> Archived Collections
-                        {archivedCollections.length > 0 && (
-                          <span className="ml-auto text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
-                            {archivedCollections.length}
-                          </span>
-                        )}
-                      </button>
-                      <button
-                        onClick={exportCollections}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                      >
-                        <DownloadIcon className="w-4 h-4" /> Export Collections
-                      </button>
-                      <label className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 cursor-pointer">
-                        <UploadIcon className="w-4 h-4" /> Import Collections
-                        <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-                      </label>
-                    </div>
-                    <div className="py-1">
-                      {/* Account Section */}
-                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
-                        Account
-                      </div>
-                      {/* Username Display */}
-                      <div className="px-3 py-2 text-sm text-muted-foreground border-b border-border">
-                        <div className="flex items-center gap-2">
-                          <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
-                          <span className="truncate max-w-[180px]" title={user?.user_metadata?.name || user?.email || 'Unknown User'}>
-                            {user?.user_metadata?.name || user?.email || 'Unknown User'}
-                          </span>
+                  {showEllipsisMenu && (
+                    <div className="absolute right-0 top-8 w-56 bg-background border border-border rounded-md shadow-lg z-50">
+                      <div className="py-1">
+                        {/* Theme Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+                          Theme
                         </div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setShowEllipsisMenu(false)
-                          onResetPassword()
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                      >
-                        Reset Password
-                      </button>
-                      <SignOutButton className="w-full px-3 py-2 text-sm text-left text-red-600 dark:text-red-500 hover:bg-accent hover:text-accent-foreground flex items-center gap-2" />
-
-                      {/* Cache Status Section */}
-                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                        Cache Status
-                      </div>
-                      <div className="px-3 py-2 flex items-center justify-between">
-                        <span className="text-sm text-muted-foreground">Data Sync</span>
-                        <CacheStatusBadge />
-                      </div>
-                      <button
-                        onClick={async () => {
-                          if (user?.id) {
-                            console.log('[HILL_CHART] Manual data refresh requested')
-                            setIsLoadingCollections(true)
-                            try {
-                              // Fetch fresh data from database
-                              
-                              const [activeCollections, allCollections, snapshots] = await Promise.all([
-                                fetchCollections(user.id, false),
-                                fetchCollections(user.id, true),
-                                fetchSnapshots(user.id)
-                              ])
-                              
-                              setCollections(activeCollections)
-                              setOriginalCollections(activeCollections)
-                              
-                              const archived = allCollections.filter(c => c.status === 'archived')
-                              setArchivedCollections(archived)
-                              setSnapshots(snapshots)
-                              
-                              console.log('[HILL_CHART] Manual refresh completed successfully')
-                            } catch (error) {
-                              console.error('[HILL_CHART] Manual refresh failed:', error)
-                            } finally {
-                              setIsLoadingCollections(false)
-                              setShowEllipsisMenu(false)
-                            }
-                          }
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                      >
-                        <Download className="w-4 h-4" /> Refresh Data
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (confirm('This will clear all stored data and force a complete refresh. Continue?')) {
-                            console.log('[HILL_CHART] Manual storage clear requested')
-                            try {
-                              const { clearAllAppStorage } = await import('@/lib/utils/storageUtils')
-                              await clearAllAppStorage()
-                              console.log('[HILL_CHART] All storage cleared successfully')
-                              // Reload the page to start fresh
-                              window.location.reload()
-                            } catch (error) {
-                              console.error('[HILL_CHART] Failed to clear storage:', error)
-                            }
-                          }
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 text-orange-600 dark:text-orange-400"
-                      >
-                        <Trash2 className="w-4 h-4" /> Clear All Storage
-                      </button>
-                      <button
-                        onClick={async () => {
-                          if (confirm('This will clear the service worker cache and reload the page. Continue?')) {
-                            console.log('[HILL_CHART] Service worker cache clear requested')
-                            try {
-                              const { clearServiceWorkerCache } = await import('@/lib/utils/serviceWorkerUtils')
-                              await clearServiceWorkerCache()
-                              console.log('[HILL_CHART] Service worker cache cleared, reloading...')
-                              window.location.reload()
-                            } catch (error) {
-                              console.error('[HILL_CHART] Failed to clear service worker cache:', error)
-                            }
-                          }
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 text-blue-600 dark:text-blue-400"
-                      >
-                        <Download className="w-4 h-4" /> Clear SW Cache
-                      </button>
-
-                      {/* Privacy Section */}
-                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                        Privacy
-                      </div>
-                      <button
-                        onClick={() => {
-                          setShowPrivacySettings(true)
-                          setShowEllipsisMenu(false)
-                        }}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                      >
-                        <Shield className="w-4 h-4" /> Privacy Settings
-                      </button>
-
-                      {/* Support Section */}
-                      <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                        Support
-                      </div>
-                      <button
-                        onClick={handleTipClick}
-                        className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                      >
-                        <Heart className="w-4 h-4" /> Send Tip
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="relative" ref={dropdownRef}>
-                <label className="text-sm font-medium mb-2 block">Collections</label>
-                <div className="relative">
-                  {isEditingCollection ? (
-                    <div className="flex items-center gap-2">
-                      <Input
-                        ref={editInputRef}
-                        value={editingCollectionName}
-                        onChange={(e) => setEditingCollectionName(e.target.value)}
-                        onKeyDown={handleEditKeyPress}
-                        className="flex-1"
-                        placeholder="Collection name"
-                        autoFocus
-                      />
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={saveCollectionEdit}
-                        className="h-8 w-8 p-0"
-                        disabled={!editingCollectionName.trim()}
-                      >
-                        <Check className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={cancelCollectionEdit}
-                        className="h-8 w-8 p-0"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="relative">
-                      <Input
-                        ref={inputRef}
-                        value={collectionInput}
-                        onChange={handleInputChange}
-                        onKeyPress={handleCollectionInputKeyPress}
-                        onFocus={handleInputFocus}
-                        placeholder="Type to search or create collection..."
-                        className="pr-16"
-                      />
-                      <div className="absolute right-0 top-0 h-full flex items-center gap-1">
-                        {selectedCollection && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-full px-2"
-                              onClick={() => {
-                                const collection = collections.find(c => c.id === selectedCollection)
-                                if (collection) {
-                                  startEditCollection(collection)
-                                }
-                              }}
-                              title="Edit collection name"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-full px-2"
-                              onClick={() => {
-                                const collection = collections.find(c => c.id === selectedCollection)
-                                if (collection) {
-                                  setArchiveConfirm({ 
-                                    collectionId: collection.id, 
-                                    collectionName: collection.name 
-                                  })
-                                }
-                              }}
-                              title="Archive collection"
-                            >
-                              <ArchiveIcon className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-full px-2 text-destructive"
-                              onClick={() => {
-                                const collection = collections.find(c => c.id === selectedCollection)
-                                if (collection) {
-                                  setDeleteCollectionConfirm({ 
-                                    collectionId: collection.id, 
-                                    collectionName: collection.name 
-                                  })
-                                }
-                              }}
-                              title="Delete collection"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-full px-2"
-                          onClick={toggleDropdown}
+                        <button
+                          onClick={() => {
+                            setTheme("light")
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
                         >
-                          <ChevronDown className="w-4 h-4" />
-                        </Button>
+                          <Sun className="w-4 h-4" /> Light {theme === "light" && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTheme("dark")
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Moon className="w-4 h-4" /> Dark {theme === "dark" && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTheme("system")
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Monitor className="w-4 h-4" /> Follow Browser{" "}
+                          {theme === "system" && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+
+                        {/* Export Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                          Export Clipboard Format
+                        </div>
+                        <button
+                          onClick={() => {
+                            setCopyFormat("PNG")
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <FileImage className="w-4 h-4" /> Copy as PNG{" "}
+                          {copyFormat === "PNG" && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setCopyFormat("SVG")
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <FileCode2 className="w-4 h-4" /> Copy as SVG{" "}
+                          {copyFormat === "SVG" && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+
+                        {/* Chart Settings Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                          Chart Settings
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowReleaseLineSettings(true)
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                          disabled={!selectedCollection}
+                        >
+                          <Rocket className="w-4 h-4" /> Release Line
+                        </button>
+                        <button
+                          onClick={() => {
+                            setHideCollectionName(!hideCollectionName)
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Monitor className="w-4 h-4" /> Hide Collection Name{" "}
+                          {hideCollectionName && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowResetConfirm(true)
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Trash2 className="w-4 h-4" /> Reset Collections
+                        </button>
+
+                        {/* Collections Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                          Collections
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowArchivedCollectionsModal(true)
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <ArchiveIcon className="w-4 h-4" /> Archived Collections
+                          {archivedCollections.length > 0 && (
+                            <span className="ml-auto text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                              {archivedCollections.length}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          onClick={exportCollections}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <DownloadIcon className="w-4 h-4" /> Export Collections
+                        </button>
+                        <label className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 cursor-pointer">
+                          <UploadIcon className="w-4 h-4" /> Import Collections
+                          <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+                        </label>
+                      </div>
+                      <div className="py-1">
+                        {/* Account Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+                          Account
+                        </div>
+                        {/* Username Display */}
+                        <div className="px-3 py-2 text-sm text-muted-foreground border-b border-border">
+                          <div className="flex items-center gap-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
+                            <span className="truncate max-w-[180px]" title={user?.user_metadata?.name || user?.email || 'Unknown User'}>
+                              {user?.user_metadata?.name || user?.email || 'Unknown User'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowEllipsisMenu(false)
+                            onResetPassword()
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          Reset Password
+                        </button>
+                        <SignOutButton className="w-full px-3 py-2 text-sm text-left text-red-600 dark:text-red-500 hover:bg-accent hover:text-accent-foreground flex items-center gap-2" />
+
+                        {/* Cache Status Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                          Cache Status
+                        </div>
+                        <div className="px-3 py-2 flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Data Sync</span>
+                          <CacheStatusBadge />
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (user?.id) {
+                              console.log('[HILL_CHART] Manual data refresh requested')
+                              setIsLoadingCollections(true)
+                              try {
+                                // Fetch fresh data from database
+
+                                const [activeCollections, allCollections, snapshots] = await Promise.all([
+                                  fetchCollections(user.id, false),
+                                  fetchCollections(user.id, true),
+                                  fetchSnapshots(user.id)
+                                ])
+
+                                setCollections(activeCollections)
+                                setOriginalCollections(activeCollections)
+
+                                const archived = allCollections.filter(c => c.status === 'archived')
+                                setArchivedCollections(archived)
+                                setSnapshots(snapshots)
+
+                                console.log('[HILL_CHART] Manual refresh completed successfully')
+                              } catch (error) {
+                                console.error('[HILL_CHART] Manual refresh failed:', error)
+                              } finally {
+                                setIsLoadingCollections(false)
+                                setShowEllipsisMenu(false)
+                              }
+                            }
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Download className="w-4 h-4" /> Refresh Data
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (confirm('This will clear all stored data and force a complete refresh. Continue?')) {
+                              console.log('[HILL_CHART] Manual storage clear requested')
+                              try {
+                                const { clearAllAppStorage } = await import('@/lib/utils/storageUtils')
+                                await clearAllAppStorage()
+                                console.log('[HILL_CHART] All storage cleared successfully')
+                                // Reload the page to start fresh
+                                window.location.reload()
+                              } catch (error) {
+                                console.error('[HILL_CHART] Failed to clear storage:', error)
+                              }
+                            }
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 text-orange-600 dark:text-orange-400"
+                        >
+                          <Trash2 className="w-4 h-4" /> Clear All Storage
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (confirm('This will clear the service worker cache and reload the page. Continue?')) {
+                              console.log('[HILL_CHART] Service worker cache clear requested')
+                              try {
+                                const { clearServiceWorkerCache } = await import('@/lib/utils/serviceWorkerUtils')
+                                await clearServiceWorkerCache()
+                                console.log('[HILL_CHART] Service worker cache cleared, reloading...')
+                                window.location.reload()
+                              } catch (error) {
+                                console.error('[HILL_CHART] Failed to clear service worker cache:', error)
+                              }
+                            }
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 text-blue-600 dark:text-blue-400"
+                        >
+                          <Download className="w-4 h-4" /> Clear SW Cache
+                        </button>
+
+                        {/* Privacy Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                          Privacy
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowPrivacySettings(true)
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Shield className="w-4 h-4" /> Privacy Settings
+                        </button>
+
+                        {/* Support Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                          Support
+                        </div>
+                        <button
+                          onClick={handleTipClick}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Heart className="w-4 h-4" /> Send Tip
+                        </button>
                       </div>
                     </div>
                   )}
                 </div>
-
-                {showDropdown && (
-                  <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md shadow-lg max-h-60 overflow-auto">
-                    {isLoadingCollections ? (
-                      <div className="px-3 py-4 text-sm text-muted-foreground flex items-center gap-2">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                        Loading collections...
-                      </div>
-                    ) : filteredCollections.length > 0 ? (
-                      filteredCollections.map((collection) => (
-                        <div
-                          key={collection.id}
-                          className="px-3 py-2 hover:bg-accent cursor-pointer text-sm"
-                          onClick={() => handleCollectionSelect(collection)}
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="relative" ref={dropdownRef}>
+                  <label className="text-sm font-medium mb-2 block">Collections</label>
+                  <div className="relative">
+                    {isEditingCollection ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          ref={editInputRef}
+                          value={editingCollectionName}
+                          onChange={(e) => setEditingCollectionName(e.target.value)}
+                          onKeyDown={handleEditKeyPress}
+                          className="flex-1"
+                          placeholder="Collection name"
+                          autoFocus
+                        />
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={saveCollectionEdit}
+                          className="h-8 w-8 p-0"
+                          disabled={!editingCollectionName.trim()}
                         >
-                          {collection.name}
-                        </div>
-                      ))
+                          <Check className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={cancelCollectionEdit}
+                          className="h-8 w-8 p-0"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
                     ) : (
-                      <div className="px-3 py-2 text-sm text-muted-foreground">No collections found</div>
-                    )}
-
-                    {collectionInput.trim() &&
-                      !collections.some((c) => c.name.toLowerCase() === collectionInput.toLowerCase()) && (
-                        <div className="border-t border-border">
-                          <div className="px-3 py-2 text-sm text-primary bg-primary/10">
-                            Press Enter to create "{collectionInput}"
-                          </div>
+                      <div className="relative">
+                        <Input
+                          ref={inputRef}
+                          value={collectionInput}
+                          onChange={handleInputChange}
+                          onKeyPress={handleCollectionInputKeyPress}
+                          onFocus={handleInputFocus}
+                          placeholder="Type to search or create collection..."
+                          className="pr-16"
+                        />
+                        <div className="absolute right-0 top-0 h-full flex items-center gap-1">
+                          {selectedCollection && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-full px-2"
+                                onClick={() => {
+                                  const collection = collections.find(c => c.id === selectedCollection)
+                                  if (collection) {
+                                    startEditCollection(collection)
+                                  }
+                                }}
+                                title="Edit collection name"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-full px-2"
+                                onClick={() => {
+                                  const collection = collections.find(c => c.id === selectedCollection)
+                                  if (collection) {
+                                    setArchiveConfirm({
+                                      collectionId: collection.id,
+                                      collectionName: collection.name
+                                    })
+                                  }
+                                }}
+                                title="Archive collection"
+                              >
+                                <ArchiveIcon className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-full px-2 text-destructive"
+                                onClick={() => {
+                                  const collection = collections.find(c => c.id === selectedCollection)
+                                  if (collection) {
+                                    setDeleteCollectionConfirm({
+                                      collectionId: collection.id,
+                                      collectionName: collection.name
+                                    })
+                                  }
+                                }}
+                                title="Delete collection"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-full px-2"
+                            onClick={toggleDropdown}
+                          >
+                            <ChevronDown className="w-4 h-4" />
+                          </Button>
                         </div>
-                      )}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
 
-              {/* Snapshot Calendar */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium block">Snapshots</label>
-                {renderCalendar()}
-              </div>
-            </CardContent>
-          </Card>
+                  {showDropdown && (
+                    <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md shadow-lg max-h-60 overflow-auto">
+                      {isLoadingCollections ? (
+                        <div className="px-3 py-4 text-sm text-muted-foreground flex items-center gap-2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                          Loading collections...
+                        </div>
+                      ) : filteredCollections.length > 0 ? (
+                        filteredCollections.map((collection) => (
+                          <div
+                            key={collection.id}
+                            className="px-3 py-2 hover:bg-accent cursor-pointer text-sm"
+                            onClick={() => handleCollectionSelect(collection)}
+                          >
+                            {collection.name}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">No collections found</div>
+                      )}
+
+                      {collectionInput.trim() &&
+                        !collections.some((c) => c.name.toLowerCase() === collectionInput.toLowerCase()) && (
+                          <div className="border-t border-border">
+                            <div className="px-3 py-2 text-sm text-primary bg-primary/10">
+                              Press Enter to create &quot;{collectionInput}&quot;
+                            </div>
+                          </div>
+                        )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Snapshot Calendar */}
+                <div className="space-y-2">
+                  <label className="text-sm font-medium block">Snapshots</label>
+                  {renderCalendar()}
+                </div>
+
+
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </div>
       </div>
 
       {/* Dots Section - Full width below both chart and sidebar */}
@@ -2253,9 +2436,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                 prev.map((collection) =>
                   collection.id === selectedCollection
                     ? {
-                        ...collection,
-                        dots: [...collection.dots].sort((a, b) => b.x - a.x), // Sort by completion percentage (x position) descending
-                      }
+                      ...collection,
+                      dots: [...collection.dots].sort((a, b) => b.x - a.x), // Sort by completion percentage (x position) descending
+                    }
                     : collection,
                 ),
               )
@@ -2341,7 +2524,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Delete Dot</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Are you sure you want to delete "{deleteConfirm.dotLabel}"? This action cannot be undone.
+              Are you sure you want to delete &quot;{deleteConfirm.dotLabel}&quot;? This action cannot be undone.
             </p>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
@@ -2398,7 +2581,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Archive Collection</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Archive "{archiveConfirm.collectionName}"? You can restore it later from the archived collections section.
+              Archive &quot;{archiveConfirm.collectionName}&quot;? You can restore it later from the archived collections section.
             </p>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setArchiveConfirm(null)}>
@@ -2416,7 +2599,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2 text-destructive">Delete Collection</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
-              <strong>This action cannot be undone.</strong> Delete "{deleteCollectionConfirm.collectionName}" and all its dots, snapshots, and data?
+              <strong>This action cannot be undone.</strong> Delete &quot;{deleteCollectionConfirm.collectionName}&quot; and all its dots, snapshots, and data?
             </p>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setDeleteCollectionConfirm(null)}>
@@ -2436,7 +2619,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             {collectionNameConflict.type === 'active' ? (
               <div>
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
-                  A collection named "<strong>{collectionNameConflict.name}</strong>" already exists and is currently active.
+                  A collection named &quot;<strong>{collectionNameConflict.name}</strong>&quot; already exists and is currently active.
                 </p>
                 <div className="flex gap-2 justify-end">
                   <Button variant="outline" onClick={() => setCollectionNameConflict(null)}>
@@ -2447,7 +2630,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             ) : (
               <div>
                 <p className="text-gray-600 dark:text-gray-300 mb-4">
-                  A collection named "<strong>{collectionNameConflict.name}</strong>" already exists but is currently archived. 
+                  A collection named &quot;<strong>{collectionNameConflict.name}</strong>&quot; already exists but is currently archived.
                   Would you like to unarchive it instead?
                 </p>
                 <div className="flex gap-2 justify-end">
@@ -2539,16 +2722,16 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                 <ArchiveIcon className="w-5 h-5" />
                 Archived Collections
               </h3>
-              <Button 
-                variant="ghost" 
-                size="sm" 
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => setShowArchivedCollectionsModal(false)}
                 className="h-8 w-8 p-0"
               >
                 <X className="w-4 h-4" />
               </Button>
             </div>
-            
+
             {archivedCollections.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <ArchiveIcon className="w-12 h-12 mx-auto mb-4 opacity-50" />
@@ -2558,7 +2741,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             ) : (
               <div className="flex-1 overflow-y-auto space-y-3">
                 {archivedCollections.map((collection) => (
-                  <div 
+                  <div
                     key={collection.id}
                     className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border"
                   >
@@ -2577,9 +2760,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       </div>
                     </div>
                     <div className="flex gap-2 flex-shrink-0">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => {
                           handleUnarchiveCollection(collection.id)
                           setShowArchivedCollectionsModal(false)
@@ -2590,13 +2773,13 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         <Undo2 className="w-4 h-4 mr-1" />
                         Unarchive
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => {
-                          setDeleteCollectionConfirm({ 
-                            collectionId: collection.id, 
-                            collectionName: collection.name 
+                          setDeleteCollectionConfirm({
+                            collectionId: collection.id,
+                            collectionName: collection.name
                           })
                           setShowArchivedCollectionsModal(false)
                         }}
@@ -2614,10 +2797,56 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           </div>
         </div>
       )}
-      
+
       {/* Privacy Settings Modal */}
       {showPrivacySettings && (
         <PrivacySettings onClose={() => setShowPrivacySettings(false)} />
+      )}
+
+      {/* Release Line Settings Modal */}
+      {showReleaseLineSettings && selectedCollection && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Release Line</h3>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowReleaseLineSettings(false)}
+                className="h-8 w-8 p-0"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-4">
+              {isLoadingReleaseLineConfig ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                  Loading settings...
+                </div>
+              ) : (
+                <ReleaseLineSettings
+                  config={releaseLineSettings[selectedCollection] || {
+                    enabled: false,
+                    color: "#ff00ff",
+                    text: ""
+                  }}
+                  onConfigChange={handleReleaseLineConfigChange}
+                />
+              )}
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <Button
+                variant="outline"
+                onClick={() => setShowReleaseLineSettings(false)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

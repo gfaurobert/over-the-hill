@@ -5,7 +5,7 @@ import { useAuth } from '../components/AuthProvider';
 import SignInForm from '../components/SignInForm';
 import RequestAccessForm from '../components/RequestAccessForm';
 import ImportDataPrompt from '../components/ImportDataPrompt';
-import SignOutButton from '../components/SignOutButton';
+
 import HillChartApp from '../components/HillChartApp';
 import ClearCacheButton from '../components/ClearCacheButton';
 import { Button } from '../components/ui/button';

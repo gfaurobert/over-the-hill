@@ -1,4 +1,6 @@
-import { Dot, Collection, Snapshot, ExportData } from "@/components/HillChartApp"
+import { Dot, Collection, Snapshot, ExportData, ReleaseLineConfig } from "@/components/HillChartApp"
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 // Validation error class
 export class ValidationError extends Error {
@@ -83,6 +85,23 @@ export const sanitizeColor = (input: string): string => {
   return sanitized
 }
 
+export const sanitizeHexColor = (input: string): string => {
+  if (typeof input !== 'string') {
+    throw new ValidationError('Color must be a string')
+  }
+  
+  // Specifically validate hex colors for release line
+  const hexColorRegex = /^#[0-9A-Fa-f]{6}$/
+  
+  const sanitized = input.trim()
+  
+  if (!hexColorRegex.test(sanitized)) {
+    throw new ValidationError('Invalid hex color format. Must be #RRGGBB')
+  }
+  
+  return sanitized
+}
+
 // Validation functions
 export const validateDot = (dot: Partial<Dot>): Dot => {
   const errors: string[] = []
@@ -119,6 +138,34 @@ export const validateDot = (dot: Partial<Dot>): Dot => {
       throw error
     }
     throw new ValidationError('Invalid dot data')
+  }
+}
+
+export const validateReleaseLineConfig = (config: Partial<ReleaseLineConfig>): ReleaseLineConfig => {
+  const errors: string[] = []
+  
+  try {
+    const validatedConfig: ReleaseLineConfig = {
+      enabled: typeof config.enabled === 'boolean' ? config.enabled : false,
+      color: config.color ? sanitizeHexColor(config.color) : '#ff00ff',
+      text: config.text ? sanitizeString(config.text, 50) : ''
+    }
+    
+    // Additional validation for text length
+    if (validatedConfig.text.length > 50) {
+      errors.push('Release line text must be 50 characters or less')
+    }
+    
+    if (errors.length > 0) {
+      throw new ValidationError(errors.join(', '))
+    }
+    
+    return validatedConfig
+  } catch (error) {
+    if (error instanceof ValidationError) {
+      throw error
+    }
+    throw new ValidationError('Invalid release line configuration')
   }
 }
 
@@ -184,12 +231,23 @@ export const validateCollection = (collection: Partial<Collection>): Omit<Collec
       errors.push('Deleted collections cannot have archived_at timestamp')
     }
 
+    // Validate release line config if present
+    let releaseLineConfig: ReleaseLineConfig | undefined = undefined
+    if (collection.releaseLineConfig) {
+      try {
+        releaseLineConfig = validateReleaseLineConfig(collection.releaseLineConfig)
+      } catch (error) {
+        errors.push(`Invalid release line configuration: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      }
+    }
+
     const validatedCollection = {
       id: collection.id ? sanitizeId(collection.id) : '',
       name: collection.name ? sanitizeString(collection.name, 100) : '',
       status: status as 'active' | 'archived' | 'deleted',
       archived_at,
-      deleted_at
+      deleted_at,
+      releaseLineConfig
     }
 
     if (!validatedCollection.id) {
@@ -326,13 +384,30 @@ export const validateImportData = (data: any): ExportData => {
           throw new ValidationError(`Snapshot ${index} is invalid`)
         }
         
-        validatedSnapshots.push({
+        // Validate release line config if present in snapshot
+        let releaseLineConfig: ReleaseLineConfig | undefined = undefined
+        if (snapshot.releaseLineConfig) {
+          try {
+            releaseLineConfig = validateReleaseLineConfig(snapshot.releaseLineConfig)
+          } catch (error) {
+            throw new ValidationError(`Invalid release line configuration in snapshot ${index}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+          }
+        }
+        
+        const validatedSnapshot: any = {
           date: sanitizeString(snapshot.date, 20),
           collectionId: sanitizeId(snapshot.collectionId),
           collectionName: sanitizeString(snapshot.collectionName, 100),
           dots: snapshot.dots.map((dot: any) => validateDot(dot)),
           timestamp: sanitizeNumber(snapshot.timestamp, 0)
-        })
+        }
+        
+        // Only include releaseLineConfig if it exists
+        if (releaseLineConfig) {
+          validatedSnapshot.releaseLineConfig = releaseLineConfig
+        }
+        
+        validatedSnapshots.push(validatedSnapshot)
       } catch (error) {
         throw new ValidationError(`Invalid snapshot at index ${index}: ${error instanceof Error ? error.message : 'Unknown error'}`)
       }

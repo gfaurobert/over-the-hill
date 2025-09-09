@@ -16,7 +16,7 @@ const ResetPasswordPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isInRecoveryMode, setIsInRecoveryMode] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [debugInfo, setDebugInfo] = useState<Record<string, unknown> | null>(null);
 
   useEffect(() => {
     const handlePasswordReset = async () => {
@@ -36,7 +36,7 @@ const ResetPasswordPage: React.FC = () => {
         
         let recoveryEventDetected = false;
         let signedInEventDetected = false;
-        let timeoutId: NodeJS.Timeout;
+        let timeoutId: NodeJS.Timeout | undefined = undefined;
         
         // Set up auth state listener BEFORE any other operations
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -154,9 +154,9 @@ const ResetPasswordPage: React.FC = () => {
             {debugInfo && (
               <div className="mt-4 p-2 bg-gray-100 rounded text-xs">
                 <strong>Debug Info:</strong>
-                <div>Current URL: {debugInfo.url}</div>
-                <div>Hash: {debugInfo.hash || 'None'}</div>
-                <div>Search: {debugInfo.search || 'None'}</div>
+                <div>Current URL: {String(debugInfo.url)}</div>
+                <div>Hash: {String(debugInfo.hash) || 'None'}</div>
+                <div>Search: {String(debugInfo.search) || 'None'}</div>
                 <div>Search Params: {JSON.stringify(debugInfo.searchParams)}</div>
               </div>
             )}
@@ -193,9 +193,9 @@ const ResetPasswordPage: React.FC = () => {
             {debugInfo && (
               <div className="mb-4 p-2 bg-red-50 rounded text-xs border border-red-200">
                 <strong>Debug Info:</strong>
-                <div>Current URL: {debugInfo.url}</div>
-                <div>Hash: {debugInfo.hash || 'None'}</div>
-                <div>Search: {debugInfo.search || 'None'}</div>
+                <div>Current URL: {String(debugInfo.url)}</div>
+                <div>Hash: {String(debugInfo.hash) || 'None'}</div>
+                <div>Search: {String(debugInfo.search) || 'None'}</div>
                 <div>Search Params: {JSON.stringify(debugInfo.searchParams)}</div>
               </div>
             )}

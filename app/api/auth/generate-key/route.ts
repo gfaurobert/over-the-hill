@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createHmac, randomBytes } from 'crypto'
+import { createHmac } from 'crypto'
 import { supabase } from '@/lib/supabaseClient'
 
 // Helper function to derive a 32-byte key using HMAC-SHA256 KDF

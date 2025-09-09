@@ -8,6 +8,8 @@
 import { getInvalidationRuleManager } from './cacheInvalidationRules'
 import * as LZString from 'lz-string'
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 // Custom error types for IndexedDB operations
 export class CacheStorageError extends Error {
   constructor(message: string, public readonly cause?: Error) {
@@ -932,7 +934,7 @@ export class CacheManager implements ICacheManager {
   // Convert glob-like pattern to regex
   private patternToRegex(pattern: string): RegExp {
     // Escape special regex characters except * and ?
-    let regexPattern = pattern
+    const regexPattern = pattern
       .replace(/[.+^${}()|[\]\\]/g, '\\$&')
       .replace(/\*/g, '.*')
       .replace(/\?/g, '.')

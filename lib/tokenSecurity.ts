@@ -1,5 +1,7 @@
 import { sanitizeString, ValidationError } from './validation';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 // Token types supported by the application
 export type TokenType = 'recovery' | 'signup' | 'invite' | 'email_change' | 'phone_change';
 

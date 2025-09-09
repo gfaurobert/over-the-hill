@@ -2,10 +2,8 @@
 
 import React, { useState } from 'react';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { PasswordInput } from './ui/password-input';
 import { Label } from './ui/label';
-import { Card, CardContent } from './ui/card';
 
 interface SetPasswordFormProps {
   onPasswordSet: (password: string) => Promise<void>;

@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabaseClient"
-import { Collection, Dot, Snapshot, ExportData } from "@/components/HillChartApp"
+import { Collection, Dot, Snapshot, ExportData, ReleaseLineConfig } from "@/components/HillChartApp"
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { privacyService } from "./privacyService"
 import { 
   validateDot, 
@@ -11,6 +13,7 @@ import {
   validateArchiveOperation,
   validateUnarchiveOperation,
   validateDeleteOperation,
+  validateReleaseLineConfig,
   ValidationError,
   sanitizeString,
   validateSnapshotId
@@ -33,6 +36,7 @@ interface CollectionRow {
   status: string
   archived_at?: string
   deleted_at?: string
+  release_line_config_encrypted?: string
 }
 
 interface DotRow {
@@ -56,6 +60,7 @@ interface SnapshotRow {
   created_at: string
   snapshot_date: string
   dots_data_encrypted: string
+  release_line_config_encrypted?: string
 }
 
 // Enhanced error handling wrapper
@@ -151,7 +156,7 @@ export const fetchCollections = async (
 
     const { data: collectionsData, error: collectionsError } = await supabase
       .from("collections")
-      .select("id, name_encrypted, name_hash, status, archived_at, deleted_at")
+      .select("id, name_encrypted, name_hash, status, archived_at, deleted_at, release_line_config_encrypted")
       .eq("user_id", validatedUserId)
       .in("status", statusFilter)
       .order("status", { ascending: true }) // Active first, then archived
@@ -217,13 +222,32 @@ export const fetchCollections = async (
             })
           )
 
+          // Decrypt release line config if present
+          let releaseLineConfig: { enabled: boolean; color: string; text: string } | undefined = undefined
+          if (collection.release_line_config_encrypted) {
+            try {
+              const encryptedConfig = JSON.parse(collection.release_line_config_encrypted)
+              releaseLineConfig = await privacyService.decryptReleaseLineConfig(encryptedConfig, validatedUserId)
+              console.log('[FETCH_COLLECTIONS] Successfully decrypted release line config for collection:', collection.id)
+            } catch (releaseLineError) {
+              console.warn('[FETCH_COLLECTIONS] Failed to decrypt release line config for collection:', collection.id, releaseLineError)
+              // Use default values if decryption fails
+              releaseLineConfig = {
+                enabled: false,
+                color: '#ff00ff',
+                text: ''
+              }
+            }
+          }
+
           return {
             id: decryptedCollection.id,
             name: decryptedCollection.name,
             status: collection.status as 'active' | 'archived' | 'deleted',
             archived_at: collection.archived_at,
             deleted_at: collection.deleted_at,
-            dots: decryptedDots
+            dots: decryptedDots,
+            releaseLineConfig
           }
         } catch (collectionError) {
           console.error('[FETCH_COLLECTIONS] Failed to decrypt collection:', collection.id, collectionError)
@@ -258,6 +282,15 @@ export const addCollection = async (collection: Collection, userId: string): Pro
     })
     console.log('[ADD_COLLECTION] Encryption successful:', { id: encryptedCollection.id, hasEncryptedName: !!encryptedCollection.name_encrypted, hasHash: !!encryptedCollection.name_hash })
 
+    // Encrypt release line config if present
+    let releaseLineConfigEncrypted: string | null = null
+    if (validatedCollection.releaseLineConfig) {
+      console.log('[ADD_COLLECTION] Encrypting release line config...')
+      const encryptedReleaseLineConfig = await privacyService.encryptReleaseLineConfig(validatedCollection.releaseLineConfig, validatedUserId)
+      releaseLineConfigEncrypted = JSON.stringify(encryptedReleaseLineConfig)
+      console.log('[ADD_COLLECTION] Release line config encryption successful')
+    }
+
     const { data, error } = await supabase
       .from("collections")
       .insert([{ 
@@ -265,7 +298,8 @@ export const addCollection = async (collection: Collection, userId: string): Pro
         name_encrypted: encryptedCollection.name_encrypted,
         name_hash: encryptedCollection.name_hash,
         user_id: validatedUserId,
-        status: 'active'
+        status: 'active',
+        release_line_config_encrypted: releaseLineConfigEncrypted
       }])
       .select()
 
@@ -509,7 +543,7 @@ export const deleteDot = async (dotId: string, userId: string): Promise<{ succes
 }
 
 // Create a snapshot of the current state
-export const createSnapshot = async (userId: string, collectionId: string, collectionName: string, dots: Dot[]): Promise<boolean> => {
+export const createSnapshot = async (userId: string, collectionId: string, collectionName: string, dots: Dot[], releaseLineConfig?: ReleaseLineConfig): Promise<boolean> => {
   try {
     const validatedUserId = validateUserId(userId)
     const validatedCollectionId = validateCollectionId(collectionId)
@@ -526,21 +560,41 @@ export const createSnapshot = async (userId: string, collectionId: string, colle
       throw new ValidationError('Too many dots in snapshot. Maximum 1000 allowed')
     }
 
+    // Validate release line config if provided
+    let validatedReleaseLineConfig: ReleaseLineConfig | undefined
+    if (releaseLineConfig) {
+      validatedReleaseLineConfig = validateReleaseLineConfig(releaseLineConfig)
+    }
+
     // Encrypt collection name and dots data
     const { encrypted: encryptedName } = await privacyService.encryptData(validatedCollectionName, validatedUserId)
     const { encrypted: encryptedDotsData } = await privacyService.encryptData(JSON.stringify(validatedDots), validatedUserId)
 
+    // Encrypt release line config if provided
+    let encryptedReleaseLineConfig: string | undefined
+    if (validatedReleaseLineConfig) {
+      const { encrypted } = await privacyService.encryptData(JSON.stringify(validatedReleaseLineConfig), validatedUserId)
+      encryptedReleaseLineConfig = encrypted
+    }
+
     const now = new Date()
+    const insertData: any = {
+      user_id: validatedUserId,
+      collection_id: validatedCollectionId,
+      collection_name_encrypted: encryptedName,
+      created_at: now.toISOString(),
+      snapshot_date: getLocalDateString(now),
+      dots_data_encrypted: encryptedDotsData
+    }
+
+    // Only include release_line_config_encrypted if we have data
+    if (encryptedReleaseLineConfig) {
+      insertData.release_line_config_encrypted = encryptedReleaseLineConfig
+    }
+
     const { error } = await supabase
       .from("snapshots")
-      .insert([{
-        user_id: validatedUserId,
-        collection_id: validatedCollectionId,
-        collection_name_encrypted: encryptedName,
-        created_at: now.toISOString(),
-        snapshot_date: getLocalDateString(now),
-        dots_data_encrypted: encryptedDotsData
-      }])
+      .insert([insertData])
 
     if (error) {
       throw error
@@ -583,14 +637,34 @@ export const fetchSnapshots = async (userId: string): Promise<Snapshot[]> => {
           console.warn(`[SNAPSHOT_PARSING] Skipping corrupted snapshot ${row.id} for user ${validatedUserId}`)
           dots = []
         }
+
+        // Decrypt release line config if present
+        let releaseLineConfig: ReleaseLineConfig | undefined
+        if (row.release_line_config_encrypted) {
+          try {
+            const decryptedReleaseLineConfig = await privacyService.decryptData(row.release_line_config_encrypted, validatedUserId)
+            releaseLineConfig = JSON.parse(decryptedReleaseLineConfig)
+          } catch (error) {
+            // If release line config parsing fails, log warning but continue without it
+            console.warn(`[SNAPSHOT_PARSING] Failed to parse release line config for snapshot ${row.id}, using default`)
+            releaseLineConfig = undefined
+          }
+        }
         
-        return {
+        const snapshot: Snapshot = {
           date: row.snapshot_date,
           collectionId: row.collection_id,
           collectionName: decryptedCollectionName,
           dots: dots,
           timestamp: new Date(row.created_at).getTime()
         }
+
+        // Only include releaseLineConfig if it exists
+        if (releaseLineConfig) {
+          snapshot.releaseLineConfig = releaseLineConfig
+        }
+
+        return snapshot
       })
     )
 
@@ -633,13 +707,33 @@ export const loadSnapshot = async (userId: string, snapshotId: string): Promise<
       handleJsonParseError(error, 'load snapshot', validatedUserId, data.id, data.dots_data_encrypted)
     }
 
-    return {
+    // Decrypt release line config if present
+    let releaseLineConfig: ReleaseLineConfig | undefined
+    if (data.release_line_config_encrypted) {
+      try {
+        const decryptedReleaseLineConfig = await privacyService.decryptData(data.release_line_config_encrypted, validatedUserId)
+        releaseLineConfig = JSON.parse(decryptedReleaseLineConfig)
+      } catch (error) {
+        // If release line config parsing fails, log warning but continue without it
+        console.warn(`[SNAPSHOT_PARSING] Failed to parse release line config for snapshot ${data.id}, using default`)
+        releaseLineConfig = undefined
+      }
+    }
+
+    const snapshot: Snapshot = {
       date: data.snapshot_date,
       collectionId: data.collection_id,
       collectionName: decryptedCollectionName,
       dots: dots,
       timestamp: new Date(data.created_at).getTime()
     }
+
+    // Only include releaseLineConfig if it exists
+    if (releaseLineConfig) {
+      snapshot.releaseLineConfig = releaseLineConfig
+    }
+
+    return snapshot
   } catch (error) {
     handleServiceError(error, 'load snapshot')
     return null
@@ -698,6 +792,13 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
           userId: validatedUserId
         })
 
+        // Encrypt release line config if present
+        let releaseLineConfigEncrypted: string | null = null
+        if (collection.releaseLineConfig) {
+          const encryptedReleaseLineConfig = await privacyService.encryptReleaseLineConfig(collection.releaseLineConfig, validatedUserId)
+          releaseLineConfigEncrypted = JSON.stringify(encryptedReleaseLineConfig)
+        }
+
         return {
           id: collection.id,
           name_encrypted: encryptedCollection.name_encrypted,
@@ -705,7 +806,8 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
           user_id: validatedUserId,
           status: (collection as any).status || 'active',
           archived_at: (collection as any).archived_at || null,
-          deleted_at: null
+          deleted_at: null,
+          release_line_config_encrypted: releaseLineConfigEncrypted
         }
       })
     )
@@ -809,7 +911,14 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
             const { encrypted: encryptedCollectionName } = await privacyService.encryptData(snapshot.collectionName, validatedUserId)
             const { encrypted: encryptedDotsData } = await privacyService.encryptData(JSON.stringify(snapshot.dots), validatedUserId)
 
-            return {
+            // Encrypt release line config if present in snapshot
+            let encryptedReleaseLineConfig: string | undefined
+            if (snapshot.releaseLineConfig) {
+              const { encrypted } = await privacyService.encryptData(JSON.stringify(snapshot.releaseLineConfig), validatedUserId)
+              encryptedReleaseLineConfig = encrypted
+            }
+
+            const snapshotRow: any = {
               user_id: validatedUserId,
               collection_id: snapshot.collectionId,
               collection_name_encrypted: encryptedCollectionName,
@@ -817,6 +926,13 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
               snapshot_date: snapshot.date,
               dots_data_encrypted: encryptedDotsData,
             }
+
+            // Only include release_line_config_encrypted if we have data
+            if (encryptedReleaseLineConfig) {
+              snapshotRow.release_line_config_encrypted = encryptedReleaseLineConfig
+            }
+
+            return snapshotRow
           })
         )
 
@@ -953,6 +1069,174 @@ export const deleteAllUserData = async (userId: string): Promise<boolean> => {
     return true
   } catch (error) {
     handleServiceError(error, 'delete all user data')
+    return false
+  }
+}
+
+// Release Line Configuration Functions
+
+// Update release line configuration for a collection
+export const updateCollectionReleaseLineConfig = async (
+  userId: string, 
+  collectionId: string, 
+  config: { enabled: boolean; color: string; text: string }
+): Promise<boolean> => {
+  try {
+    console.log('[UPDATE_RELEASE_LINE_CONFIG] Starting update:', { userId, collectionId, config })
+    const validatedUserId = validateUserId(userId)
+    const validatedCollectionId = validateCollectionId(collectionId)
+    
+    // Validate the release line configuration
+    const validatedConfig = validateReleaseLineConfig(config)
+    console.log('[UPDATE_RELEASE_LINE_CONFIG] Validation passed:', validatedConfig)
+
+    // Verify collection ownership
+    const { data: collectionData, error: collectionError } = await supabase
+      .from("collections")
+      .select("id")
+      .eq("id", validatedCollectionId)
+      .eq("user_id", validatedUserId)
+      .single()
+    
+    if (collectionError || !collectionData) {
+      console.error('[UPDATE_RELEASE_LINE_CONFIG] Collection not found or not owned by user:', collectionError)
+      throw new Error('Collection not found or not owned by user')
+    }
+
+    // Encrypt the release line configuration
+    console.log('[UPDATE_RELEASE_LINE_CONFIG] Encrypting release line config...')
+    const encryptedConfig = await privacyService.encryptReleaseLineConfig(validatedConfig, validatedUserId)
+    console.log('[UPDATE_RELEASE_LINE_CONFIG] Encryption successful:', { enabled: encryptedConfig.enabled, hasColorEncrypted: !!encryptedConfig.color_encrypted, hasTextEncrypted: !!encryptedConfig.text_encrypted })
+
+    // Store as JSON in the database
+    const configJson = JSON.stringify(encryptedConfig)
+
+    const { error } = await supabase
+      .from("collections")
+      .update({ 
+        release_line_config_encrypted: configJson
+      })
+      .eq("id", validatedCollectionId)
+      .eq("user_id", validatedUserId)
+
+    if (error) {
+      console.error('[UPDATE_RELEASE_LINE_CONFIG] Database update error:', error)
+      throw error
+    }
+    
+    console.log('[UPDATE_RELEASE_LINE_CONFIG] Update successful')
+    return true
+  } catch (error) {
+    console.error('[UPDATE_RELEASE_LINE_CONFIG] Overall error:', error)
+    handleServiceError(error, 'update release line configuration')
+    return false
+  }
+}
+
+// Get release line configuration for a collection
+export const getCollectionReleaseLineConfig = async (
+  userId: string, 
+  collectionId: string
+): Promise<{ enabled: boolean; color: string; text: string } | null> => {
+  try {
+    console.log('[GET_RELEASE_LINE_CONFIG] Starting fetch:', { userId, collectionId })
+    const validatedUserId = validateUserId(userId)
+    const validatedCollectionId = validateCollectionId(collectionId)
+
+    const { data, error } = await supabase
+      .from("collections")
+      .select("release_line_config_encrypted")
+      .eq("id", validatedCollectionId)
+      .eq("user_id", validatedUserId)
+      .single()
+
+    if (error) {
+      console.error('[GET_RELEASE_LINE_CONFIG] Database query error:', error)
+      throw error
+    }
+
+    if (!data) {
+      console.log('[GET_RELEASE_LINE_CONFIG] Collection not found')
+      return null
+    }
+
+    // If no release line config exists, return default values
+    if (!data.release_line_config_encrypted) {
+      console.log('[GET_RELEASE_LINE_CONFIG] No release line config found, returning defaults')
+      return {
+        enabled: false,
+        color: '#ff00ff',
+        text: ''
+      }
+    }
+
+    try {
+      // Parse the JSON configuration
+      const encryptedConfig = JSON.parse(data.release_line_config_encrypted)
+      console.log('[GET_RELEASE_LINE_CONFIG] Parsed encrypted config:', { enabled: encryptedConfig.enabled, hasColorEncrypted: !!encryptedConfig.color_encrypted, hasTextEncrypted: !!encryptedConfig.text_encrypted })
+
+      // Decrypt the configuration
+      const decryptedConfig = await privacyService.decryptReleaseLineConfig(encryptedConfig, validatedUserId)
+      console.log('[GET_RELEASE_LINE_CONFIG] Decryption successful:', decryptedConfig)
+
+      return decryptedConfig
+    } catch (parseError) {
+      console.error('[GET_RELEASE_LINE_CONFIG] Failed to parse or decrypt release line config:', parseError)
+      // Return default values if parsing/decryption fails
+      return {
+        enabled: false,
+        color: '#ff00ff',
+        text: ''
+      }
+    }
+  } catch (error) {
+    console.error('[GET_RELEASE_LINE_CONFIG] Overall error:', error)
+    handleServiceError(error, 'get release line configuration')
+    return null
+  }
+}
+
+// Delete release line configuration for a collection (reset to defaults)
+export const deleteCollectionReleaseLineConfig = async (
+  userId: string, 
+  collectionId: string
+): Promise<boolean> => {
+  try {
+    console.log('[DELETE_RELEASE_LINE_CONFIG] Starting delete:', { userId, collectionId })
+    const validatedUserId = validateUserId(userId)
+    const validatedCollectionId = validateCollectionId(collectionId)
+
+    // Verify collection ownership
+    const { data: collectionData, error: collectionError } = await supabase
+      .from("collections")
+      .select("id")
+      .eq("id", validatedCollectionId)
+      .eq("user_id", validatedUserId)
+      .single()
+    
+    if (collectionError || !collectionData) {
+      console.error('[DELETE_RELEASE_LINE_CONFIG] Collection not found or not owned by user:', collectionError)
+      throw new Error('Collection not found or not owned by user')
+    }
+
+    const { error } = await supabase
+      .from("collections")
+      .update({ 
+        release_line_config_encrypted: null
+      })
+      .eq("id", validatedCollectionId)
+      .eq("user_id", validatedUserId)
+
+    if (error) {
+      console.error('[DELETE_RELEASE_LINE_CONFIG] Database update error:', error)
+      throw error
+    }
+    
+    console.log('[DELETE_RELEASE_LINE_CONFIG] Delete successful')
+    return true
+  } catch (error) {
+    console.error('[DELETE_RELEASE_LINE_CONFIG] Overall error:', error)
+    handleServiceError(error, 'delete release line configuration')
     return false
   }
 } 

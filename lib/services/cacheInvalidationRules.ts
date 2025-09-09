@@ -7,6 +7,8 @@
 
 import { InvalidationRule, CacheEntry } from './cacheService'
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 // Predefined invalidation rules for common operations
 export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
   // Collection operations
