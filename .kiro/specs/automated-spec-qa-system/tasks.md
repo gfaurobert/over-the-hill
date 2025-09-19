@@ -14,7 +14,7 @@
   - Add support for parsing EARS format requirements (WHEN/THEN/SHALL patterns)
   - _Requirements: 1.2, 1.3, 1.4_
 
-- [ ] 3. Build test script generator with Playwright templates
+- [x] 3. Build test script generator with Playwright templates
   - Create TestScriptGenerator class with template-based script generation
   - Implement Playwright test script templates for common UI interactions
   - Build test step generation logic from acceptance criteria

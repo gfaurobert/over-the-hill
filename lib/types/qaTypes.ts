@@ -4,6 +4,9 @@
 
 import { TestCategory } from '../config/qaConfig';
 
+// Re-export types
+export { TestCategory };
+
 // Agent Hook Interfaces
 export interface QAAgentHook {
   name: string;

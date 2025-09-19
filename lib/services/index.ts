@@ -3,3 +3,4 @@
  */
 
 export { SpecAnalyzer } from './specAnalyzer';
+export { TestScriptGenerator } from './testScriptGenerator';

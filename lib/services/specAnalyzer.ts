@@ -29,7 +29,7 @@ export class SpecAnalyzer implements ISpecAnalyzer {
       // Filter for completed specs only
       for (const specName of allSpecs) {
         const metadata = await this.getSpecMetadata(specName);
-        if (QA_CONFIG.SUPPORTED_SPEC_STATUS.includes(metadata.status)) {
+        if (QA_CONFIG.SUPPORTED_SPEC_STATUS.includes(metadata.status as any)) {
           completedSpecs.push(specName);
         }
       }
