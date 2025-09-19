@@ -1,0 +1,14 @@
+{
+  "name": "automated-qa-system",
+  "description": "Generate and run QA tests from specifications",
+  "trigger": "manual",
+  "config": {
+    "baseUrl": "http://localhost:3001",
+    "timeout": 30000,
+    "screenshotQuality": 90,
+    "headless": false,
+    "maxRetries": 2,
+    "screenshotFormat": "png"
+  },
+  "entry": "lib/hooks/automated-qa-system.ts"
+}
