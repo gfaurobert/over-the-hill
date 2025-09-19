@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Automated QA System",
+  "description": "Generate and execute QA tests from completed spec requirements using Playwright automation",
+  "version": "1",
+  "when": {
+    "type": "userTriggered",
+    "patterns": [
+      ".kiro/specs/**/*.md"
+    ]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Execute the automated QA system to generate and run tests for completed specifications. Scan .kiro/specs directory for completed specs, parse their requirements, generate Playwright test scripts, execute the tests with screenshot capture, and update the Tests-Summary.md report with results organized by spec."
+  }
+}
