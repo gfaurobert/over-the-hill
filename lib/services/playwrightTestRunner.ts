@@ -14,6 +14,7 @@ import {
 } from '../types/qaTypes';
 import { QA_CONFIG } from '../config/qaConfig';
 import { MCPPlaywrightIntegration, createMCPPlaywrightService } from './mcpPlaywrightIntegration';
+import { ScreenshotManager } from './screenshotManager';
 import path from 'path';
 import fs from 'fs/promises';
 
@@ -21,6 +22,7 @@ export class PlaywrightTestRunner implements IPlaywrightTestRunner {
   private config: QAConfig;
   private browserInitialized: boolean = false;
   private mcpService: MCPPlaywrightIntegration;
+  private screenshotManager: ScreenshotManager;
 
   constructor(config?: Partial<QAConfig>) {
     this.config = {
@@ -33,6 +35,7 @@ export class PlaywrightTestRunner implements IPlaywrightTestRunner {
       ...config
     };
     this.mcpService = createMCPPlaywrightService();
+    this.screenshotManager = new ScreenshotManager(this.mcpService);
   }
 
   /**
@@ -55,6 +58,9 @@ export class PlaywrightTestRunner implements IPlaywrightTestRunner {
     try {
       // Setup browser if not already initialized
       await this.setupBrowser();
+
+      // Create asset directory structure for this spec
+      await this.screenshotManager.createAssetDirectoryStructure(specName);
 
       // Navigate to base URL first
       await this.navigateToBaseUrl();
@@ -84,10 +90,14 @@ export class PlaywrightTestRunner implements IPlaywrightTestRunner {
       testResult.overallStatus = 'Failed';
       testResult.errorSummary = `Test execution failed: ${error instanceof Error ? error.message : String(error)}`;
       
-      // Capture final screenshot on error
+      // Capture final screenshot on error using screenshot manager
       try {
-        const errorScreenshot = await this.captureScreenshot('error', specName);
-        testResult.screenshots.push(errorScreenshot);
+        const errorMetadata = await this.screenshotManager.captureErrorScreenshot(
+          'test-execution-error', 
+          specName, 
+          testResult.errorSummary
+        );
+        testResult.screenshots.push(errorMetadata.path);
       } catch (screenshotError) {
         console.warn('Failed to capture error screenshot:', screenshotError);
       }
@@ -121,9 +131,10 @@ export class PlaywrightTestRunner implements IPlaywrightTestRunner {
         // Execute the playwright action
         await this.executePlaywrightAction(step.action);
 
-        // Capture screenshot after action
+        // Capture screenshot after action using screenshot manager
         if (step.screenshotName) {
-          stepResult.screenshot = await this.captureScreenshot(step.id, specName);
+          const screenshotMetadata = await this.screenshotManager.captureScreenshot(step.id, specName);
+          stepResult.screenshot = screenshotMetadata.path;
         }
 
         // Validate the result if there's an expected result
@@ -145,9 +156,14 @@ export class PlaywrightTestRunner implements IPlaywrightTestRunner {
           stepResult.status = 'Failed';
           stepResult.errorMessage = `Failed after ${maxRetries} retries: ${errorMessage}`;
           
-          // Capture screenshot on failure
+          // Capture error screenshot using screenshot manager
           try {
-            stepResult.screenshot = await this.captureScreenshot(`${step.id}-error`, specName);
+            const errorMetadata = await this.screenshotManager.captureErrorScreenshot(
+              step.id, 
+              specName, 
+              errorMessage
+            );
+            stepResult.screenshot = errorMetadata.path;
           } catch (screenshotError) {
             console.warn('Failed to capture error screenshot:', screenshotError);
           }
@@ -216,22 +232,12 @@ export class PlaywrightTestRunner implements IPlaywrightTestRunner {
   }
 
   /**
-   * Capture screenshot using Playwright MCP
+   * Capture screenshot using ScreenshotManager
    */
   async captureScreenshot(stepId: string, specName: string): Promise<string> {
     try {
-      // Ensure assets directory exists
-      const assetDir = path.join(this.config.screenshotPath, QA_CONFIG.NAMING_PATTERNS.assetDir(specName));
-      await fs.mkdir(assetDir, { recursive: true });
-
-      // Generate screenshot filename
-      const screenshotName = QA_CONFIG.NAMING_PATTERNS.screenshot(specName, stepId);
-      const screenshotPath = path.join(assetDir, screenshotName);
-
-      // Use MCP screenshot function
-      await this.mcpTakeScreenshot(screenshotPath);
-
-      return screenshotPath;
+      const screenshotMetadata = await this.screenshotManager.captureScreenshot(stepId, specName);
+      return screenshotMetadata.path;
     } catch (error) {
       console.warn(`Failed to capture screenshot for ${stepId}:`, error);
       return '';
@@ -340,5 +346,26 @@ export class PlaywrightTestRunner implements IPlaywrightTestRunner {
 
   private async mcpElementExists(selector: string): Promise<boolean> {
     return await this.mcpService.elementExists(selector);
+  }
+
+  /**
+   * Get the screenshot manager instance
+   */
+  getScreenshotManager(): ScreenshotManager {
+    return this.screenshotManager;
+  }
+
+  /**
+   * Clean up old screenshots for a spec
+   */
+  async cleanupOldScreenshots(specName: string, maxAge?: number): Promise<void> {
+    await this.screenshotManager.cleanupOldScreenshots(specName, maxAge);
+  }
+
+  /**
+   * Get asset directory information for a spec
+   */
+  async getAssetDirectoryInfo(specName: string) {
+    return await this.screenshotManager.getAssetDirectoryInfo(specName);
   }
 }

@@ -187,6 +187,13 @@ export interface PlaywrightTestRunner {
   validateResult(step: TestStep): Promise<boolean>;
   setupBrowser(): Promise<void>;
   teardownBrowser(): Promise<void>;
+  cleanupOldScreenshots(specName: string, maxAge?: number): Promise<void>;
+  getAssetDirectoryInfo(specName: string): Promise<{
+    exists: boolean;
+    screenshotCount: number;
+    totalSize: number;
+    lastUpdated?: Date;
+  }>;
 }
 
 export interface ReportGenerator {
@@ -194,6 +201,33 @@ export interface ReportGenerator {
   generateSpecSection(result: TestResult): string;
   organizeBySpecs(results: TestResult[]): SpecSection[];
   generateMarkdownReport(data: ReportData): string;
+}
+
+// Screenshot and Asset Management Types
+export interface ScreenshotOptions {
+  fullPage?: boolean;
+  quality?: number;
+  maxWidth?: number;
+  maxHeight?: number;
+  format?: 'png' | 'jpeg';
+}
+
+export interface ScreenshotMetadata {
+  filename: string;
+  path: string;
+  stepId: string;
+  specName: string;
+  timestamp: Date;
+  fileSize: number;
+  dimensions?: { width: number; height: number };
+}
+
+export interface AssetDirectoryStructure {
+  specName: string;
+  assetDir: string;
+  screenshotDir: string;
+  errorDir: string;
+  metadataFile: string;
 }
 
 // Utility Types

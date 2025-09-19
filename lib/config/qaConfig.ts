@@ -35,6 +35,16 @@ export const QA_CONFIG = {
     assetDir: (specName: string) => `${specName}-test`,
     scriptDir: (specName: string) => `${specName}-test`
   },
+
+  // Screenshot management settings
+  SCREENSHOT_CONFIG: {
+    maxFileSize: 5 * 1024 * 1024, // 5MB
+    defaultQuality: 90,
+    defaultFormat: 'png' as const,
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+    compressionThreshold: 2 * 1024 * 1024, // 2MB - compress files larger than this
+    maxScreenshotsPerSpec: 100 // Maximum screenshots to keep per spec
+  },
   
   // EARS format patterns for parsing requirements
   EARS_PATTERNS: {

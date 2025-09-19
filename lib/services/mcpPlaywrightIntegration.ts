@@ -7,7 +7,7 @@ export interface MCPPlaywrightIntegration {
   navigate(url: string): Promise<void>;
   click(selector: string, options?: any): Promise<void>;
   type(selector: string, text: string, options?: any): Promise<void>;
-  takeScreenshot(filename?: string): Promise<void>;
+  takeScreenshot(filename?: string, options?: { fullPage?: boolean; type?: 'png' | 'jpeg' }): Promise<void>;
   snapshot(): Promise<any>;
   waitFor(options: { text?: string; time?: number }): Promise<void>;
   elementExists(selector: string): Promise<boolean>;
@@ -71,15 +71,15 @@ export class MCPPlaywrightService implements MCPPlaywrightIntegration {
     }
   }
 
-  async takeScreenshot(filename?: string): Promise<void> {
+  async takeScreenshot(filename?: string, options?: { fullPage?: boolean; type?: 'png' | 'jpeg' }): Promise<void> {
     try {
       console.log(`[MCP] Taking screenshot${filename ? `: ${filename}` : ''}`);
       
       // Actual MCP call would be:
       // await mcp_playwright_browser_take_screenshot({ 
       //   filename,
-      //   type: 'png',
-      //   fullPage: false 
+      //   type: options?.type || 'png',
+      //   fullPage: options?.fullPage || false 
       // });
       
       await this.delay(200);
