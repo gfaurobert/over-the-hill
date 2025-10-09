@@ -192,18 +192,27 @@ export async function POST(request: NextRequest) {
     let tokenExpiry: number | undefined;
     try {
       if (accessToken.includes('.')) {
-        const payload = JSON.parse(atob(accessToken.split('.')[1]));
-        tokenExpiry = payload.exp ? payload.exp * 1000 : undefined; // Convert to milliseconds
-        
-        if (tokenExpiry && tokenExpiry < Date.now()) {
-          return NextResponse.json(
-            {
-              valid: false,
-              error: 'Token has expired',
-              code: 'TOKEN_EXPIRED'
-            },
-            { status: 401 }
-          );
+        // Properly decode base64url encoded JWT payload
+        const parts = accessToken.split('.');
+        if (parts.length === 3) {
+          const payload = parts[1];
+          // Convert base64url to base64 for atob()
+          const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+          // Add padding if needed
+          const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+          const decodedPayload = JSON.parse(atob(padded));
+          tokenExpiry = decodedPayload.exp ? decodedPayload.exp * 1000 : undefined; // Convert to milliseconds
+          
+          if (tokenExpiry && tokenExpiry < Date.now()) {
+            return NextResponse.json(
+              {
+                valid: false,
+                error: 'Token has expired',
+                code: 'TOKEN_EXPIRED'
+              },
+              { status: 401 }
+            );
+          }
         }
       }
     } catch (jwtError) {

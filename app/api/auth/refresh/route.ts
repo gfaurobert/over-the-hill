@@ -158,8 +158,17 @@ export async function POST(request: NextRequest) {
     let tokenExpiry: number | undefined;
     try {
       if (session.access_token.includes('.')) {
-        const payload = JSON.parse(atob(session.access_token.split('.')[1]));
-        tokenExpiry = payload.exp ? payload.exp * 1000 : undefined; // Convert to milliseconds
+        // Properly decode base64url encoded JWT payload
+        const parts = session.access_token.split('.');
+        if (parts.length === 3) {
+          const payload = parts[1];
+          // Convert base64url to base64 for atob()
+          const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+          // Add padding if needed
+          const padded = base64 + '='.repeat((4 - base64.length % 4) % 4);
+          const decodedPayload = JSON.parse(atob(padded));
+          tokenExpiry = decodedPayload.exp ? decodedPayload.exp * 1000 : undefined; // Convert to milliseconds
+        }
       }
     } catch (jwtError) {
       console.warn(`[Session Refresh] JWT parsing failed for user: ${user.id}`);

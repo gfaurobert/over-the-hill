@@ -25,14 +25,31 @@ const AUTH_ROUTES = [
 const validationAttempts = new Map<string, { count: number; lastAttempt: number }>();
 const MAX_MIDDLEWARE_ATTEMPTS = 20;
 const MIDDLEWARE_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_CACHE_SIZE = 1000; // Maximum number of IPs to track
 
-// Cleanup function to remove stale entries
+// Cleanup function to remove stale entries and prevent memory leaks
 function cleanupValidationAttempts(): void {
   const now = Date.now();
+  const entriesToDelete: string[] = [];
+  
   for (const [ip, entry] of validationAttempts.entries()) {
     if (now - entry.lastAttempt > MIDDLEWARE_WINDOW_MS) {
-      validationAttempts.delete(ip);
+      entriesToDelete.push(ip);
     }
+  }
+  
+  // Remove stale entries
+  entriesToDelete.forEach(ip => validationAttempts.delete(ip));
+  
+  // If cache is still too large, remove oldest entries
+  if (validationAttempts.size > MAX_CACHE_SIZE) {
+    const sortedEntries = Array.from(validationAttempts.entries())
+      .sort((a, b) => a[1].lastAttempt - b[1].lastAttempt);
+    
+    const entriesToRemove = sortedEntries.slice(0, validationAttempts.size - MAX_CACHE_SIZE);
+    entriesToRemove.forEach(([ip]) => validationAttempts.delete(ip));
+    
+    console.warn(`[Middleware] Cache size exceeded ${MAX_CACHE_SIZE}, removed ${entriesToRemove.length} oldest entries`);
   }
 }
 

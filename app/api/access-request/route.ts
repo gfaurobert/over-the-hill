@@ -26,10 +26,24 @@ export async function POST(request: NextRequest) {
 
     let messageEncrypted = '';
     
-    // For access requests, we'll store the message as-is since these are public form submissions
-    // from users who don't have accounts yet. The message_encrypted field can store plain text.
+    // Sanitize message content to prevent XSS attacks
     if (message && typeof message === 'string' && message.trim()) {
-      messageEncrypted = message.trim();
+      // Remove potentially dangerous HTML/script content
+      const sanitizedMessage = message
+        .trim()
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '') // Remove script tags
+        .replace(/<[^>]*>/g, '') // Remove all HTML tags
+        .replace(/javascript:/gi, '') // Remove javascript: protocols
+        .replace(/on\w+\s*=/gi, '') // Remove event handlers
+        .replace(/&lt;/g, '<') // Decode HTML entities
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .replace(/&quot;/g, '"')
+        .replace(/&#x27;/g, "'")
+        .replace(/&#x2F;/g, '/')
+        .substring(0, 1000); // Limit length to prevent DoS
+      
+      messageEncrypted = sanitizedMessage;
     }
 
     // Insert into database with correct column name
