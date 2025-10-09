@@ -35,21 +35,21 @@
   - Add screenshot optimization and file size management
   - _Requirements: 2.2, 2.3, 5.3, 5.4_
 
-- [ ] 6. Build report generator with spec-based organization
+- [x] 6. Build report generator with spec-based organization
   - Create ReportGenerator class for updating Tests-Summary.md
   - Implement spec-based section generation instead of category-based
   - Build markdown formatting for test results with screenshots and links
   - Add integration with existing QA framework documentation format
   - _Requirements: 3.1, 3.2, 3.3, 3.4, 3.5_
 
-- [ ] 7. Implement password-visibility-toggle MVP test generation
+- [x] 7. Implement password-visibility-toggle MVP test generation
   - Create specific test generators for password visibility toggle acceptance criteria
   - Implement tests for toggle functionality, accessibility features, and form integration
   - Build test scripts that interact with actual password input components
   - Add validation for password field behavior and icon state changes
   - _Requirements: 4.1, 4.2, 4.3, 4.4_
 
-- [ ] 8. Integrate agent hook with Kiro IDE and test execution flow
+- [x] 8. Integrate agent hook with Kiro IDE and test execution flow
   - Register agent hook in Kiro IDE hook system
   - Implement manual trigger mechanism for QA process execution
   - Create main execution flow that orchestrates all system components
