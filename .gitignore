@@ -36,3 +36,6 @@ next-env.d.ts
 
 # YoYo AI version control directory
 .yoyo/
+
+# PM2 logs
+/logs
