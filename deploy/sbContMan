@@ -19,7 +19,7 @@ NC='\033[0m' # No Color
 print_color() {
     local color=$1
     local message=$2
-    echo -e "${color}${message}${NC}"
+    printf "${color}%s${NC}\n" "$message"
 }
 
 # Function to show usage
@@ -72,13 +72,16 @@ start_containers() {
     print_color $YELLOW "Do you want to start these containers? (y/N): "
     read -r response
     
-    if [[ "$response" =~ ^[Yy]$ ]]; then
-        print_color $BLUE "Starting containers..."
-        echo "$containers" | xargs -r docker start
-        print_color $GREEN "Containers started successfully!"
-    else
-        print_color $YELLOW "Operation cancelled."
-    fi
+    case "$response" in
+        [Yy])
+            print_color $BLUE "Starting containers..."
+            echo "$containers" | xargs -r docker start
+            print_color $GREEN "Containers started successfully!"
+            ;;
+        *)
+            print_color $YELLOW "Operation cancelled."
+            ;;
+    esac
 }
 
 # Function to stop containers
@@ -98,13 +101,16 @@ stop_containers() {
     print_color $YELLOW "Do you want to stop these containers? (y/N): "
     read -r response
     
-    if [[ "$response" =~ ^[Yy]$ ]]; then
-        print_color $BLUE "Stopping containers..."
-        echo "$containers" | xargs -r docker stop
-        print_color $GREEN "Containers stopped successfully!"
-    else
-        print_color $YELLOW "Operation cancelled."
-    fi
+    case "$response" in
+        [Yy])
+            print_color $BLUE "Stopping containers..."
+            echo "$containers" | xargs -r docker stop
+            print_color $GREEN "Containers stopped successfully!"
+            ;;
+        *)
+            print_color $YELLOW "Operation cancelled."
+            ;;
+    esac
 }
 
 # Function to list all Supabase containers
@@ -121,17 +127,21 @@ list_containers() {
     fi
     
     # Display containers in a nice format
-    printf "%-40s %-15s %-20s %-15s\n" "CONTAINER NAME" "STATUS" "IMAGE" "PORTS"
-    printf "%-40s %-15s %-20s %-15s\n" "$(printf '%*s' 40 | tr ' ' '-')" "$(printf '%*s' 15 | tr ' ' '-')" "$(printf '%*s' 20 | tr ' ' '-')" "$(printf '%*s' 15 | tr ' ' '-')"
+    printf "%-40s %-15s %-15s\n" "CONTAINER NAME" "STATUS" "PORTS"
+    printf "%-40s %-15s %-15s\n" "$(printf '%*s' 40 | tr ' ' '-')" "$(printf '%*s' 15 | tr ' ' '-')" "$(printf '%*s' 15 | tr ' ' '-')"
     
     # Get detailed info for each Supabase container
-    docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}" | grep -i "supabase" | tail -n +2 | while IFS=$'\t' read -r name status image ports; do
-        # Color code based on status
-        if [[ "$status" == *"Up"* ]]; then
-            printf "${GREEN}%-40s${NC} %-15s %-20s %-15s\n" "$name" "$status" "$image" "$ports"
-        else
-            printf "${RED}%-40s${NC} %-15s %-20s %-15s\n" "$name" "$status" "$image" "$ports"
-        fi
+    # Use POSIX-compatible approach (works with both bash and sh)
+    docker ps -a --format "{{.Names}}\t{{.Status}}\t{{.Ports}}" | grep -i "supabase" | while IFS="$(printf '\t')" read -r name status ports; do
+        # Color code based on status - check if status contains "Up" (case-insensitive)
+        case "$status" in
+            *[Uu][Pp]*)
+                printf "${GREEN}%-40s${NC} %-15s %-15s\n" "$name" "$status" "$ports"
+                ;;
+            *)
+                printf "${RED}%-40s${NC} %-15s %-15s\n" "$name" "$status" "$ports"
+                ;;
+        esac
     done
     
     echo ""
@@ -156,13 +166,16 @@ delete_containers() {
     print_color $YELLOW "Do you want to proceed with deletion? (y/N): "
     read -r response
     
-    if [[ "$response" =~ ^[Yy]$ ]]; then
-        print_color $BLUE "Deleting containers and volumes..."
-        echo "$containers" | xargs -r docker rm -f -v
-        print_color $GREEN "Containers and volumes deleted successfully!"
-    else
-        print_color $YELLOW "Operation cancelled."
-    fi
+    case "$response" in
+        [Yy])
+            print_color $BLUE "Deleting containers and volumes..."
+            echo "$containers" | xargs -r docker rm -f -v
+            print_color $GREEN "Containers and volumes deleted successfully!"
+            ;;
+        *)
+            print_color $YELLOW "Operation cancelled."
+            ;;
+    esac
 }
 
 # Function to check if Docker is running

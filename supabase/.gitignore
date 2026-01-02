@@ -14,3 +14,4 @@
 !.env.example
 !.env.vault
 config.toml
+signing_keys.json

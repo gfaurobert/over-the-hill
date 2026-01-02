@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { sendDebugIngestEvent } from '../lib/debug-ingest';
 import { Button } from './ui/button';
 import {
   Card,
@@ -24,29 +25,126 @@ const SignInForm: React.FC<SignInFormProps> = ({ onSignIn, onRequestAccess, onRe
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const hasLoggedMountRef = useRef(false);
+
+  useEffect(() => {
+    if (hasLoggedMountRef.current) return;
+    hasLoggedMountRef.current = true;
+    sendDebugIngestEvent({
+      location: 'components/SignInForm.tsx:mount',
+      message: 'SignInForm mounted',
+      data: { pageOrigin: typeof window !== 'undefined' ? window.location.origin : null },
+      hypothesisId: 'E',
+    });
+  }, []);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else {
-      if (onSignIn) onSignIn();
+    
+    try {
+      (() => {
+        let parsed: { origin?: string; host?: string; port?: string; protocol?: string } = {};
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        try {
+          if (typeof supabaseUrl === 'string' && supabaseUrl.length > 0) {
+            const url = new URL(supabaseUrl);
+            parsed = { origin: url.origin, host: url.host, port: url.port, protocol: url.protocol };
+          }
+        } catch {
+          // ignore parse errors
+        }
+        sendDebugIngestEvent({
+          location: 'components/SignInForm.tsx:handleSignIn',
+          message: 'handleSignIn start',
+          data: {
+            hasEmail: email.length > 0,
+            hasPassword: password.length > 0,
+            pageOrigin: typeof window !== 'undefined' ? window.location.origin : null,
+            parsedSupabaseUrl: parsed,
+            supabaseUrlSample: typeof supabaseUrl === 'string' ? supabaseUrl.slice(0, 80) : null,
+          },
+          hypothesisId: 'A',
+        });
+      })();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        sendDebugIngestEvent({
+          location: 'components/SignInForm.tsx:handleSignIn',
+          message: 'signInWithPassword returned error',
+          data: {
+            errorName: error.name ?? null,
+            errorMessage: error.message ?? null,
+            errorStatus: (error as any).status ?? null,
+          },
+          hypothesisId: 'C',
+        });
+        setError(error.message);
+      } else {
+        if (onSignIn) onSignIn();
+      }
+    } catch (err) {
+      console.error('Sign in error:', err);
+      sendDebugIngestEvent({
+        location: 'components/SignInForm.tsx:handleSignIn',
+        message: 'signInWithPassword threw',
+        data: {
+          errType: err instanceof Error ? err.name : typeof err,
+          errMessage: err instanceof Error ? err.message : String(err),
+        },
+        hypothesisId: 'B',
+      });
+      // Handle network errors specifically
+      if (err instanceof TypeError && (err.message === 'Failed to fetch' || err.message.includes('fetch'))) {
+        setError(
+          `Cannot connect to Supabase server.\n\n` +
+          `Possible solutions:\n` +
+          `• If using local Supabase: Run "npx supabase start" or "supabase start"\n` +
+          `• Check your .env.local file has NEXT_PUBLIC_SUPABASE_URL set correctly\n` +
+          `• Verify your network connection\n` +
+          `• Check browser console for more details`
+        );
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleMagicLink = async () => {
     setLoading(true);
     setError(null);
-    const { error } = await supabase.auth.signInWithOtp({ email });
-    setLoading(false);
-    if (error) {
-      setError(error.message);
-    } else {
-      setMagicLinkSent(true);
+    
+    try {
+      const { error } = await supabase.auth.signInWithOtp({ email });
+      if (error) {
+        setError(error.message);
+      } else {
+        setMagicLinkSent(true);
+      }
+    } catch (err) {
+      console.error('Magic link error:', err);
+      // Handle network errors specifically
+      if (err instanceof TypeError && (err.message === 'Failed to fetch' || err.message.includes('fetch'))) {
+        setError(
+          `Cannot connect to Supabase server.\n\n` +
+          `Possible solutions:\n` +
+          `• If using local Supabase: Run "npx supabase start" or "supabase start"\n` +
+          `• Check your .env.local file has NEXT_PUBLIC_SUPABASE_URL set correctly\n` +
+          `• Verify your network connection\n` +
+          `• Check browser console for more details`
+        );
+      } else if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -112,7 +210,11 @@ const SignInForm: React.FC<SignInFormProps> = ({ onSignIn, onRequestAccess, onRe
             >
               Request Access
             </Button>
-            {error && <div className="text-red-600 text-sm mt-2">{error}</div>}
+            {error && (
+              <div className="text-red-600 text-sm mt-2 whitespace-pre-line">
+                {error}
+              </div>
+            )}
           </form>
         </CardContent>
       </Card>

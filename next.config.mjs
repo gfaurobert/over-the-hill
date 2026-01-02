@@ -1,13 +1,27 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: false,
-  },
   typescript: {
     ignoreBuildErrors: false,
   },
+  turbopack: {},
   images: {
     unoptimized: true,
+  },
+  async rewrites() {
+    if (process.env.NODE_ENV !== 'development') return []
+
+    // Proxy local Supabase endpoints through Next.js during development.
+    // This avoids browser loopback issues in remote dev / SSH port-forwarding setups.
+    const localSupabase = 'http://127.0.0.1:3001'
+
+    return [
+      { source: '/auth/v1/:path*', destination: `${localSupabase}/auth/v1/:path*` },
+      { source: '/rest/v1/:path*', destination: `${localSupabase}/rest/v1/:path*` },
+      { source: '/graphql/v1/:path*', destination: `${localSupabase}/graphql/v1/:path*` },
+      { source: '/realtime/v1/:path*', destination: `${localSupabase}/realtime/v1/:path*` },
+      { source: '/storage/v1/:path*', destination: `${localSupabase}/storage/v1/:path*` },
+      { source: '/functions/v1/:path*', destination: `${localSupabase}/functions/v1/:path*` },
+    ]
   },
   async headers() {
     return [

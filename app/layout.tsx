@@ -3,6 +3,7 @@ import { ReactNode } from 'react';
 import { AuthProvider } from '../components/AuthProvider';
 import { ThemeProvider } from '../components/theme-provider';
 import ServiceWorkerRegister from '../components/ServiceWorkerRegister';
+import { FetchPatch } from '../components/debug/FetchPatch';
 
 export const metadata = {
   title: 'Over The Hill',
@@ -18,6 +19,9 @@ export const viewport = {
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
+  const isDebugIngestEnabled =
+    process.env.NEXT_PUBLIC_DEBUG_INGEST === '1' || !!process.env.NEXT_PUBLIC_DEBUG_INGEST_URL;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
@@ -27,6 +31,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           enableSystem
           disableTransitionOnChange
         >
+          {process.env.NODE_ENV === 'development' && isDebugIngestEnabled ? <FetchPatch /> : null}
           <ServiceWorkerRegister />
           <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>

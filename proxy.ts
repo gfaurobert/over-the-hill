@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { sendDebugIngestEvent } from './lib/debug-ingest';
 
 // Protected routes that require authentication
 const PROTECTED_ROUTES = [
@@ -19,24 +20,24 @@ const AUTH_ROUTES = [
   '/invite'
 ];
 
-// Rate limiting for middleware validation
+// Rate limiting for proxy validation
 // TODO: For production/distributed environments, replace this in-memory Map with Redis
 // to handle rate limiting across multiple instances
 const validationAttempts = new Map<string, { count: number; lastAttempt: number }>();
-const MAX_MIDDLEWARE_ATTEMPTS = 20;
-const MIDDLEWARE_WINDOW_MS = 60 * 1000; // 1 minute
+const MAX_PROXY_ATTEMPTS = 20;
+const PROXY_WINDOW_MS = 60 * 1000; // 1 minute
 
 // Cleanup function to remove stale entries
 function cleanupValidationAttempts(): void {
   const now = Date.now();
   for (const [ip, entry] of validationAttempts.entries()) {
-    if (now - entry.lastAttempt > MIDDLEWARE_WINDOW_MS) {
+    if (now - entry.lastAttempt > PROXY_WINDOW_MS) {
       validationAttempts.delete(ip);
     }
   }
 }
 
-function isMiddlewareRateLimited(clientIP: string): boolean {
+function isProxyRateLimited(clientIP: string): boolean {
   // Cleanup stale entries before processing
   cleanupValidationAttempts();
   
@@ -49,7 +50,7 @@ function isMiddlewareRateLimited(clientIP: string): boolean {
   }
   
   // Reset if window has passed
-  if (now - attempts.lastAttempt > MIDDLEWARE_WINDOW_MS) {
+  if (now - attempts.lastAttempt > PROXY_WINDOW_MS) {
     validationAttempts.set(clientIP, { count: 1, lastAttempt: now });
     return false;
   }
@@ -58,7 +59,7 @@ function isMiddlewareRateLimited(clientIP: string): boolean {
   attempts.count++;
   attempts.lastAttempt = now;
   
-  return attempts.count > MAX_MIDDLEWARE_ATTEMPTS;
+  return attempts.count > MAX_PROXY_ATTEMPTS;
 }
 
 function getClientIP(request: NextRequest): string {
@@ -105,9 +106,32 @@ async function validateTokenServerSide(token: string): Promise<{ valid: boolean;
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    (() => {
+      let parsed: { origin?: string; host?: string; port?: string; protocol?: string } = {};
+      try {
+        if (typeof supabaseUrl === 'string' && supabaseUrl.length > 0) {
+          const url = new URL(supabaseUrl);
+          parsed = { origin: url.origin, host: url.host, port: url.port, protocol: url.protocol };
+        }
+      } catch {
+        // ignore parse errors
+      }
+      sendDebugIngestEvent({
+        location: 'proxy.ts:validateTokenServerSide',
+        message: 'validateTokenServerSide env snapshot',
+        data: {
+          hasSupabaseUrl: !!supabaseUrl,
+          hasServiceRoleKey: !!serviceRoleKey,
+          parsed,
+          supabaseUrlSample: typeof supabaseUrl === 'string' ? supabaseUrl.slice(0, 80) : null,
+        },
+        hypothesisId: 'D',
+      });
+    })();
     
     if (!supabaseUrl || !serviceRoleKey) {
-      console.warn('[Middleware] Missing Supabase environment variables');
+      console.warn('[Proxy] Missing Supabase environment variables');
       return { valid: false };
     }
     
@@ -126,16 +150,16 @@ async function validateTokenServerSide(token: string): Promise<{ valid: boolean;
     
     return { valid: true, user };
   } catch (error) {
-    console.warn('[Middleware] Token validation error:', error);
+    console.warn('[Proxy] Token validation error:', error);
     return { valid: false };
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const clientIP = getClientIP(request);
   
-  // Skip middleware for API routes, static files, and internal Next.js routes
+  // Skip proxy for API routes, static files, and internal Next.js routes
   if (
     pathname.startsWith('/api/') ||
     pathname.startsWith('/_next/') ||
@@ -146,8 +170,8 @@ export async function middleware(request: NextRequest) {
   }
   
   // Check rate limiting
-  if (isMiddlewareRateLimited(clientIP)) {
-    console.warn(`[Middleware] Rate limit exceeded for IP: ${clientIP}`);
+  if (isProxyRateLimited(clientIP)) {
+    console.warn(`[Proxy] Rate limit exceeded for IP: ${clientIP}`);
     return new NextResponse('Too Many Requests', { status: 429 });
   }
   
@@ -168,7 +192,7 @@ export async function middleware(request: NextRequest) {
   
   // Handle protected routes
   if (isProtectedRoute && !isAuthenticated) {
-    console.log(`[Middleware] Redirecting unauthenticated user from ${pathname} to /login`);
+    console.log(`[Proxy] Redirecting unauthenticated user from ${pathname} to /login`);
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('redirect', pathname);
     return NextResponse.redirect(loginUrl);
@@ -176,7 +200,7 @@ export async function middleware(request: NextRequest) {
   
   // Handle auth routes when already authenticated
   if (isAuthRoute && isAuthenticated) {
-    console.log(`[Middleware] Redirecting authenticated user from ${pathname} to /dashboard`);
+    console.log(`[Proxy] Redirecting authenticated user from ${pathname} to /dashboard`);
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
   
@@ -212,3 +236,4 @@ export const config = {
     '/((?!api|_next/static|_next/image|favicon.ico|public).*)',
   ],
 };
+
