@@ -715,7 +715,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const handleArchiveCollection = async (collectionId: string) => {
     if (!user) return
 
-    const success = await archiveCollection(collectionId, user.id)
+    const success = await archiveCollection(user.id, collectionId)
     if (success) {
       // Move collection from active to archived
       const collectionToArchive = collections.find(c => c.id === collectionId)
@@ -751,7 +751,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const handleUnarchiveCollection = async (collectionId: string) => {
     if (!user) return
 
-    const success = await unarchiveCollection(collectionId, user.id)
+    const success = await unarchiveCollection(user.id, collectionId)
     if (success) {
       // Move collection from archived to active
       const collectionToUnarchive = archivedCollections.find(c => c.id === collectionId)
@@ -770,7 +770,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const handleDeleteCollection = async (collectionId: string) => {
     if (!user) return
 
-    const success = await deleteCollection(collectionId, user.id)
+    const success = await deleteCollection(user.id, collectionId)
     if (success) {
       // Remove collection from both active and archived lists
       setCollections(prev => prev.filter(c => c.id !== collectionId))

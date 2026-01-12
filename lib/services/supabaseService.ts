@@ -358,7 +358,7 @@ export const archiveCollection = async (collectionId: string, userId: string): P
   try {
     validateArchiveOperation(collectionId, userId)
     
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("collections")
       .update({ 
         status: 'archived',
@@ -367,12 +367,13 @@ export const archiveCollection = async (collectionId: string, userId: string): P
       .eq("id", collectionId)
       .eq("user_id", userId)
       .eq("status", 'active') // Only archive active collections
+      .select('id')
 
     if (error) {
       throw error
     }
     
-    return true
+    return Array.isArray(data) && data.length === 1
   } catch (error) {
     handleServiceError(error, 'archive collection')
     return false
@@ -384,7 +385,7 @@ export const unarchiveCollection = async (collectionId: string, userId: string):
   try {
     validateUnarchiveOperation(collectionId, userId)
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("collections")
       .update({ 
         status: 'active',
@@ -393,12 +394,13 @@ export const unarchiveCollection = async (collectionId: string, userId: string):
       .eq("id", collectionId)
       .eq("user_id", userId)
       .eq("status", 'archived') // Only unarchive archived collections
+      .select('id')
 
     if (error) {
       throw error
     }
     
-    return true
+    return Array.isArray(data) && data.length === 1
   } catch (error) {
     handleServiceError(error, 'unarchive collection')
     return false
@@ -411,17 +413,18 @@ export const deleteCollection = async (collectionId: string, userId: string): Pr
     validateDeleteOperation(collectionId, userId)
 
     // Delete the collection (cascading will handle dots, snapshots, user_preferences)
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("collections")
       .delete()
       .eq("id", collectionId)
       .eq("user_id", userId)
+      .select('id')
 
     if (error) {
       throw error
     }
     
-    return true
+    return Array.isArray(data) && data.length === 1
   } catch (error) {
     handleServiceError(error, 'delete collection')
     return false
