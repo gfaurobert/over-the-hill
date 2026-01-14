@@ -45,3 +45,5 @@ coverage/
 
 /supabase/.env
 /supabase/.env.local
+/supabase/signing-key.json
+/supabase/signing_keys.json
