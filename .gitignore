@@ -37,6 +37,9 @@ next-env.d.ts
 # YoYo AI version control directory
 .yoyo/
 
+# Temp test directories (can have bad permissions and break Turbopack watcher)
+temp-test-*/
+
 pnpm-lock.yaml
 coverage/
 

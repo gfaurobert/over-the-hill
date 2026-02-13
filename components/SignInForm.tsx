@@ -42,7 +42,9 @@ const SignInForm: React.FC<SignInFormProps> = ({ onSignIn, onRequestAccess, onRe
     e.preventDefault();
     setLoading(true);
     setError(null);
-    
+    // #region agent log
+    if (typeof fetch !== 'undefined') fetch('http://127.0.0.1:7249/ingest/685368f0-06f2-47f7-9f0b-ce960e48801d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'components/SignInForm.tsx:handleSignIn',message:'handleSignIn invoked',data:{timestamp:Date.now()},timestamp:Date.now(),hypothesisId:'C'})}).catch(()=>{});
+    // #endregion
     try {
       (() => {
         let parsed: { origin?: string; host?: string; port?: string; protocol?: string } = {};
@@ -80,7 +82,14 @@ const SignInForm: React.FC<SignInFormProps> = ({ onSignIn, onRequestAccess, onRe
           },
           hypothesisId: 'C',
         });
-        setError(error.message);
+        if ((error as { status?: number }).status === 429) {
+          setError(
+            'Too many sign-in attempts. Please wait a few minutes and try again.\n\n' +
+            'If using local Supabase, restart it to apply higher rate limits (see supabase/config.toml [auth.rate_limit]).'
+          );
+        } else {
+          setError(error.message);
+        }
       } else {
         if (onSignIn) onSignIn();
       }

@@ -159,17 +159,24 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const clientIP = getClientIP(request);
   
-  // Skip proxy for API routes, static files, and internal Next.js routes
+  // Skip proxy for API routes, static files, internal Next.js routes, and Supabase backend paths.
+  // Supabase paths (/auth/, /rest/, etc.) are rewritten to the Supabase API; they must not be
+  // rate-limited here or sign-in and other auth requests get 429 (all localhost traffic shares one IP).
   if (
     pathname.startsWith('/api/') ||
     pathname.startsWith('/_next/') ||
     pathname.startsWith('/favicon.ico') ||
-    pathname.includes('.')
+    pathname.includes('.') ||
+    pathname.startsWith('/auth/') ||
+    pathname.startsWith('/rest/') ||
+    pathname.startsWith('/realtime/') ||
+    pathname.startsWith('/storage/') ||
+    pathname.startsWith('/functions/')
   ) {
     return NextResponse.next();
   }
   
-  // Check rate limiting
+  // Check rate limiting (only for page navigation, not Supabase API calls)
   if (isProxyRateLimited(clientIP)) {
     console.warn(`[Proxy] Rate limit exceeded for IP: ${clientIP}`);
     return new NextResponse('Too Many Requests', { status: 429 });

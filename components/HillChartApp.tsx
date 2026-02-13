@@ -646,8 +646,15 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
     const handleMouseUp = () => {
       if (isDragging && draggingDot) {
-        // Update the actual dot position in collections
-        updateDot(draggingDot.id, { x: draggingDot.x, y: draggingDot.y })
+        const updates: Partial<Dot> = { x: draggingDot.x, y: draggingDot.y }
+        if (draggingDot.x === 100) {
+          updates.color = defaultColors[4]
+          updates.size = 1
+        } else if (draggingDot.x > 50) {
+          updates.color = defaultColors[1]
+          updates.size = 3
+        }
+        updateDot(draggingDot.id, updates)
       }
       setIsDragging(null)
       setDraggingDot(null)
@@ -1606,9 +1613,13 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     )
   }
 
-  // Before rendering the dot list, define activeDots and archivedDots
-  const activeDots: Dot[] = (currentCollection?.dots || []).filter((dot: Dot) => !dot.archived);
-  const archivedDots: Dot[] = (currentCollection?.dots || []).filter((dot: Dot) => dot.archived);
+  // Before rendering the dot list, define activeDots and archivedDots (sorted by position on line: higher x = top of list)
+  const activeDots: Dot[] = (currentCollection?.dots || [])
+    .filter((dot: Dot) => !dot.archived)
+    .sort((a, b) => b.x - a.x);
+  const archivedDots: Dot[] = (currentCollection?.dots || [])
+    .filter((dot: Dot) => dot.archived)
+    .sort((a, b) => b.x - a.x);
 
   return (
     <div className="min-h-screen p-4 bg-transparent" style={{ userSelect: isDragging ? "none" : "auto" }}>

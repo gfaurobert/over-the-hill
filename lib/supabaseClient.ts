@@ -40,6 +40,10 @@ function createLoggedSupabaseFetch(supabaseUrl: string): typeof fetch {
     }
   }
 
+  // #region agent log
+  let tokenRequestCount = 0;
+  // #endregion
+
   return async (input: RequestInfo | URL, init?: RequestInit) => {
     const url =
       typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
@@ -47,10 +51,16 @@ function createLoggedSupabaseFetch(supabaseUrl: string): typeof fetch {
       init?.method ??
       (typeof Request !== "undefined" && input instanceof Request ? input.method : "GET");
 
+    const isTokenRequest = typeof url === "string" && url.includes("/auth/v1/token");
     const shouldLog =
       typeof url === "string" &&
       (url.startsWith(supabaseOrigin) || url.includes("/auth/v1/")) &&
       (url.includes("/auth/v1/token") || url.includes("/auth/v1/"));
+
+    if (isTokenRequest) {
+      tokenRequestCount += 1;
+      fetch('http://127.0.0.1:7249/ingest/685368f0-06f2-47f7-9f0b-ce960e48801d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/supabaseClient.ts:fetch',message:'auth token request',data:{tokenRequestCount,method,urlSnippet:url.slice(0,120),timestamp:Date.now()},timestamp:Date.now(),hypothesisId:'A'})}).catch(()=>{});
+    }
 
     if (shouldLog) {
       sendDebugIngestEvent({
@@ -63,6 +73,9 @@ function createLoggedSupabaseFetch(supabaseUrl: string): typeof fetch {
 
     try {
       const response = await fetch(input as any, init);
+      if (isTokenRequest) {
+        fetch('http://127.0.0.1:7249/ingest/685368f0-06f2-47f7-9f0b-ce960e48801d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/supabaseClient.ts:fetch',message:'auth token response',data:{tokenRequestCount,status:response.status,status429:response.status===429,timestamp:Date.now()},timestamp:Date.now(),hypothesisId:response.status===429?'B':'A'})}).catch(()=>{});
+      }
       if (shouldLog) {
         sendDebugIngestEvent({
           location: 'lib/supabaseClient.ts:createLoggedSupabaseFetch',

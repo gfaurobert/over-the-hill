@@ -12,7 +12,9 @@ const nextConfig = {
 
     // Proxy local Supabase endpoints through Next.js during development.
     // This avoids browser loopback issues in remote dev / SSH port-forwarding setups.
-    const localSupabase = 'http://127.0.0.1:3001'
+    // Must target the Supabase API port (54321), not the Next.js app port (3001).
+    const apiPort = process.env.API_PORT || '54321'
+    const localSupabase = `http://127.0.0.1:${apiPort}`
 
     return [
       { source: '/auth/v1/:path*', destination: `${localSupabase}/auth/v1/:path*` },
