@@ -35,6 +35,14 @@ jobs:
         run: pnpm build
       
       - name: Run unit tests
+        env:
+          SMTP_HOST: ${{ secrets.OTH_SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.OTH_SMTP_PORT }}
+          SMTP_USER: ${{ secrets.OTH_SMTP_USER }}
+          SMTP_PASS: ${{ secrets.OTH_SMTP_PASS }}
+          SMTP_SECURE: ${{ secrets.OTH_SMTP_SECURE }}
+          FROM_EMAIL: ${{ secrets.OTH_FROM_EMAIL }}
+          TO_EMAIL: ${{ secrets.OTH_TO_EMAIL }}
         run: pnpm test:unit
 
   deploy:
