@@ -1,0 +1,3 @@
+fileName,migrated,migratedAt
+001_schema.sql,true,2026-03-12T13:23:15Z
+002_molds_add_type_serial.sql,false,
