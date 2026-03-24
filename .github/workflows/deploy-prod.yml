@@ -81,7 +81,8 @@ jobs:
             git fetch origin main
             git checkout main
             git reset --hard origin/main
-            "$PNPM_CMD" install --frozen-lockfile
+            "$PNPM_CMD" config set auto-install-peers false
+            "$PNPM_CMD" install --frozen-lockfile --config.auto-install-peers=false
             if [ -f deploy/release-actions.sh ]; then
               chmod +x deploy/release-actions.sh
               ./deploy/release-actions.sh
