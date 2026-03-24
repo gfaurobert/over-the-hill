@@ -26,22 +26,21 @@ afterEach(() => {
 
 describe('EmailService', () => {
   describe('Configuration Loading', () => {
-    it('should load SMTP configuration from environment variables', () => {
-      // This test verifies that the service can be instantiated with proper env vars
-      expect(async () => {
-        const { emailService } = await import('../emailService');
-        return emailService;
-      }).not.toThrow();
+    it('should load SMTP configuration from environment variables', async () => {
+      const service = emailService;
+      const config = (service as any).loadSMTPConfig();
+      expect(config.host).toBe('test.smtp.com');
+      expect(config.port).toBe(587);
+      expect(config.auth.user).toBe('test@example.com');
     });
 
-    it('should throw error when required SMTP config is missing', async () => {
+    it('should return false when required SMTP config is missing', async () => {
       delete process.env.SMTP_HOST;
-      
-      await expect(async () => {
-        // Note: ES modules don't have cache clearing like CommonJS
-        const { emailService } = await import('../emailService');
-        return emailService;
-      }).rejects.toThrow('Missing required SMTP configuration');
+
+      const service = emailService;
+      await expect(service.sendAccessRequestNotification('requester@example.com', 'Test message')).rejects.toThrow(
+        'Missing required SMTP configuration',
+      );
     });
   });
 
@@ -223,18 +222,13 @@ describe('EmailService', () => {
       process.env.FROM_EMAIL = originalFromEmail;
     });
 
-    it('should validate SMTP configuration on service creation', () => {
-      // This test verifies that SMTP config validation works
+    it('should fail validation when SMTP configuration is missing', async () => {
       const originalHost = process.env.SMTP_HOST;
       delete process.env.SMTP_HOST;
-      
-      expect(async () => {
-        // Note: ES modules don't have cache clearing like CommonJS
-        const { emailService } = await import('../emailService');
-        return emailService;
-      }).rejects.toThrow('Missing required SMTP configuration');
-      
-      // Restore for other tests
+
+      const service = emailService;
+      await expect(service.validateConnection()).resolves.toBe(false);
+
       process.env.SMTP_HOST = originalHost;
     });
   });

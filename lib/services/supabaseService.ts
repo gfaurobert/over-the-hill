@@ -3,6 +3,7 @@ import { Collection, Dot, Snapshot, ExportData, ReleaseLineConfig } from "@/comp
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { privacyService } from "./privacyService"
+import { DOMAIN_ERROR_CODES } from "./domainErrors"
 import { 
   validateDot, 
   validateCollection, 
@@ -14,6 +15,8 @@ import {
   validateUnarchiveOperation,
   validateDeleteOperation,
   validateReleaseLineConfig,
+  validateUserPreferencesUpdate,
+  UserPreferencesUpdate,
   ValidationError,
   sanitizeString,
   validateSnapshotId
@@ -48,6 +51,7 @@ interface DotRow {
   color: string
   size: number
   archived: boolean
+  flag_for_today: boolean
   user_id: string
   collection_id: string
 }
@@ -63,14 +67,36 @@ interface SnapshotRow {
   release_line_config_encrypted?: string
 }
 
+export interface UserPreferences {
+  selectedCollectionId: string | null
+  collectionInput: string
+  hideCollectionName: boolean
+  copyFormat: 'PNG' | 'SVG'
+  gradientStartColor: string | null
+  gradientEndColor: string | null
+  dotColorDiscovery: string
+  dotColorUpslope: string
+  dotColorDangerZone: string
+  dotColorDownslope: string
+  dotColorDone: string
+  splitHillAreaFillEnabled: boolean
+  showTodayCollection: boolean
+  createdAt: string
+  updatedAt: string
+}
+
 // Enhanced error handling wrapper
 const handleServiceError = (error: any, operation: string): void => {
   if (error instanceof ValidationError) {
     console.error(`Validation error in ${operation}:`, error.message)
-    throw error
+    const validationError = new Error(error.message)
+    ;(validationError as any).code = DOMAIN_ERROR_CODES.validationError
+    throw validationError
   }
   console.error(`Database error in ${operation}:`, error)
-  throw new Error(`Failed to ${operation}: ${error?.message || 'Unknown error'}`)
+  const wrappedError = new Error(`Failed to ${operation}: ${error?.message || 'Unknown error'}`)
+  ;(wrappedError as any).code = DOMAIN_ERROR_CODES.databaseError
+  throw wrappedError
 }
 
 // Specialized error handling for JSON parsing failures
@@ -213,7 +239,8 @@ export const fetchCollections = async (
                   y: dot.y,
                   color: dot.color,
                   size: dot.size,
-                  archived: dot.archived
+                  archived: dot.archived,
+                  flag_for_today: dot.flag_for_today === true
                 }
               } catch (dotError) {
                 console.error('[FETCH_COLLECTIONS] Failed to decrypt dot:', dot.id, dotError)
@@ -467,6 +494,7 @@ export const addDot = async (dot: Dot, collectionId: string, userId: string): Pr
         color: validatedDot.color,
         size: validatedDot.size,
         archived: validatedDot.archived,
+        flag_for_today: validatedDot.flag_for_today,
         collection_id: validatedCollectionId, 
         user_id: validatedUserId 
       }])
@@ -476,7 +504,7 @@ export const addDot = async (dot: Dot, collectionId: string, userId: string): Pr
       throw error
     }
     
-    return data ? { ...validatedDot, archived: validatedDot.archived } : null
+    return data ? { ...validatedDot, archived: validatedDot.archived, flag_for_today: validatedDot.flag_for_today } : null
   } catch (error) {
     handleServiceError(error, 'add dot')
     return null
@@ -505,7 +533,8 @@ export const updateDot = async (dot: Dot, userId: string): Promise<Dot | null> =
         y: validatedDot.y,
         color: validatedDot.color,
         size: validatedDot.size,
-        archived: validatedDot.archived
+        archived: validatedDot.archived,
+        flag_for_today: validatedDot.flag_for_today
       })
       .eq("id", validatedDot.id)
       .eq("user_id", validatedUserId)
@@ -515,7 +544,7 @@ export const updateDot = async (dot: Dot, userId: string): Promise<Dot | null> =
       throw error
     }
     
-    return data ? { ...validatedDot, archived: validatedDot.archived } : null
+    return data ? { ...validatedDot, archived: validatedDot.archived, flag_for_today: validatedDot.flag_for_today } : null
   } catch (error) {
     handleServiceError(error, 'update dot')
     return null
@@ -767,6 +796,8 @@ export const deleteSnapshot = async (userId: string, snapshotId: string): Promis
 }
 
 // Import data with comprehensive validation and encryption
+// Contract note: this API currently returns imported collections and uses warning logs
+// for partial snapshot skips/failures. It does not yet expose a structured partial-import report.
 export const importData = async (data: ExportData, userId: string): Promise<Collection[]> => {
   try {
     console.log('[IMPORT_DATA] Starting import for user:', userId)
@@ -845,6 +876,7 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
           color: dot.color,
           size: dot.size,
           archived: dot.archived === true,
+          flag_for_today: dot.flag_for_today === true,
           user_id: validatedUserId,
           collection_id: collection.id,
         }))
@@ -901,7 +933,7 @@ export const importData = async (data: ExportData, userId: string): Promise<Coll
         importedCollectionIds.has(snapshot.collectionId)
       )
       
-      // Log if any snapshots were skipped
+      // Best-effort snapshot import: snapshots not referencing imported collections are skipped.
       if (validSnapshots.length < snapshots.length) {
         const skippedCount = snapshots.length - validSnapshots.length
         console.log(`[IMPORT_DATA] Skipping ${skippedCount} snapshot${skippedCount > 1 ? 's' : ''} for non-existent or renamed collections`)
@@ -985,14 +1017,7 @@ export const resetAllCollections = async (userId: string): Promise<boolean> => {
 } 
 
 // Fetch user preferences for a user
-export const fetchUserPreferences = async (userId: string): Promise<{
-  selectedCollectionId: string | null
-  collectionInput: string
-  hideCollectionName: boolean
-  copyFormat: 'PNG' | 'SVG'
-  createdAt: string
-  updatedAt: string
-} | null> => {
+export const fetchUserPreferences = async (userId: string): Promise<UserPreferences | null> => {
   try {
     const validatedUserId = validateUserId(userId)
 
@@ -1010,6 +1035,15 @@ export const fetchUserPreferences = async (userId: string): Promise<{
           collectionInput: '',
           hideCollectionName: false,
           copyFormat: 'PNG',
+          gradientStartColor: null,
+          gradientEndColor: null,
+          dotColorDiscovery: '#b0cdfb',
+          dotColorUpslope: '#a6e7be',
+          dotColorDangerZone: '#f8b4b4',
+          dotColorDownslope: '#fcc7a1',
+          dotColorDone: '#d0bdfb',
+          splitHillAreaFillEnabled: false,
+          showTodayCollection: true,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         }
@@ -1036,6 +1070,15 @@ export const fetchUserPreferences = async (userId: string): Promise<{
       collectionInput: decryptedCollectionInput,
       hideCollectionName: data.hide_collection_name,
       copyFormat: data.copy_format as 'PNG' | 'SVG',
+      gradientStartColor: data.gradient_start_color,
+      gradientEndColor: data.gradient_end_color,
+      dotColorDiscovery: data.dot_color_discovery || '#b0cdfb',
+      dotColorUpslope: data.dot_color_upslope || '#a6e7be',
+      dotColorDangerZone: data.dot_color_danger_zone || '#f8b4b4',
+      dotColorDownslope: data.dot_color_downslope || '#fcc7a1',
+      dotColorDone: data.dot_color_done || '#d0bdfb',
+      splitHillAreaFillEnabled: data.split_hill_area_fill_enabled === true,
+      showTodayCollection: data.show_today_collection !== false,
       createdAt: data.created_at,
       updatedAt: data.updated_at
     }
@@ -1044,6 +1087,47 @@ export const fetchUserPreferences = async (userId: string): Promise<{
     return null
   }
 } 
+
+// Update user preferences for a user
+export const upsertUserPreferences = async (
+  userId: string,
+  preferences: Partial<UserPreferencesUpdate>
+): Promise<boolean> => {
+  try {
+    const validatedUserId = validateUserId(userId)
+    const validatedPreferences = validateUserPreferencesUpdate(preferences)
+
+    const { encrypted: encryptedCollectionInput } = await privacyService.encryptData(
+      validatedPreferences.collectionInput,
+      validatedUserId
+    )
+
+    const { error } = await supabase
+      .from("user_preferences")
+      .upsert({
+        user_id: validatedUserId,
+        selected_collection_id: validatedPreferences.selectedCollectionId,
+        collection_input_encrypted: encryptedCollectionInput,
+        hide_collection_name: validatedPreferences.hideCollectionName,
+        copy_format: validatedPreferences.copyFormat,
+        gradient_start_color: validatedPreferences.gradientStartColor,
+        gradient_end_color: validatedPreferences.gradientEndColor,
+        dot_color_discovery: validatedPreferences.dotColorDiscovery,
+        dot_color_upslope: validatedPreferences.dotColorUpslope,
+        dot_color_danger_zone: validatedPreferences.dotColorDangerZone,
+        dot_color_downslope: validatedPreferences.dotColorDownslope,
+        dot_color_done: validatedPreferences.dotColorDone,
+        split_hill_area_fill_enabled: validatedPreferences.splitHillAreaFillEnabled,
+        show_today_collection: validatedPreferences.showTodayCollection,
+      }, { onConflict: 'user_id' })
+
+    if (error) throw error
+    return true
+  } catch (error) {
+    handleServiceError(error, 'update user preferences')
+    return false
+  }
+}
 
 // Delete all user data and the user account
 export const deleteAllUserData = async (userId: string): Promise<boolean> => {

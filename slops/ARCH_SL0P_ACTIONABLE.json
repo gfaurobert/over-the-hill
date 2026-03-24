@@ -1,0 +1,341 @@
+{
+  "title": "Architecture Slop Actionable Arbitration Report",
+  "generated_at": "2026-03-23T21:18:24+01:00",
+  "scope": "ARCH findings only (ARCH-001..ARCH-011)",
+  "sources": [
+    "slops/ARCH_SL0P_DEFENSE.json",
+    "slops/ARCH_SL0P_PROSECUTOR.json",
+    "slops/ARCH_SLOP_PRIORITY.md",
+    "slops/ARCH_SLOP_TRENDS.md",
+    "slops/ARCH_SL0P.md"
+  ],
+  "arbitration_policy": {
+    "summary": "Accept defender context as operationally valid, but prioritize prosecutor worst-case risk for AI coding because regression amplification is the optimization target.",
+    "scoring": {
+      "priority_severity_weight": 0.5,
+      "prosecutor_risk_weight": 0.35,
+      "trend_weight": 0.15,
+      "risk_to_points": {
+        "critical": 10,
+        "high": 8,
+        "medium-high": 6,
+        "medium": 5
+      },
+      "trend_to_points": {
+        "new": 8,
+        "persistent": 7,
+        "escalated": 10,
+        "de-escalated": 4,
+        "resolved": 0
+      }
+    }
+  },
+  "overall": {
+    "defender_positions_total": 11,
+    "defender_positions_challenged": 11,
+    "baseline_snapshot": true,
+    "ai_coding_strategy": [
+      "Prioritize boundary-contract hardening before feature work.",
+      "Prefer fail-loud degraded-mode outcomes over silent fallback success.",
+      "Converge duplicate service facades to reduce drift surface."
+    ]
+  },
+  "actionable_slops": [
+    {
+      "id": "ARCH-001",
+      "title": "Missing explicit error taxonomy across auth/session/data/privacy boundaries",
+      "category": "Missing domain errors",
+      "score": 10,
+      "trend": "new",
+      "failure_risk": "critical",
+      "defense_status": {
+        "justified": true,
+        "challenged_by_prosecutor": true
+      },
+      "references": [
+        "slops/ARCH_SLOP_PRIORITY.md",
+        "slops/ARCH_SL0P_DEFENSE.json",
+        "slops/ARCH_SL0P_PROSECUTOR.json",
+        "components/AuthProvider.tsx",
+        "lib/services/sessionValidationService.ts",
+        "app/api/auth/validate/route.ts",
+        "app/api/auth/refresh/route.ts",
+        "lib/services/supabaseService.ts",
+        "lib/services/privacyService.ts"
+      ],
+      "guidance_for_ai_coding_prioritization": [
+        "Define a discriminated DomainError union and require boundary mappers at provider/service/route edges.",
+        "Reject generic catch-all errors in touched files unless mapped to a stable domain code.",
+        "Gate merges on tests that assert stable error translation across at least one auth and one data path."
+      ]
+    },
+    {
+      "id": "ARCH-002",
+      "title": "Silent-failure risk from multi-layer fallback chains (crypto + cache + offline)",
+      "category": "Silent failures",
+      "score": 9,
+      "trend": "new",
+      "failure_risk": "critical",
+      "defense_status": {
+        "justified": true,
+        "challenged_by_prosecutor": true
+      },
+      "references": [
+        "slops/ARCH_SLOP_PRIORITY.md",
+        "slops/ARCH_SL0P_DEFENSE.json",
+        "slops/ARCH_SL0P_PROSECUTOR.json",
+        "lib/services/privacyService.ts",
+        "lib/services/cacheService.ts",
+        "public/sw.js",
+        "lib/services/simpleDataService.ts",
+        "lib/services/supabaseService.ts"
+      ],
+      "guidance_for_ai_coding_prioritization": [
+        "Replace boolean fallback outcomes with explicit mode/result payloads (normal, degraded, stale, failed).",
+        "Propagate degraded mode to UI and telemetry, never swallow it as success.",
+        "Add regression tests for stale-read and crypto-unavailable scenarios."
+      ]
+    },
+    {
+      "id": "ARCH-003",
+      "title": "Inconsistent error propagation between client provider, service facades, and API routes",
+      "category": "Mismanaged propagation",
+      "score": 9,
+      "trend": "new",
+      "failure_risk": "high",
+      "defense_status": {
+        "justified": true,
+        "challenged_by_prosecutor": true
+      },
+      "references": [
+        "slops/ARCH_SLOP_PRIORITY.md",
+        "slops/ARCH_SL0P_DEFENSE.json",
+        "slops/ARCH_SL0P_PROSECUTOR.json",
+        "components/AuthProvider.tsx",
+        "lib/services/sessionValidationService.ts",
+        "lib/services/simpleDataService.ts",
+        "lib/services/cachedDataService.ts",
+        "app/api/auth/validate/route.ts",
+        "app/api/auth/refresh/route.ts"
+      ],
+      "guidance_for_ai_coding_prioritization": [
+        "Pick one propagation contract per boundary family (Result-or-throw) and codify it.",
+        "Block mixed nullable-plus-throw patterns in modified code paths.",
+        "Add contract tests ensuring same backend failure yields equivalent user-facing semantics."
+      ]
+    },
+    {
+      "id": "ARCH-004",
+      "title": "Import/export pipeline likely lacks partial-failure semantics",
+      "category": "Missing domain errors",
+      "score": 8,
+      "trend": "new",
+      "failure_risk": "high",
+      "defense_status": {
+        "justified": true,
+        "challenged_by_prosecutor": true
+      },
+      "references": [
+        "slops/ARCH_SLOP_PRIORITY.md",
+        "slops/ARCH_SL0P_DEFENSE.json",
+        "slops/ARCH_SL0P_PROSECUTOR.json",
+        "components/HillChartApp.tsx",
+        "components/PrivacySettings.tsx",
+        "lib/services/supabaseService.ts#importData"
+      ],
+      "guidance_for_ai_coding_prioritization": [
+        "Introduce an import report contract with created, updated, skipped, failed, and retryable counts.",
+        "Make retries idempotent and resumable with operation markers.",
+        "Require UX to surface partial success instead of binary success."
+      ]
+    },
+    {
+      "id": "ARCH-005",
+      "title": "Unused dual-service architecture (`simple` vs `cached`) increases error drift",
+      "category": "Premature abstraction",
+      "score": 8,
+      "trend": "new",
+      "failure_risk": "high",
+      "defense_status": {
+        "justified": true,
+        "challenged_by_prosecutor": true
+      },
+      "references": [
+        "slops/ARCH_SLOP_PRIORITY.md",
+        "slops/ARCH_SL0P_DEFENSE.json",
+        "slops/ARCH_SL0P_PROSECUTOR.json",
+        "lib/services/simpleDataService.ts",
+        "lib/services/cachedDataService.ts",
+        "components/HillChartApp.tsx",
+        "components/PrivacySettings.tsx",
+        "components/ImportDataPrompt.tsx"
+      ],
+      "guidance_for_ai_coding_prioritization": [
+        "Select one production facade as canonical and route all new AI edits through it.",
+        "If both must exist temporarily, enforce a shared contract test suite across both facades.",
+        "Tag the non-canonical facade as migration-only and prevent net-new behavior there."
+      ]
+    },
+    {
+      "id": "ARCH-006",
+      "title": "Auth refresh/validation loop lacks explicit retry budget and terminal states",
+      "category": "Mismanaged control flow",
+      "score": 8,
+      "trend": "new",
+      "failure_risk": "critical",
+      "defense_status": {
+        "justified": true,
+        "challenged_by_prosecutor": true
+      },
+      "references": [
+        "slops/ARCH_SLOP_PRIORITY.md",
+        "slops/ARCH_SL0P_DEFENSE.json",
+        "slops/ARCH_SL0P_PROSECUTOR.json",
+        "components/AuthProvider.tsx",
+        "lib/services/sessionValidationService.ts",
+        "app/api/auth/validate/route.ts",
+        "app/api/auth/refresh/route.ts"
+      ],
+      "guidance_for_ai_coding_prioritization": [
+        "Define explicit auth state machine terminals (authenticated, backoff, reauth-required, force-logout).",
+        "Set retry budgets and jittered backoff; fail closed when budget is exhausted.",
+        "Add tests for network flap loops and concurrent refresh races."
+      ]
+    },
+    {
+      "id": "ARCH-007",
+      "title": "Cache subsystem breadth can mask cache-write/cache-invalidate failures",
+      "category": "Silent failures",
+      "score": 7,
+      "trend": "new",
+      "failure_risk": "high",
+      "defense_status": {
+        "justified": true,
+        "challenged_by_prosecutor": true
+      },
+      "references": [
+        "slops/ARCH_SLOP_PRIORITY.md",
+        "slops/ARCH_SL0P_DEFENSE.json",
+        "slops/ARCH_SL0P_PROSECUTOR.json",
+        "lib/services/cacheService.ts",
+        "lib/services/cacheInvalidationRules.ts",
+        "lib/services/cachedDataService.ts",
+        "public/sw.js"
+      ],
+      "guidance_for_ai_coding_prioritization": [
+        "Promote cache outcomes to first-class typed results (applied, missed, failed).",
+        "Emit cache invalidation diagnostics in development and CI tests.",
+        "Prevent AI-generated mutations from skipping invalidation checks."
+      ]
+    },
+    {
+      "id": "ARCH-008",
+      "title": "SSR mock cache adapters risk diverging failure semantics from browser runtime",
+      "category": "Mismanaged propagation",
+      "score": 6,
+      "trend": "new",
+      "failure_risk": "medium-high",
+      "defense_status": {
+        "justified": true,
+        "challenged_by_prosecutor": true
+      },
+      "references": [
+        "slops/ARCH_SLOP_PRIORITY.md",
+        "slops/ARCH_SL0P_DEFENSE.json",
+        "slops/ARCH_SL0P_PROSECUTOR.json",
+        "lib/services/cacheService.ts",
+        "lib/services/cachedDataService.ts"
+      ],
+      "guidance_for_ai_coding_prioritization": [
+        "Centralize a single SSR adapter and mirror browser degraded/error semantics.",
+        "Run parity tests that assert SSR and browser adapters classify failure modes equivalently.",
+        "Avoid no-op success returns in SSR for operations that can fail in browser runtime."
+      ]
+    },
+    {
+      "id": "ARCH-009",
+      "title": "\"Class + singleton + bound exports\" obscures ownership of throw/catch boundaries",
+      "category": "Indirection without leverage",
+      "score": 6,
+      "trend": "new",
+      "failure_risk": "medium-high",
+      "defense_status": {
+        "justified": true,
+        "challenged_by_prosecutor": true
+      },
+      "references": [
+        "slops/ARCH_SLOP_PRIORITY.md",
+        "slops/ARCH_SL0P_DEFENSE.json",
+        "slops/ARCH_SL0P_PROSECUTOR.json",
+        "lib/services/simpleDataService.ts",
+        "lib/services/cachedDataService.ts"
+      ],
+      "guidance_for_ai_coding_prioritization": [
+        "Consolidate to one invocation/export pattern per service module.",
+        "Keep throw/catch normalization at explicit boundary functions.",
+        "Require stack-preserving rethrow wrappers where mapping is necessary."
+      ]
+    },
+    {
+      "id": "ARCH-010",
+      "title": "Placeholder options/no-op API paths can imply successful handling when none occurred",
+      "category": "Silent failures",
+      "score": 7,
+      "trend": "new",
+      "failure_risk": "high",
+      "defense_status": {
+        "justified": false,
+        "challenged_by_prosecutor": true
+      },
+      "references": [
+        "slops/ARCH_SLOP_PRIORITY.md",
+        "slops/ARCH_SL0P_DEFENSE.json",
+        "slops/ARCH_SL0P_PROSECUTOR.json",
+        "lib/services/simpleDataService.ts"
+      ],
+      "guidance_for_ai_coding_prioritization": [
+        "Delete no-op branches when possible; otherwise emit runtime warning and explicit unsupported result.",
+        "Prevent silent accept-and-ignore options in public APIs.",
+        "Add tests that fail when unsupported options appear to succeed."
+      ]
+    },
+    {
+      "id": "ARCH-011",
+      "title": "Cache invalidation rule set includes non-active operations, diluting failure signal clarity",
+      "category": "Indirection without leverage",
+      "score": 5,
+      "trend": "new",
+      "failure_risk": "medium",
+      "defense_status": {
+        "justified": false,
+        "challenged_by_prosecutor": true
+      },
+      "references": [
+        "slops/ARCH_SLOP_PRIORITY.md",
+        "slops/ARCH_SL0P_DEFENSE.json",
+        "slops/ARCH_SL0P_PROSECUTOR.json",
+        "lib/services/cacheInvalidationRules.ts",
+        "lib/services/cachedDataService.ts",
+        "lib/services/cacheService.ts"
+      ],
+      "guidance_for_ai_coding_prioritization": [
+        "Prune speculative invalidation rules not exercised by active mutations.",
+        "Require each rule to have a traceable runtime owner or test.",
+        "Keep rule set minimal to preserve debugging signal quality."
+      ]
+    }
+  ],
+  "ai_coding_prioritization_queue": [
+    "ARCH-001",
+    "ARCH-002",
+    "ARCH-003",
+    "ARCH-006",
+    "ARCH-004",
+    "ARCH-005",
+    "ARCH-007",
+    "ARCH-010",
+    "ARCH-008",
+    "ARCH-009",
+    "ARCH-011"
+  ]
+}

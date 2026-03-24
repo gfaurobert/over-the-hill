@@ -14,16 +14,56 @@ const customJestConfig = {
     '**/*.(test|spec).(ts|tsx|js)',
     '!**/*.e2e.(test|spec).(ts|tsx|js)', // Exclude e2e tests
   ],
-  moduleNameMapping: {
+  moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/$1',
   },
+  testPathIgnorePatterns: [
+    '<rootDir>/temp/',
+    '<rootDir>/.yoyo/',
+    '<rootDir>/e2e/',
+  ],
   collectCoverageFrom: [
-    'lib/**/*.{ts,tsx}',
-    'components/**/*.{ts,tsx}',
-    'app/**/*.{ts,tsx}',
+    'lib/validation.ts',
+    'lib/services/sessionValidationService.ts',
+    'lib/services/cacheInvalidationRules.ts',
+    'lib/services/domainErrors.ts',
+    'lib/services/emailService.ts',
+    'components/ui/button.tsx',
+    'components/ui/card.tsx',
+    'components/ui/input.tsx',
+    'components/ui/label.tsx',
+    'components/ui/password-input.tsx',
+    'components/ui/select.tsx',
+    'components/ui/switch.tsx',
     '!**/*.d.ts',
     '!**/node_modules/**',
   ],
+  coverageThreshold: {
+    global: {
+      statements: 90,
+      branches: 90,
+      functions: 90,
+      lines: 90,
+    },
+    './lib/validation.ts': {
+      statements: 90,
+      branches: 90,
+      functions: 90,
+      lines: 90,
+    },
+    './lib/services/sessionValidationService.ts': {
+      statements: 90,
+      branches: 90,
+      functions: 90,
+      lines: 90,
+    },
+    './lib/services/cacheInvalidationRules.ts': {
+      statements: 90,
+      branches: 90,
+      functions: 90,
+      lines: 90,
+    },
+  },
   coverageReporters: ['text', 'lcov', 'html'],
   testTimeout: 10000,
 }

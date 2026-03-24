@@ -31,8 +31,11 @@ import {
   Undo2,
   Shield,
   Rocket,
+  Flag,
+  Palette,
 } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
+import { Switch } from "./ui/switch"
 import { useTheme } from "next-themes"
 import SignOutButton from "./SignOutButton"
 import { useAuth } from "./AuthProvider"
@@ -54,6 +57,8 @@ import {
   fetchSnapshots,
   loadSnapshot,
   resetAllCollections,
+  fetchUserPreferences,
+  updateUserPreferences,
   updateCollectionReleaseLineConfig,
   getCollectionReleaseLineConfig,
 } from "@/lib/services/simpleDataService"
@@ -66,6 +71,7 @@ export interface Dot {
   color: string
   size: number
   archived: boolean // always present
+  flag_for_today?: boolean
 }
 
 export interface ReleaseLineConfig {
@@ -100,7 +106,27 @@ export interface ExportData {
   version: string
 }
 
-const defaultColors = ["#3b82f6", "#22c55e", "#ef4444", "#f97316", "#8b5cf6"]
+interface DotColorPreferences {
+  discovery: string
+  upslope: string
+  dangerZone: string
+  downslope: string
+  done: string
+}
+
+const defaultDotColors: DotColorPreferences = {
+  discovery: "#b0cdfb",
+  upslope: "#a6e7be",
+  dangerZone: "#f8b4b4",
+  downslope: "#fcc7a1",
+  done: "#d0bdfb",
+}
+const dotColorLabels = ["Discovery", "On Track", "Blocked", "At Risk", "Done"]
+const defaultLightGradientStart = "#f8fafc"
+const defaultLightGradientEnd = "#e2e8f0"
+const defaultDarkGradientStart = "#0f172a"
+const defaultDarkGradientEnd = "#1e293b"
+const TODAY_COLLECTION_NAME = "Today"
 
 // Helper function to get local date string in YYYY-MM-DD format (consistent with backend)
 const getLocalDateString = (date: Date): string => {
@@ -235,7 +261,7 @@ function DotRow({ dot, dotMenuOpen, setDotMenuOpen, setDeleteConfirm, updateDot,
             />
           </SelectTrigger>
           <SelectContent>
-            {defaultColors.map((color, index) => (
+            {Object.values(defaultDotColors).map((color, index) => (
               <SelectItem key={color} value={color}>
                 <div className="flex items-center gap-2">
                   <div
@@ -243,7 +269,7 @@ function DotRow({ dot, dotMenuOpen, setDotMenuOpen, setDeleteConfirm, updateDot,
                     style={{ backgroundColor: color }}
                   />
                   <span className="text-sm">
-                    {['Blue', 'Green', 'Red', 'Orange', 'Purple'][index]}
+                    {dotColorLabels[index]}
                   </span>
                 </div>
               </SelectItem>
@@ -325,16 +351,29 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [isTyping, setIsTyping] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<{ dotId: string; dotLabel: string } | null>(null)
+  const [selectedDotIds, setSelectedDotIds] = useState<string[]>([])
+  const [batchDeleteConfirm, setBatchDeleteConfirm] = useState<{ dotIds: string[]; count: number } | null>(null)
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false)
-  const { theme, setTheme } = useTheme()
+  const { theme, setTheme, resolvedTheme } = useTheme()
+  const [gradientStartColor, setGradientStartColor] = useState(defaultLightGradientStart)
+  const [gradientEndColor, setGradientEndColor] = useState(defaultLightGradientEnd)
+  const [dotColors, setDotColors] = useState<DotColorPreferences>(defaultDotColors)
+  const previousDotColorsRef = useRef<DotColorPreferences>(defaultDotColors)
+  const hasInitializedDotColorSyncRef = useRef(false)
+  const [hasCustomGradientColors, setHasCustomGradientColors] = useState(false)
+  const [isSplitHillAreaFillEnabled, setIsSplitHillAreaFillEnabled] = useState(false)
+  const [hasHydratedUserPreferences, setHasHydratedUserPreferences] = useState(false)
   const ellipsisMenuRef = useRef<HTMLDivElement>(null)
+  const settingsModalRef = useRef<HTMLDivElement>(null)
 
   // Add click-outside-to-close behavior for main ellipsis menu
   useEffect(() => {
     function handleClick(e: MouseEvent) {
+      const target = e.target as Node
+      if (settingsModalRef.current?.contains(target)) return
       if (
         ellipsisMenuRef.current &&
-        !ellipsisMenuRef.current.contains(e.target as Node)
+        !ellipsisMenuRef.current.contains(target)
       ) {
         setShowEllipsisMenu(false)
       }
@@ -348,6 +387,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [copyStatus, setCopyStatus] = useState<"idle" | "copying" | "success" | "error">("idle")
   const [copyFormat, setCopyFormat] = useState<"PNG" | "SVG">("PNG")
   const [hideCollectionName, setHideCollectionName] = useState(false)
+  const [showTodayCollection, setShowTodayCollection] = useState(true)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [showInfoModal, setShowInfoModal] = useState(false)
   const { user } = useAuth()
@@ -376,7 +416,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   } | null>(null)
   const [showArchivedCollectionsModal, setShowArchivedCollectionsModal] = useState(false)
   const [showPrivacySettings, setShowPrivacySettings] = useState(false)
-  const [showReleaseLineSettings, setShowReleaseLineSettings] = useState(false)
+  const [showColorSettingsModal, setShowColorSettingsModal] = useState(false)
 
   // Collection editing state
   const [isEditingCollection, setIsEditingCollection] = useState(false)
@@ -386,6 +426,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   // Add state to track which dot is being edited
   const [editingDotId, setEditingDotId] = useState<string | null>(null)
+  const [editingDotLabel, setEditingDotLabel] = useState("")
 
   // Add state to track which dot's menu is open
   const [dotMenuOpen, setDotMenuOpen] = useState<string | null>(null)
@@ -399,6 +440,13 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     [collectionId: string]: ReleaseLineConfig
   }>({})
   const [isLoadingReleaseLineConfig, setIsLoadingReleaseLineConfig] = useState(false)
+  const dotColorOptions = [
+    dotColors.discovery,
+    dotColors.upslope,
+    dotColors.dangerZone,
+    dotColors.downslope,
+    dotColors.done,
+  ]
 
   // Release line configuration functions
   const loadReleaseLineConfig = useCallback(async (collectionId: string) => {
@@ -478,16 +526,52 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       // Fetch active collections with force refresh on login
       fetchCollections(user.id, false).then((activeCollections) => {
         console.log('[HILL_CHART] Loaded active collections:', activeCollections.length)
-        setCollections(activeCollections)
-        setOriginalCollections(activeCollections)
-        if (activeCollections.length > 0 && !selectedCollection) {
-          const firstCollection = activeCollections[0]
-          setSelectedCollection(firstCollection.id)
-          setCollectionInput(firstCollection.name)
-          // Load release line config for the first collection
-          loadReleaseLineConfig(firstCollection.id)
+        const todayCollectionId = `today-${user.id}`
+        const hasTodayCollection = activeCollections.some(
+          (collection) =>
+            collection.id === todayCollectionId || collection.name.toLowerCase() === TODAY_COLLECTION_NAME.toLowerCase(),
+        )
+
+        if (hasTodayCollection) {
+          setCollections(activeCollections)
+          setOriginalCollections(activeCollections)
+          if (activeCollections.length > 0 && !selectedCollection) {
+            const firstCollection =
+              activeCollections.find((collection) => collection.id !== todayCollectionId) || activeCollections[0]
+            setSelectedCollection(firstCollection.id)
+            setCollectionInput(firstCollection.name)
+            // Load release line config for the first collection
+            loadReleaseLineConfig(firstCollection.id)
+          }
+          setIsLoadingCollections(false)
+          return
         }
-        setIsLoadingCollections(false)
+
+        addCollection(user.id, TODAY_COLLECTION_NAME, todayCollectionId).then((todayCollection) => {
+          const collectionsWithToday = todayCollection ? [...activeCollections, todayCollection] : activeCollections
+          setCollections(collectionsWithToday)
+          setOriginalCollections(collectionsWithToday)
+          if (collectionsWithToday.length > 0 && !selectedCollection) {
+            const firstCollection =
+              collectionsWithToday.find((collection) => collection.id !== todayCollectionId) || collectionsWithToday[0]
+            setSelectedCollection(firstCollection.id)
+            setCollectionInput(firstCollection.name)
+            loadReleaseLineConfig(firstCollection.id)
+          }
+          setIsLoadingCollections(false)
+        }).catch((error) => {
+          console.error('[HILL_CHART] Failed to ensure Today collection exists:', error)
+          setCollections(activeCollections)
+          setOriginalCollections(activeCollections)
+          if (activeCollections.length > 0 && !selectedCollection) {
+            const firstCollection =
+              activeCollections.find((collection) => collection.id !== todayCollectionId) || activeCollections[0]
+            setSelectedCollection(firstCollection.id)
+            setCollectionInput(firstCollection.name)
+            loadReleaseLineConfig(firstCollection.id)
+          }
+          setIsLoadingCollections(false)
+        })
       }).catch((error) => {
         console.error('[HILL_CHART] Failed to fetch active collections:', error)
         setIsLoadingCollections(false)
@@ -543,6 +627,13 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     initServiceWorker()
   }, [])
 
+  useEffect(() => {
+    if (hasCustomGradientColors) return
+    const isDarkMode = resolvedTheme === "dark"
+    setGradientStartColor(isDarkMode ? defaultDarkGradientStart : defaultLightGradientStart)
+    setGradientEndColor(isDarkMode ? defaultDarkGradientEnd : defaultLightGradientEnd)
+  }, [resolvedTheme, hasCustomGradientColors])
+
   // Force refresh data when user returns to the app after being away
   useEffect(() => {
     const handleVisibilityChange = async () => {
@@ -574,8 +665,242 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
   }, [user])
 
-  const filteredCollections = collections.filter((c) => c.name.toLowerCase().includes(collectionInput.toLowerCase()))
-  const currentCollection = collections.find((c) => c.id === selectedCollection)
+  useEffect(() => {
+    if (!user?.id) {
+      setHasHydratedUserPreferences(false)
+      return
+    }
+
+    let isCancelled = false
+    const loadUserPreferences = async () => {
+      try {
+        const preferences = await fetchUserPreferences(user.id)
+        if (!preferences || isCancelled) return
+
+        setSelectedCollection(preferences.selectedCollectionId)
+        setCollectionInput(preferences.collectionInput)
+        setHideCollectionName(preferences.hideCollectionName)
+        setCopyFormat(preferences.copyFormat)
+        setShowTodayCollection(preferences.showTodayCollection)
+        setIsSplitHillAreaFillEnabled(preferences.splitHillAreaFillEnabled)
+        setDotColors({
+          discovery: preferences.dotColorDiscovery,
+          upslope: preferences.dotColorUpslope,
+          dangerZone: preferences.dotColorDangerZone,
+          downslope: preferences.dotColorDownslope,
+          done: preferences.dotColorDone,
+        })
+
+        if (preferences.gradientStartColor && preferences.gradientEndColor) {
+          setGradientStartColor(preferences.gradientStartColor)
+          setGradientEndColor(preferences.gradientEndColor)
+          setHasCustomGradientColors(true)
+        } else {
+          setHasCustomGradientColors(false)
+        }
+      } catch (error) {
+        console.error('[HILL_CHART] Failed to load user preferences:', error)
+      } finally {
+        if (!isCancelled) {
+          setHasHydratedUserPreferences(true)
+        }
+      }
+    }
+
+    loadUserPreferences()
+    return () => {
+      isCancelled = true
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    if (!user?.id || !hasHydratedUserPreferences) return
+
+    const timeoutId = window.setTimeout(async () => {
+      const success = await updateUserPreferences(user.id, {
+        selectedCollectionId: selectedCollection,
+        collectionInput,
+        hideCollectionName,
+        copyFormat,
+        gradientStartColor: hasCustomGradientColors ? gradientStartColor : null,
+        gradientEndColor: hasCustomGradientColors ? gradientEndColor : null,
+        dotColorDiscovery: dotColors.discovery,
+        dotColorUpslope: dotColors.upslope,
+        dotColorDangerZone: dotColors.dangerZone,
+        dotColorDownslope: dotColors.downslope,
+        dotColorDone: dotColors.done,
+        splitHillAreaFillEnabled: isSplitHillAreaFillEnabled,
+        showTodayCollection,
+      })
+
+      if (!success) {
+        console.error('[HILL_CHART] Failed to persist user preferences')
+      }
+    }, 250)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [
+    user?.id,
+    hasHydratedUserPreferences,
+    selectedCollection,
+    collectionInput,
+    hideCollectionName,
+    copyFormat,
+    gradientStartColor,
+    gradientEndColor,
+    dotColors,
+    hasCustomGradientColors,
+    isSplitHillAreaFillEnabled,
+    showTodayCollection,
+  ])
+
+  useEffect(() => {
+    if (!user?.id || !hasHydratedUserPreferences) return
+
+    if (!hasInitializedDotColorSyncRef.current) {
+      previousDotColorsRef.current = dotColors
+      hasInitializedDotColorSyncRef.current = true
+      return
+    }
+
+    const previousDotColors = previousDotColorsRef.current
+    const colorTransitions = new Map<string, string>([
+      [previousDotColors.discovery, dotColors.discovery],
+      [previousDotColors.upslope, dotColors.upslope],
+      [previousDotColors.dangerZone, dotColors.dangerZone],
+      [previousDotColors.downslope, dotColors.downslope],
+      [previousDotColors.done, dotColors.done],
+    ])
+
+    const dotsToUpdate = collections.flatMap((collection) =>
+      collection.dots
+        .filter((dot) => {
+          const nextColor = colorTransitions.get(dot.color)
+          return typeof nextColor === "string" && nextColor !== dot.color
+        })
+        .map((dot) => ({
+          ...dot,
+          color: colorTransitions.get(dot.color) as string,
+        })),
+    )
+
+    previousDotColorsRef.current = dotColors
+    if (dotsToUpdate.length === 0) return
+
+    const originalColorByDotId = new Map(
+      collections.flatMap((collection) => collection.dots.map((dot) => [dot.id, dot.color] as const)),
+    )
+    const dotsToUpdateById = new Map(dotsToUpdate.map((dot) => [dot.id, dot.color] as const))
+
+    setCollections((previousCollections) =>
+      previousCollections.map((collection) => ({
+        ...collection,
+        dots: collection.dots.map((dot) => {
+          const updatedColor = dotsToUpdateById.get(dot.id)
+          if (!updatedColor) return dot
+          return { ...dot, color: updatedColor }
+        }),
+      })),
+    )
+
+    void (async () => {
+      const updateResults = await Promise.allSettled(
+        dotsToUpdate.map((dot) => updateDotService(dot, user.id)),
+      )
+
+      const failedDotIds = dotsToUpdate
+        .filter((_, index) => {
+          const result = updateResults[index]
+          return result.status === "rejected" || result.value === null
+        })
+        .map((dot) => dot.id)
+
+      if (failedDotIds.length === 0) return
+
+      const failedDotIdsSet = new Set(failedDotIds)
+      setCollections((previousCollections) =>
+        previousCollections.map((collection) => ({
+          ...collection,
+          dots: collection.dots.map((dot) => {
+            if (!failedDotIdsSet.has(dot.id)) return dot
+            const originalColor = originalColorByDotId.get(dot.id)
+            if (!originalColor) return dot
+            return { ...dot, color: originalColor }
+          }),
+        })),
+      )
+      console.error("[HILL_CHART] Failed to persist some dot color updates after palette change")
+    })()
+  }, [dotColors, collections, hasHydratedUserPreferences, user?.id])
+
+  const todayCollectionId = user?.id ? `today-${user.id}` : null
+  const realTodayCollection = todayCollectionId ? collections.find((collection) => collection.id === todayCollectionId) : null
+  const nonTodayCollections = collections.filter((collection) => collection.id !== todayCollectionId)
+
+  const todayFlaggedDots = nonTodayCollections.flatMap((collection) =>
+    collection.dots
+      .filter((dot) => dot.flag_for_today && !dot.archived)
+      .map((dot) => ({ ...dot, id: dot.id })),
+  )
+
+  const todayOnlyDots = realTodayCollection ? realTodayCollection.dots : []
+  const todayDotKeys = new Set(todayFlaggedDots.map((dot) => dot.id))
+  const mergedTodayDots = [
+    ...todayFlaggedDots,
+    ...todayOnlyDots.filter((dot) => !todayDotKeys.has(dot.id)),
+  ]
+
+  const todayDisplayCollection: Collection | null =
+    todayCollectionId && showTodayCollection
+      ? {
+        id: todayCollectionId,
+        name: TODAY_COLLECTION_NAME,
+        status: "active",
+        dots: mergedTodayDots,
+      }
+      : null
+
+  const collectionsForSelector = [
+    ...(todayDisplayCollection ? [todayDisplayCollection] : []),
+    ...nonTodayCollections,
+  ]
+
+  const filteredCollections = collectionsForSelector.filter((c) =>
+    c.name.toLowerCase().includes(collectionInput.toLowerCase()),
+  )
+  const currentCollection = collectionsForSelector.find((c) => c.id === selectedCollection)
+  const isTodaySelected = todayCollectionId !== null && selectedCollection === todayCollectionId
+
+  useEffect(() => {
+    setSelectedDotIds([])
+  }, [selectedCollection])
+
+  useEffect(() => {
+    if (!dotMenuOpen) return
+
+    function handleDotActionMenuOutsideClick(event: MouseEvent) {
+      const target = event.target as HTMLElement
+      const dotActionRoot = target.closest("[data-dot-action-root]")
+      if (!dotActionRoot) {
+        setDotMenuOpen(null)
+        return
+      }
+
+      const dotId = dotActionRoot.getAttribute("data-dot-action-root")
+      if (dotId !== dotMenuOpen) setDotMenuOpen(null)
+    }
+
+    document.addEventListener("mousedown", handleDotActionMenuOutsideClick)
+    return () => document.removeEventListener("mousedown", handleDotActionMenuOutsideClick)
+  }, [dotMenuOpen])
+
+  useEffect(() => {
+    if (showTodayCollection) return
+    if (!todayCollectionId || selectedCollection !== todayCollectionId) return
+    const fallbackCollection = nonTodayCollections[0]
+    setSelectedCollection(fallbackCollection?.id || null)
+    setCollectionInput(fallbackCollection?.name || "")
+  }, [showTodayCollection, selectedCollection, todayCollectionId, nonTodayCollections])
 
   const updateDot = useCallback(
     async (dotId: string, updates: Partial<Dot>) => {
@@ -648,10 +973,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       if (isDragging && draggingDot) {
         const updates: Partial<Dot> = { x: draggingDot.x, y: draggingDot.y }
         if (draggingDot.x === 100) {
-          updates.color = defaultColors[4]
+          updates.color = dotColorOptions[4]
           updates.size = 1
         } else if (draggingDot.x > 50) {
-          updates.color = defaultColors[1]
+          updates.color = dotColorOptions[1]
           updates.size = 3
         }
         updateDot(draggingDot.id, updates)
@@ -682,9 +1007,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       label: newDotLabel,
       x: 50,
       y: getHillY(50),
-      color: defaultColors[0],
+      color: dotColorOptions[0],
       size: 3,
       archived: false,
+      flag_for_today: false,
     }
 
     try {
@@ -704,13 +1030,48 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
   }
 
+  function startEditingDotLabel(dot: Dot) {
+    setEditingDotId(dot.id)
+    setEditingDotLabel(dot.label)
+  }
+
+  function cancelEditingDotLabel() {
+    setEditingDotId(null)
+    setEditingDotLabel("")
+  }
+
+  async function confirmEditingDotLabel(dot: Dot) {
+    const trimmedLabel = editingDotLabel.trim()
+    if (!trimmedLabel) {
+      cancelEditingDotLabel()
+      return
+    }
+
+    if (trimmedLabel !== dot.label) {
+      await updateDot(dot.id, { label: trimmedLabel })
+    }
+
+    cancelEditingDotLabel()
+  }
+
+  function getOwningCollectionId(dotId: string): string | null {
+    const owner = collections.find((collection) => collection.dots.some((dot) => dot.id === dotId))
+    return owner?.id || null
+  }
+
   const confirmDelete = async () => {
-    if (deleteConfirm && selectedCollection && user) {
-      const success = await deleteDotService(user.id, selectedCollection, deleteConfirm.dotId)
+    if (deleteConfirm && user) {
+      const owningCollectionId = getOwningCollectionId(deleteConfirm.dotId)
+      if (!owningCollectionId) {
+        setDeleteConfirm(null)
+        return
+      }
+
+      const success = await deleteDotService(user.id, owningCollectionId, deleteConfirm.dotId)
       if (success) {
         setCollections((prev) =>
           prev.map((c) =>
-            c.id === selectedCollection ? { ...c, dots: c.dots.filter((d) => d.id !== deleteConfirm.dotId) } : c,
+            c.id === owningCollectionId ? { ...c, dots: c.dots.filter((d) => d.id !== deleteConfirm.dotId) } : c,
           ),
         )
       }
@@ -718,9 +1079,115 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
   }
 
+  const confirmBatchDelete = async () => {
+    if (!batchDeleteConfirm || !user) return
+
+    const deletionResults = await Promise.all(
+      batchDeleteConfirm.dotIds.map(async (dotId) => {
+        const owningCollectionId = getOwningCollectionId(dotId)
+        if (!owningCollectionId) return { dotId, owningCollectionId: null, success: false }
+        const success = await deleteDotService(user.id, owningCollectionId, dotId)
+        return { dotId, owningCollectionId, success }
+      }),
+    )
+
+    const deletedDotIds = deletionResults.filter((result) => result.success).map((result) => result.dotId)
+    const deletedDotIdsByCollection = deletionResults
+      .filter((result) => result.success && result.owningCollectionId)
+      .reduce<Record<string, string[]>>((acc, result) => {
+        const collectionId = result.owningCollectionId as string
+        if (!acc[collectionId]) acc[collectionId] = []
+        acc[collectionId].push(result.dotId)
+        return acc
+      }, {})
+
+    if (deletedDotIds.length > 0) {
+      setCollections((prev) =>
+        prev.map((collection) =>
+          deletedDotIdsByCollection[collection.id]
+            ? {
+              ...collection,
+              dots: collection.dots.filter((dot) => !deletedDotIdsByCollection[collection.id].includes(dot.id)),
+            }
+            : collection,
+        ),
+      )
+    }
+
+    setSelectedDotIds((prev) => prev.filter((dotId) => !deletedDotIds.includes(dotId)))
+    setBatchDeleteConfirm(null)
+  }
+
+  const archiveSelectedDots = async () => {
+    if (!selectedCollection) return
+    const selectedIds = activeDots.filter((dot) => selectedDotIds.includes(dot.id)).map((dot) => dot.id)
+    if (selectedIds.length === 0) return
+
+    const archiveResults = await Promise.allSettled(selectedIds.map((dotId) => updateDot(dotId, { archived: true })))
+    const archivedDotIds = selectedIds.filter((_, index) => {
+      const result = archiveResults[index]
+      return result.status === "fulfilled"
+    })
+
+    if (archivedDotIds.length > 0) {
+      setSelectedDotIds((prev) => prev.filter((dotId) => !archivedDotIds.includes(dotId)))
+    }
+  }
+
+  const markSelectedDotsAsDone = async () => {
+    if (!selectedCollection) return
+    const selectedIds = activeDots.filter((dot) => selectedDotIds.includes(dot.id)).map((dot) => dot.id)
+    if (selectedIds.length === 0) return
+
+    const doneColor = dotColorOptions[4]
+    const doneX = 100
+    const doneY = getHillY(doneX)
+    const doneResults = await Promise.allSettled(
+      selectedIds.map((dotId) =>
+        updateDot(dotId, {
+          x: doneX,
+          y: doneY,
+          color: doneColor,
+          size: 1,
+        }),
+      ),
+    )
+    const doneDotIds = selectedIds.filter((_, index) => {
+      const result = doneResults[index]
+      return result.status === "fulfilled"
+    })
+
+    if (doneDotIds.length > 0) {
+      setSelectedDotIds((prev) => prev.filter((dotId) => !doneDotIds.includes(dotId)))
+    }
+  }
+
+  const flagSelectedDotsForToday = async (enabled: boolean) => {
+    if (!selectedCollection) return
+    const selectedIds = activeDots.filter((dot) => selectedDotIds.includes(dot.id)).map((dot) => dot.id)
+    if (selectedIds.length === 0) return
+
+    const updateResults = await Promise.allSettled(
+      selectedIds.map((dotId) =>
+        updateDot(dotId, {
+          flag_for_today: enabled,
+        }),
+      ),
+    )
+    const updatedDotIds = selectedIds.filter((_, index) => {
+      const result = updateResults[index]
+      return result.status === "fulfilled"
+    })
+
+    if (updatedDotIds.length > 0) {
+      setSelectedDotIds((prev) => prev.filter((dotId) => !updatedDotIds.includes(dotId)))
+    }
+  }
+
   // Archive operation handlers
   const handleArchiveCollection = async (collectionId: string) => {
     if (!user) return
+    if (todayCollectionId && collectionId === todayCollectionId) return
 
     const success = await archiveCollection(user.id, collectionId)
     if (success) {
@@ -776,6 +1243,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   const handleDeleteCollection = async (collectionId: string) => {
     if (!user) return
+    if (todayCollectionId && collectionId === todayCollectionId) return
 
     const success = await deleteCollection(user.id, collectionId)
     if (success) {
@@ -1148,7 +1616,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         y: dot.y,
         color: dot.color,
         size: dot.size,
-        archived: Boolean(dot.archived) // Ensure it's a boolean
+        archived: Boolean(dot.archived), // Ensure it's a boolean
+        flag_for_today: Boolean(dot.flag_for_today),
       })),
       // Include release line configuration if it exists
       ...(releaseLineSettings[collection.id] && {
@@ -1168,7 +1637,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         y: dot.y,
         color: dot.color,
         size: dot.size,
-        archived: Boolean(dot.archived)
+        archived: Boolean(dot.archived),
+        flag_for_today: Boolean(dot.flag_for_today),
       })),
       timestamp: snapshot.timestamp,
       // Include release line configuration if it exists in the snapshot
@@ -1498,7 +1968,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const handleViewLive = () => {
     // Restore original collections
     setCollections(originalCollections)
-    const firstCollection = originalCollections[0]
+    const firstCollection =
+      originalCollections.find((collection) => !todayCollectionId || collection.id !== todayCollectionId) ||
+      originalCollections[0]
     setSelectedCollection(firstCollection?.id || null)
     setCollectionInput(firstCollection?.name || "")
     setCurrentSnapshot(null)
@@ -1620,15 +2092,42 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const archivedDots: Dot[] = (currentCollection?.dots || [])
     .filter((dot: Dot) => dot.archived)
     .sort((a, b) => b.x - a.x);
+  const selectedActiveDotCount = activeDots.filter((dot) => selectedDotIds.includes(dot.id)).length
+
+  function handleGradientColorChange(colorRole: "start" | "end", value: string) {
+    setHasCustomGradientColors(true)
+    if (colorRole === "start") setGradientStartColor(value)
+    else setGradientEndColor(value)
+  }
+
+  function handleResetGradientColors() {
+    const isDarkMode = resolvedTheme === "dark"
+    setHasCustomGradientColors(false)
+    setGradientStartColor(isDarkMode ? defaultDarkGradientStart : defaultLightGradientStart)
+    setGradientEndColor(isDarkMode ? defaultDarkGradientEnd : defaultLightGradientEnd)
+  }
+
+  function handleResetDotColors() {
+    setDotColors({ ...defaultDotColors })
+  }
+
+  const hillCurvePath = generateBellCurvePath(600, 150, 300)
+  const hillAreaPath = `${hillCurvePath} L 600 150 L 0 150 Z`
 
   return (
-    <div className="min-h-screen p-4 bg-transparent" style={{ userSelect: isDragging ? "none" : "auto" }}>
-      <div className="max-w-screen-2xl mx-auto space-y-6">
+    <div
+      className="min-h-screen px-4 py-3 "
+      style={{
+        userSelect: isDragging ? "none" : "auto",
+        backgroundImage: `linear-gradient(135deg, ${gradientStartColor} 0%, ${gradientEndColor} 100%)`,
+      }}
+    >
+      <div className="mx-auto max-w-[1220px] space-y-3">
         {/* Main Chart Area */}
-        <div className="grid grid-cols-1 lg:grid-cols-[2.4fr_1.2fr] gap-6">
-          <div className="lg:col-span-1 space-y-6">
-            <Card className="h-[600px]">
-              <CardHeader className="flex flex-row items-center justify-between">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[2.35fr_1fr]">
+          <div className="mr-[15px] space-y-4 rounded-lg shadow-[0px_16px_20px_5px_rgba(0,0,0,0.1)]">
+            <Card className="h-full overflow-hidden">
+              <CardHeader className="flex flex-row items-center justify-between py-3">
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={downloadChartAsPNG}>
                     <Download className="w-4 h-4 mr-1" />
@@ -1654,7 +2153,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="p-2">
+              <CardContent className="p-3 pt-0">
                 {/* Loading overlay */}
                 {isLoadingCollections && (
                   <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg">
@@ -1667,21 +2166,59 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                     </div>
                   </div>
                 )}
-                <div className="relative w-full h-full bg-background -m-2 flex items-center justify-center">
+                <div className="relative flex h-[235px] w-full items-center justify-center rounded-md bg-background">
                   <svg
                     ref={svgRef}
                     width="100%"
                     height="100%"
-                    viewBox="-50 -100 700 180" // Moved chart down by using negative Y offset
+                    viewBox="-28 -46 655 210"
                     className="overflow-visible max-w-full"
                     style={{ userSelect: isDragging ? "none" : "auto" }}
                   >
+                    <defs>
+                      <linearGradient id="hillGradientFill" x1="0%" y1="0%" x2="100%" y2="0%">
+                        <stop offset="0%" stopColor="#c7d2fe" stopOpacity="0.12" />
+                        <stop offset="55%" stopColor="#60a5fa" stopOpacity="0.2" />
+                        <stop offset="100%" stopColor="#a78bfa" stopOpacity="0.14" />
+                      </linearGradient>
+                      <clipPath id="splitHillLeftClip">
+                        <rect x="0" y="-60" width="300" height="240" />
+                      </clipPath>
+                      <clipPath id="splitHillRightClip">
+                        <rect x="300" y="-60" width="300" height="240" />
+                      </clipPath>
+                    </defs>
+                    {/* Bell curve area fill */}
+                    {isSplitHillAreaFillEnabled ? (
+                      <>
+                        <path
+                          d={hillAreaPath}
+                          fill={gradientStartColor}
+                          fillOpacity="0.22"
+                          clipPath="url(#splitHillLeftClip)"
+                          stroke="none"
+                        />
+                        <path
+                          d={hillAreaPath}
+                          fill={gradientEndColor}
+                          fillOpacity="0.22"
+                          clipPath="url(#splitHillRightClip)"
+                          stroke="none"
+                        />
+                      </>
+                    ) : (
+                      <path
+                        d={hillAreaPath}
+                        fill="url(#hillGradientFill)"
+                        stroke="none"
+                      />
+                    )}
                     {/* Bell curve */}
                     <path
                       className="bg-transparent shadow-none leading-9"
-                      d={generateBellCurvePath(600, 150, 300)}
-                      stroke="currentColor"
-                      strokeWidth="1"
+                      d={hillCurvePath}
+                      stroke="#374151"
+                      strokeWidth="1.25"
                       fill="none"
                     />
 
@@ -1692,8 +2229,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       y1="150"
                       x2="600"
                       y2="150"
-                      stroke="currentColor"
-                      strokeWidth="1"
+                      stroke="#374151"
+                      strokeWidth="1.15"
                     />
 
                     {/* Center divider */}
@@ -1921,12 +2458,16 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       // Render dots with collision-free labels
                       return (currentCollection?.dots || []).filter(dot => !dot.archived).map((dot) => {
                         const dotX = (dot.x / 100) * 600;
-                        const dotRadius = 4 + dot.size * 2;
 
                         // Use draggingDot for immediate feedback if this dot is being dragged with null safety
                         const isBeingDragged = draggingDot?.id === dot.id;
-                        const displayX = isBeingDragged && draggingDot ? (draggingDot.x / 100) * 600 : dotX;
+                        const currentXPercent = isBeingDragged && draggingDot ? draggingDot.x : dot.x;
+                        const displayX = (currentXPercent / 100) * 600;
                         const displayY = isBeingDragged && draggingDot ? draggingDot.y : dot.y;
+                        const isBelowFiftyPercent = currentXPercent < 50;
+                        const displayDotSize = isBelowFiftyPercent ? 3 : dot.size;
+                        const displayDotColor = isBelowFiftyPercent ? defaultDotColors.discovery : dot.color;
+                        const dotRadius = 4 + displayDotSize * 2;
 
                         // Get calculated label position
                         const labelPos = labelPositions[dot.id];
@@ -1941,7 +2482,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                               cx={displayX}
                               cy={displayY}
                               r={dotRadius}
-                              fill={dot.color}
+                              fill={displayDotColor}
                               stroke="#fff"
                               strokeWidth="2"
                               className={`cursor-pointer hover:opacity-80 ${isBeingDragged ? '' : 'transition-all'}`}
@@ -1954,7 +2495,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                               height={labelPos.height}
                               rx="8"
                               ry="8"
-                              fill="hsl(var(--background))"
+                              fill={displayDotColor}
                               stroke="hsl(var(--border))"
                               strokeWidth="1"
                               opacity={opacity}
@@ -1983,24 +2524,12 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           </div>
 
           {/* Sidebar */}
-          <div className="space-y-6">
-            <Card className="h-[600px]">
-              <CardHeader className="flex flex-row items-center justify-between">
+          <div className="space-y-3 rounded-lg shadow-[0px_16px_20px_5px_rgba(0,0,0,0.1)]">
+            <Card className="shadow-sm overflow-visible">
+              <CardHeader className="flex flex-row items-center justify-between py-3">
                 <div className="flex flex-col">
-                  <CardTitle className="text-lg">Over The Hill</CardTitle>
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="text-sm text-muted-foreground">
-                      Inspired by{" "}
-                      <a
-                        href="https://37signals.com/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        37signals
-                      </a>{" "}
-                      Hill Chart
-                    </span>
+                  <div className="flex items-center gap-1">
+                    <CardTitle className="text-lg">Over The Hill</CardTitle>
                     <Button
                       variant="ghost"
                       size="sm"
@@ -2015,15 +2544,38 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowEllipsisMenu(!showEllipsisMenu)}
+                    onClick={() => {
+                      if (!showEllipsisMenu) setShowColorSettingsModal(false)
+                      setShowEllipsisMenu(!showEllipsisMenu)
+                    }}
                     className="h-8 w-8 p-0"
                   >
                     <MoreHorizontal className="w-4 h-4" />
                   </Button>
 
                   {showEllipsisMenu && (
-                    <div className="absolute right-0 top-8 w-56 bg-background border border-border rounded-md shadow-lg z-50">
-                      <div className="py-1">
+                    <div
+                      className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4"
+                      onMouseDown={() => setShowEllipsisMenu(false)}
+                    >
+                      <div
+                        ref={settingsModalRef}
+                        className="w-[95vw] max-w-5xl md:min-w-[800px] max-h-[85vh] overflow-hidden rounded-lg border border-border bg-background shadow-lg"
+                        onMouseDown={(event) => event.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                          <h3 className="text-base font-semibold">Settings</h3>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowEllipsisMenu(false)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 overflow-y-auto max-h-[calc(85vh-56px)]">
+                          <div className="py-1 rounded-md border border-border/60">
                         {/* Theme Section */}
                         <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
                           Theme
@@ -2088,13 +2640,12 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         </div>
                         <button
                           onClick={() => {
-                            setShowReleaseLineSettings(true)
+                            setShowColorSettingsModal(true)
                             setShowEllipsisMenu(false)
                           }}
                           className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                          disabled={!selectedCollection}
                         >
-                          <Rocket className="w-4 h-4" /> Release Line
+                          <Palette className="w-4 h-4" /> Color Settings
                         </button>
                         <button
                           onClick={() => {
@@ -2105,6 +2656,16 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         >
                           <Monitor className="w-4 h-4" /> Hide Collection Name{" "}
                           {hideCollectionName && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowTodayCollection(!showTodayCollection)
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Sun className="w-4 h-4" /> Show Today Collection{" "}
+                          {showTodayCollection && <Check className="w-4 h-4 ml-auto" />}
                         </button>
                         <button
                           onClick={() => {
@@ -2145,7 +2706,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                           <input type="file" accept=".json" onChange={handleImport} className="hidden" />
                         </label>
                       </div>
-                      <div className="py-1">
+                      <div className="py-1 rounded-md border border-border/60">
                         {/* Account Section */}
                         <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
                           Account
@@ -2153,7 +2714,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         {/* Username Display */}
                         <div className="px-3 py-2 text-sm text-muted-foreground border-b border-border">
                           <div className="flex items-center gap-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></div>
+                            <div className="h-2 w-2 shrink-0 rounded-full bg-green-500"></div>
                             <span className="truncate max-w-[180px]" title={user?.user_metadata?.name || user?.email || 'Unknown User'}>
                               {user?.user_metadata?.name || user?.email || 'Unknown User'}
                             </span>
@@ -2229,27 +2790,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                           }}
                           className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 text-orange-600 dark:text-orange-400"
                         >
-                          <Trash2 className="w-4 h-4" /> Clear All Storage
+                          <Trash2 className="w-4 h-4" /> Clear Local Storage
                         </button>
-                        <button
-                          onClick={async () => {
-                            if (confirm('This will clear the service worker cache and reload the page. Continue?')) {
-                              console.log('[HILL_CHART] Service worker cache clear requested')
-                              try {
-                                const { clearServiceWorkerCache } = await import('@/lib/utils/serviceWorkerUtils')
-                                await clearServiceWorkerCache()
-                                console.log('[HILL_CHART] Service worker cache cleared, reloading...')
-                                window.location.reload()
-                              } catch (error) {
-                                console.error('[HILL_CHART] Failed to clear service worker cache:', error)
-                              }
-                            }
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 text-blue-600 dark:text-blue-400"
-                        >
-                          <Download className="w-4 h-4" /> Clear SW Cache
-                        </button>
-
                         {/* Privacy Section */}
                         <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
                           Privacy
@@ -2275,13 +2817,15 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                           <Heart className="w-4 h-4" /> Send Tip
                         </button>
                       </div>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-3 pt-0">
                 <div className="relative" ref={dropdownRef}>
-                  <label className="text-sm font-medium mb-2 block">Collections</label>
+                  <label className="text-sm font-medium mb-2 block">Collection</label>
                   <div className="relative">
                     {isEditingCollection ? (
                       <div className="flex items-center gap-2">
@@ -2320,11 +2864,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                           onChange={handleInputChange}
                           onKeyPress={handleCollectionInputKeyPress}
                           onFocus={handleInputFocus}
-                          placeholder="Type to search or create collection..."
+                          placeholder="Select a collection..."
                           className="pr-16"
                         />
                         <div className="absolute right-0 top-0 h-full flex items-center gap-1">
-                          {selectedCollection && (
+                          {selectedCollection && !isTodaySelected && (
                             <>
                               <Button
                                 variant="ghost"
@@ -2435,9 +2979,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         </div>
       </div>
 
-      {/* Dots Section - Full width below both chart and sidebar */}
-      <Card className="max-w-[1540px] mx-auto mt-7">
-        <CardHeader className="flex flex-row items-center justify-between">
+      {/* Dots section */}
+      <Card className="mx-auto mt-[60px] max-w-[1220px] shadow-sm">
+        <CardHeader className="flex flex-row items-center justify-between py-3">
           <CardTitle className="text-lg">Dots</CardTitle>
           <Button
             variant="ghost"
@@ -2459,7 +3003,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             <ArrowUpDown className="w-4 h-4 text-gray-500" />
           </Button>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 pt-0">
           <Input
             placeholder="Enter dot name and press Enter to add..."
             value={newDotLabel}
@@ -2471,59 +3015,295 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             onFocus={() => setEditingDotId(null)}
             onKeyPress={(e) => e.key === "Enter" && addDot()}
             maxLength={24}
+            className="h-8 text-xs"
           />
           {newDotLabel.length === 24 && editingDotId === null && (
             <div className="text-xs text-red-500 mt-1">Dot name cannot exceed 24 characters.</div>
           )}
+          {activeDots.length > 0 && (
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs text-muted-foreground">
+                {selectedActiveDotCount > 0
+                  ? `${selectedActiveDotCount} selected`
+                  : "Select dots to batch edit"}
+              </div>
+              <div className="flex items-center gap-1">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-7 px-2 text-[11px]"
+                  onClick={() => {
+                    const allActiveDotIds = activeDots.map((dot) => dot.id)
+                    setSelectedDotIds((prev) => {
+                      const areAllSelected =
+                        allActiveDotIds.length > 0 && allActiveDotIds.every((dotId) => prev.includes(dotId))
+                      return areAllSelected ? [] : allActiveDotIds
+                    })
+                  }}
+                >
+                  {selectedActiveDotCount === activeDots.length ? "Clear" : "Select all"}
+                </Button>
+                {selectedActiveDotCount > 0 && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={archiveSelectedDots}
+                    >
+                      Archive
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={markSelectedDotsAsDone}
+                    >
+                      Mark as Done
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={() => flagSelectedDotsForToday(true)}
+                    >
+                      Flag for Today
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={() => flagSelectedDotsForToday(false)}
+                    >
+                      Unflag Today
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      className="h-7 px-2 text-[11px]"
+                      onClick={() =>
+                        setBatchDeleteConfirm({
+                          dotIds: activeDots.filter((dot) => selectedDotIds.includes(dot.id)).map((dot) => dot.id),
+                          count: selectedActiveDotCount,
+                        })
+                      }
+                    >
+                      Delete
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
 
-          <div className="space-y-2">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             {activeDots.map((dot: Dot) => (
-              <DotRow
+              <div
                 key={dot.id}
-                dot={dot}
-                dotMenuOpen={dotMenuOpen}
-                setDotMenuOpen={setDotMenuOpen}
-                setDeleteConfirm={setDeleteConfirm}
-                updateDot={updateDot}
-                editingDotId={editingDotId}
-                setEditingDotId={setEditingDotId}
-              />
+                className={`rounded-md border bg-background p-2.5 shadow-[0px_4px_12px_0px_rgba(0,0,0,0.15)] ${selectedDotIds.includes(dot.id) ? "border-destructive/70 ring-1 ring-destructive/40" : "border-border"}`}
+              >
+                <div className="mb-1.5 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    className={`h-4 w-4 shrink-0 rounded-sm border transition-colors ${selectedDotIds.includes(dot.id) ? "border-destructive bg-destructive text-destructive-foreground" : "border-border bg-background"}`}
+                    onClick={() =>
+                      setSelectedDotIds((prev) =>
+                        prev.includes(dot.id) ? prev.filter((dotId) => dotId !== dot.id) : [...prev, dot.id],
+                      )
+                    }
+                    aria-label={
+                      selectedDotIds.includes(dot.id)
+                        ? `Unselect ${dot.label} for batch delete`
+                        : `Select ${dot.label} for batch delete`
+                    }
+                  >
+                    {selectedDotIds.includes(dot.id) && <Check className="h-3 w-3" />}
+                  </button>
+                  {editingDotId === dot.id ? (
+                    <div className="flex min-w-0 flex-1 items-center gap-1">
+                      <Input
+                        value={editingDotLabel}
+                        onChange={(e) => {
+                          if (e.target.value.length <= 24) {
+                            setEditingDotLabel(e.target.value)
+                          }
+                        }}
+                        onKeyDown={async (e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault()
+                            await confirmEditingDotLabel(dot)
+                          }
+                          if (e.key === "Escape") {
+                            e.preventDefault()
+                            cancelEditingDotLabel()
+                          }
+                        }}
+                        autoFocus
+                        maxLength={24}
+                        className="h-6 text-xs"
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={() => cancelEditingDotLabel()}
+                        aria-label={`Cancel renaming ${dot.label}`}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        onClick={async () => {
+                          await confirmEditingDotLabel(dot)
+                        }}
+                        aria-label={`Save renaming ${dot.label}`}
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <p
+                      className="truncate text-xs font-medium"
+                      onDoubleClick={() => startEditingDotLabel(dot)}
+                      title="Double-click to rename"
+                    >
+                      {dot.label}
+                    </p>
+                  )}
+                  <span className="text-xs text-muted-foreground">{Math.round(dot.x)}%</span>
+                </div>
+                <div className="mb-2 h-1.5 w-full rounded-full bg-muted">
+                  <div
+                    className="h-1.5 rounded-full"
+                    style={{ width: `${Math.max(0, Math.min(100, dot.x))}%`, backgroundColor: dot.color }}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-1">
+                  <div className="flex items-center gap-1">
+                    <Select
+                      value={dot.color}
+                      onValueChange={(value) => updateDot(dot.id, { color: value })}
+                    >
+                      <SelectTrigger className="h-6 w-6 border-0 bg-transparent p-0 shadow-none">
+                        <div
+                          className="h-3 w-4 rounded-full border border-border"
+                          style={{ backgroundColor: dot.color }}
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dotColorOptions.map((color, index) => (
+                          <SelectItem key={color} value={color}>
+                            <div className="flex items-center gap-2">
+                              <div
+                                className="h-4 w-4 rounded-full border border-border"
+                                style={{ backgroundColor: color }}
+                              />
+                              <span className="text-xs">
+                                {dotColorLabels[index]}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={dot.size.toString()}
+                      onValueChange={(value) => updateDot(dot.id, { size: Number(value) })}
+                    >
+                      <SelectTrigger className="h-6 w-10 px-1 text-[11px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5].map((size) => (
+                          <SelectItem key={size} value={size.toString()}>
+                            {size}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="relative flex items-center gap-1" data-dot-action-root={dot.id}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      onClick={() => setDotMenuOpen((prev) => (prev === dot.id ? null : dot.id))}
+                      aria-label={`Open actions for ${dot.label}`}
+                    >
+                      <MoreHorizontal className="h-3.5 w-3.5" />
+                    </Button>
+                    {dotMenuOpen === dot.id && (
+                      <div className="absolute right-0 top-7 z-20 min-w-[150px] rounded-md border border-border bg-background shadow-md">
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] hover:bg-accent hover:text-accent-foreground"
+                          onClick={async () => {
+                            await updateDot(dot.id, { flag_for_today: !dot.flag_for_today })
+                            setDotMenuOpen(null)
+                          }}
+                        >
+                          <Flag className="h-3.5 w-3.5" />
+                          {dot.flag_for_today ? "Unflag Today" : "Flag Today"}
+                        </button>
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] hover:bg-accent hover:text-accent-foreground"
+                          onClick={async () => {
+                            await updateDot(dot.id, { archived: true })
+                            setDotMenuOpen(null)
+                          }}
+                        >
+                          <ArchiveIcon className="h-3.5 w-3.5" />
+                          Archive
+                        </button>
+                        <button
+                          type="button"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-destructive hover:bg-accent"
+                          onClick={() => {
+                            setDeleteConfirm({ dotId: dot.id, dotLabel: dot.label })
+                            setDotMenuOpen(null)
+                          }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
           {archivedDots.length > 0 && (
             <>
-              <div className="border-t border-border my-2" />
+              <div className="my-2 border-t border-border" />
               <div className="text-xs text-muted-foreground mb-1">Archived</div>
-              {archivedDots.map((dot: Dot) => (
-                <div key={dot.id} className="p-3 bg-muted/50 rounded-lg space-y-3 opacity-60 italic">
-                  <div className="flex items-center gap-2">
-                    <Input value={dot.label} disabled className="text-sm flex-1 italic" />
-                    <div className="relative">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setDotMenuOpen(dotMenuOpen === dot.id ? null : dot.id)}
-                        className="h-8 w-8 p-0 border-muted hover:border-accent hover:bg-accent/20"
-                      >
-                        <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-                      </Button>
-                      {dotMenuOpen === dot.id && (
-                        <div className="absolute right-0 top-9 z-50 bg-background border border-border rounded shadow-lg min-w-[140px]">
-                          <button
-                            className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-accent hover:text-accent-foreground"
-                            onClick={async () => {
-                              setDotMenuOpen(null)
-                              await updateDot(dot.id, { archived: false })
-                            }}
-                          >
-                            <Undo2 className="w-4 h-4 text-muted-foreground" /> Unarchive
-                          </button>
-                        </div>
-                      )}
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                {archivedDots.map((dot: Dot) => (
+                  <div
+                    key={dot.id}
+                    className="rounded-md border border-border bg-muted/40 p-2.5 opacity-65 grayscale shadow-[0px_4px_12px_0px_rgba(0,0,0,0.1)]"
+                  >
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <p className="truncate text-xs font-medium italic text-muted-foreground">{dot.label}</p>
+                      <span className="text-xs text-muted-foreground">{Math.round(dot.x)}%</span>
                     </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-6 w-full px-2 text-[11px]"
+                      onClick={async () => {
+                        await updateDot(dot.id, { archived: false })
+                      }}
+                    >
+                      <Undo2 className="mr-1 h-3.5 w-3.5" />
+                      Unarchive
+                    </Button>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </>
           )}
         </CardContent>
@@ -2531,7 +3311,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
       {/* Modals */}
       {deleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Delete Dot</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
@@ -2548,8 +3328,27 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           </div>
         </div>
       )}
+      {batchDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Delete Selected Dots</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              Are you sure you want to delete {batchDeleteConfirm.count} selected
+              {batchDeleteConfirm.count === 1 ? " dot" : " dots"}? This action cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setBatchDeleteConfirm(null)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={confirmBatchDelete}>
+                Delete Selected
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {showResetConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Reset All Collections</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
@@ -2588,7 +3387,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         </div>
       )}
       {archiveConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Archive Collection</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
@@ -2606,7 +3405,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         </div>
       )}
       {deleteCollectionConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2 text-destructive">Delete Collection</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
@@ -2624,7 +3423,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         </div>
       )}
       {collectionNameConflict && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Collection Name Already Exists</h3>
             {collectionNameConflict.type === 'active' ? (
@@ -2659,7 +3458,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         </div>
       )}
       {showInfoModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold mb-4">About Hill Charts</h3>
             <div className="text-gray-600 dark:text-gray-300 space-y-3">
@@ -2696,7 +3495,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         </div>
       )}
       {showImportSuccess && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Import Successful</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
@@ -2711,7 +3510,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         </div>
       )}
       {importError && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
             <h3 className="text-lg font-semibold mb-2">Import Error</h3>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
@@ -2726,7 +3525,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         </div>
       )}
       {showArchivedCollectionsModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -2757,7 +3556,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                     className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border"
                   >
                     <div className="flex items-center gap-3 text-muted-foreground min-w-0 flex-1">
-                      <ArchiveIcon className="w-5 h-5 flex-shrink-0" />
+                      <ArchiveIcon className="h-5 w-5 shrink-0" />
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium opacity-75 truncate">{collection.name}</p>
                         <p className="text-xs opacity-50">
@@ -2770,7 +3569,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-2 flex-shrink-0">
+                    <div className="flex shrink-0 gap-2">
                       <Button
                         variant="outline"
                         size="sm"
@@ -2814,16 +3613,16 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         <PrivacySettings onClose={() => setShowPrivacySettings(false)} />
       )}
 
-      {/* Release Line Settings Modal */}
-      {showReleaseLineSettings && selectedCollection && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      {/* Color Settings Modal */}
+      {showColorSettingsModal && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Release Line</h3>
+              <h3 className="text-lg font-semibold">Color Settings</h3>
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setShowReleaseLineSettings(false)}
+                onClick={() => setShowColorSettingsModal(false)}
                 className="h-8 w-8 p-0"
               >
                 <X className="w-4 h-4" />
@@ -2831,27 +3630,114 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             </div>
 
             <div className="space-y-4">
-              {isLoadingReleaseLineConfig ? (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                  Loading settings...
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Dot Colors</div>
+                <div className="rounded-md border border-border/70 bg-muted/30 p-3 space-y-2">
+                  {(
+                    [
+                      { key: "discovery", label: "Discovery" },
+                      { key: "upslope", label: "On Track" },
+                      { key: "dangerZone", label: "Blocked" },
+                      { key: "downslope", label: "At Risk" },
+                      { key: "done", label: "Done" },
+                    ] as Array<{ key: keyof DotColorPreferences; label: string }>
+                  ).map((dotColorSetting) => (
+                    <label key={dotColorSetting.key} className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                      <span>
+                        {dotColorSetting.label}
+                        {(dotColorSetting.key === "discovery" || dotColorSetting.key === "done") && (
+                          <span className="ml-1 text-xs text-foreground">(required)</span>
+                        )}
+                      </span>
+                      <input
+                        type="color"
+                        value={dotColors[dotColorSetting.key]}
+                        onChange={(event) =>
+                          setDotColors((previous) => ({
+                            ...previous,
+                            [dotColorSetting.key]: event.target.value,
+                          }))
+                        }
+                        className="h-8 w-12 cursor-pointer rounded-md border border-border/70 bg-background/80 p-0 shadow-sm"
+                      />
+                    </label>
+                  ))}
+                  <button
+                    onClick={handleResetDotColors}
+                    className="w-full rounded-md border border-border/70 bg-background/60 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                  >
+                    Reset Dot Colors
+                  </button>
                 </div>
-              ) : (
-                <ReleaseLineSettings
-                  config={releaseLineSettings[selectedCollection] || {
-                    enabled: false,
-                    color: "#ff00ff",
-                    text: ""
-                  }}
-                  onConfigChange={handleReleaseLineConfigChange}
-                />
-              )}
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Background Gradient</div>
+                <div className="rounded-md border border-border/70 bg-muted/30 p-3 space-y-2">
+                  <label className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                    <span>Point A</span>
+                    <input
+                      type="color"
+                      value={gradientStartColor}
+                      onChange={(event) => handleGradientColorChange("start", event.target.value)}
+                      className="h-8 w-12 cursor-pointer rounded-md border border-border/70 bg-background/80 p-0 shadow-sm"
+                    />
+                  </label>
+                  <label className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+                    <span>Point B</span>
+                    <input
+                      type="color"
+                      value={gradientEndColor}
+                      onChange={(event) => handleGradientColorChange("end", event.target.value)}
+                      className="h-8 w-12 cursor-pointer rounded-md border border-border/70 bg-background/80 p-0 shadow-sm"
+                    />
+                  </label>
+                  <button
+                    onClick={handleResetGradientColors}
+                    className="w-full rounded-md border border-border/70 bg-background/60 px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                  >
+                    Reset to Theme Defaults
+                  </button>
+                  <div className="flex items-center justify-between rounded-md border border-border/70 bg-background/60 px-3 py-2 text-sm text-muted-foreground">
+                    <span>Split Fill (Point A/B)</span>
+                    <Switch
+                      checked={isSplitHillAreaFillEnabled}
+                      onCheckedChange={setIsSplitHillAreaFillEnabled}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Release Line</div>
+                {!selectedCollection ? (
+                  <div className="text-sm text-muted-foreground rounded-md border border-border/70 bg-muted/30 p-3">
+                    Select a collection to edit release line color settings.
+                  </div>
+                ) : isLoadingReleaseLineConfig ? (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground rounded-md border border-border/70 bg-muted/30 p-3">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                    Loading settings...
+                  </div>
+                ) : (
+                  <div className="rounded-md border border-border/70 bg-muted/30 p-3">
+                    <ReleaseLineSettings
+                      config={releaseLineSettings[selectedCollection] || {
+                        enabled: false,
+                        color: "#ff00ff",
+                        text: ""
+                      }}
+                      onConfigChange={handleReleaseLineConfigChange}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="flex justify-end mt-6">
               <Button
                 variant="outline"
-                onClick={() => setShowReleaseLineSettings(false)}
+                onClick={() => setShowColorSettingsModal(false)}
               >
                 Close
               </Button>

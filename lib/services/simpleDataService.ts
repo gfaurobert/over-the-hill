@@ -7,6 +7,8 @@
 
 import * as supabaseService from './supabaseService'
 import type { Collection, Dot, Snapshot, ReleaseLineConfig } from '@/components/HillChartApp'
+import type { UserPreferences } from './supabaseService'
+import type { UserPreferencesUpdate } from '@/lib/validation'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -15,10 +17,18 @@ export interface SimpleFetchOptions {
   // No caching options - always fresh
 }
 
+function warnUnsupportedSimpleOptions(methodName: string, options: SimpleFetchOptions): void {
+  if (Object.keys(options).length > 0) {
+    console.warn(`[SIMPLE_DATA] ${methodName} received unsupported options and ignored them`, options)
+  }
+}
+
 /**
  * Simple data service that always fetches fresh data
  */
 export class SimpleDataService {
+  // Canonical runtime facade: this service is the production default.
+  // Keep API explicit and avoid adding cache-like options here.
   
   // Collections operations
   async fetchCollections(
@@ -26,14 +36,15 @@ export class SimpleDataService {
     includeArchived: boolean = false,
     options: SimpleFetchOptions = {}
   ): Promise<Collection[]> {
+    warnUnsupportedSimpleOptions('fetchCollections', options)
     console.log(`[SIMPLE_DATA] Fetching fresh collections from database (archived: ${includeArchived})`)
     return await supabaseService.fetchCollections(userId, includeArchived)
   }
 
-  async createCollection(userId: string, name: string): Promise<Collection | null> {
+  async createCollection(userId: string, name: string, id?: string): Promise<Collection | null> {
     console.log(`[SIMPLE_DATA] Creating new collection: ${name}`)
     const collection: Collection = {
-      id: crypto.randomUUID(),
+      id: id || crypto.randomUUID(),
       name,
       status: 'active',
       dots: []
@@ -64,9 +75,9 @@ export class SimpleDataService {
     return await supabaseService.unarchiveCollection(collectionId, userId)
   }
 
-  async addCollection(userId: string, name: string): Promise<Collection | null> {
+  async addCollection(userId: string, name: string, id?: string): Promise<Collection | null> {
     console.log(`[SIMPLE_DATA] Adding collection: ${name}`)
-    return await this.createCollection(userId, name)
+    return await this.createCollection(userId, name, id)
   }
 
   // Dots operations
@@ -109,6 +120,7 @@ export class SimpleDataService {
   }
 
   async fetchSnapshots(userId: string, options: SimpleFetchOptions = {}): Promise<Snapshot[]> {
+    warnUnsupportedSimpleOptions('fetchSnapshots', options)
     console.log(`[SIMPLE_DATA] Fetching fresh snapshots from database`)
     return await supabaseService.fetchSnapshots(userId)
   }
@@ -124,40 +136,24 @@ export class SimpleDataService {
   }
 
   // User preferences operations
-  async fetchUserPreferences(userId: string, options: SimpleFetchOptions = {}): Promise<any> {
+  async fetchUserPreferences(userId: string, options: SimpleFetchOptions = {}): Promise<UserPreferences | null> {
+    warnUnsupportedSimpleOptions('fetchUserPreferences', options)
     console.log(`[SIMPLE_DATA] Fetching fresh user preferences from database`)
     return await supabaseService.fetchUserPreferences(userId)
   }
 
-  async updateUserPreferences(userId: string, preferences: any): Promise<boolean> {
+  async updateUserPreferences(userId: string, preferences: Partial<UserPreferencesUpdate>): Promise<boolean> {
     console.log(`[SIMPLE_DATA] Updating user preferences`)
-    // This function doesn't exist in supabaseService, so we'll implement it directly
-    try {
-      const { supabase } = await import('@/lib/supabaseClient')
-      const { error } = await supabase
-        .from('user_preferences')
-        .upsert({ user_id: userId, preferences })
-      
-      if (error) {
-        console.error('[SIMPLE_DATA] Failed to update user preferences:', error)
-        return false
-      }
-      return true
-    } catch (error) {
-      console.error('[SIMPLE_DATA] Error updating user preferences:', error)
-      return false
-    }
+    return await supabaseService.upsertUserPreferences(userId, preferences)
   }
 
   // Utility functions
   async clearAllCache(): Promise<void> {
-    console.log(`[SIMPLE_DATA] No cache to clear - always fresh data`)
-    // No-op since we don't use cache
+    console.warn(`[SIMPLE_DATA] clearAllCache called on simple service; operation is unsupported because this service has no cache`)
   }
 
   async clearUserCache(userId: string): Promise<void> {
-    console.log(`[SIMPLE_DATA] No cache to clear for user: ${userId}`)
-    // No-op since we don't use cache
+    console.warn(`[SIMPLE_DATA] clearUserCache called for user ${userId}; operation is unsupported because this service has no cache`)
   }
 
   async importData(userId: string, data: any): Promise<Collection[]> {
@@ -192,6 +188,8 @@ export class SimpleDataService {
 // Export singleton instance
 export const simpleDataService = new SimpleDataService()
 
+// Keep one export style in this module: bound functions from the singleton.
+// New APIs should follow this pattern to keep throw/catch ownership explicit.
 // Export individual functions to match the cached service interface
 export const fetchCollections = simpleDataService.fetchCollections.bind(simpleDataService)
 export const addCollection = simpleDataService.addCollection.bind(simpleDataService)
@@ -207,6 +205,7 @@ export const fetchSnapshots = simpleDataService.fetchSnapshots.bind(simpleDataSe
 export const loadSnapshot = simpleDataService.loadSnapshot.bind(simpleDataService)
 export const deleteSnapshot = simpleDataService.deleteSnapshot.bind(simpleDataService)
 export const fetchUserPreferences = simpleDataService.fetchUserPreferences.bind(simpleDataService)
+export const updateUserPreferences = simpleDataService.updateUserPreferences.bind(simpleDataService)
 export const importData = simpleDataService.importData.bind(simpleDataService)
 export const resetAllCollections = simpleDataService.resetAllCollections.bind(simpleDataService)
 export const updateCollectionReleaseLineConfig = simpleDataService.updateCollectionReleaseLineConfig.bind(simpleDataService)

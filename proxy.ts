@@ -176,8 +176,12 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
   
-  // Check rate limiting (only for page navigation, not Supabase API calls)
-  if (isProxyRateLimited(clientIP)) {
+  // Check rate limiting (only for page navigation, not Supabase API calls).
+  // Playwright E2E runs many parallel workers; all share one localhost IP and would hit this cap instantly.
+  if (
+    process.env.PLAYWRIGHT_E2E !== '1' &&
+    isProxyRateLimited(clientIP)
+  ) {
     console.warn(`[Proxy] Rate limit exceeded for IP: ${clientIP}`);
     return new NextResponse('Too Many Requests', { status: 429 });
   }

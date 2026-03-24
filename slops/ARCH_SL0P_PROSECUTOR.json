@@ -1,0 +1,160 @@
+{
+  "agent": "Agent 9: Prosecutor",
+  "generated_at": "2026-03-23T21:30:00+01:00",
+  "inputs": [
+    "/home/gregoire/Development/over-the-hill/slops/ARCH_SL0P.md",
+    "/home/gregoire/Development/over-the-hill/slops/ARCH_SLOP_PRIORITY.md",
+    "/home/gregoire/Development/over-the-hill/slops/ARCH_SL0P_DEFENSE.json"
+  ],
+  "assumption_mode": "worst-case-ai-coding-scenarios",
+  "prosecutions": [
+    {
+      "id": "ARCH-001",
+      "title": "Missing explicit error taxonomy across auth/session/data/privacy boundaries",
+      "defender_justified": true,
+      "challenges_defender": true,
+      "risk_level": "critical",
+      "failure_risks": [
+        "AI-generated handlers collapse distinct failures into generic errors, causing incorrect auto-retry/logout decisions.",
+        "Cross-boundary error translation drifts, producing incompatible behavior between routes, providers, and service facades.",
+        "Observability becomes noisy and non-actionable because semantic failure classes are absent."
+      ],
+      "prosecutor_argument": "Local handling is not a substitute for cross-boundary contracts. In worst-case automated refactors, missing taxonomy amplifies regressions and makes recovery logic unsafe."
+    },
+    {
+      "id": "ARCH-002",
+      "title": "Silent-failure risk from multi-layer fallback chains (crypto + cache + offline)",
+      "defender_justified": true,
+      "challenges_defender": true,
+      "risk_level": "critical",
+      "failure_risks": [
+        "Fallbacks succeed superficially while privacy posture downgrades without user-visible signal.",
+        "Cache/offline fallback returns stale data that AI-generated UI treats as authoritative truth.",
+        "Partial persistence appears successful, creating hidden divergence between local state and backend state."
+      ],
+      "prosecutor_argument": "Continuity without explicit degraded-mode signaling is indistinguishable from correctness. Worst-case, the app silently violates user expectations and data guarantees."
+    },
+    {
+      "id": "ARCH-003",
+      "title": "Inconsistent error propagation between client provider, service facades, and API routes",
+      "defender_justified": true,
+      "challenges_defender": true,
+      "risk_level": "high",
+      "failure_risks": [
+        "AI patches introduce mixed throw/nullable/HTTP error conventions that break caller assumptions.",
+        "Identical backend failures trigger divergent UX outcomes depending on call path.",
+        "Error swallowing in one layer prevents upper-layer compensating logic from executing."
+      ],
+      "prosecutor_argument": "Layer-specific contracts are valid only when explicitly mapped. Without a unifying propagation policy, variation becomes unbounded defect surface."
+    },
+    {
+      "id": "ARCH-004",
+      "title": "Import/export pipeline likely lacks partial-failure semantics",
+      "defender_justified": true,
+      "challenges_defender": true,
+      "risk_level": "high",
+      "failure_risks": [
+        "Bulk import reports success while dropping conflicted/encrypted subsets silently.",
+        "Retries duplicate previously successful sub-operations due to missing resumability markers.",
+        "AI-generated migration/import code cannot classify retryable vs terminal failures, causing data corruption loops."
+      ],
+      "prosecutor_argument": "Whole-operation simplicity fails under real-world fault patterns. Worst-case imports become non-auditable and irrecoverable."
+    },
+    {
+      "id": "ARCH-005",
+      "title": "Unused dual-service architecture (`simple` vs `cached`) increases error drift",
+      "defender_justified": true,
+      "challenges_defender": true,
+      "risk_level": "high",
+      "failure_risks": [
+        "AI modifies one facade only, creating semantic drift in validation, nullability, and retries.",
+        "Feature toggling or accidental callsite usage flips behavior unexpectedly between facades.",
+        "Bug fixes appear complete in tests that target one facade but fail in production paths using the other."
+      ],
+      "prosecutor_argument": "Interim dual facades require strict convergence controls. Without them, worst-case AI edits create split-brain service behavior."
+    },
+    {
+      "id": "ARCH-006",
+      "title": "Auth refresh/validation loop lacks explicit retry budget and terminal states",
+      "defender_justified": true,
+      "challenges_defender": true,
+      "risk_level": "critical",
+      "failure_risks": [
+        "Network flaps cause unbounded validate-refresh oscillation and request storms.",
+        "Session races produce contradictory UI states (authenticated vs forced logout).",
+        "AI-introduced retries bypass intended guard conditions, resulting in account lockouts or token churn."
+      ],
+      "prosecutor_argument": "Implicit guards are fragile under concurrent and degraded conditions. Worst-case auth control flow needs explicit terminal states and retry budgets."
+    },
+    {
+      "id": "ARCH-007",
+      "title": "Cache subsystem breadth can mask cache-write/cache-invalidate failures",
+      "defender_justified": true,
+      "challenges_defender": true,
+      "risk_level": "high",
+      "failure_risks": [
+        "Invalidation misses are treated as benign, yielding long-lived stale UI decisions.",
+        "AI-generated mutations forget one invalidation branch, causing correctness bugs that evade basic tests.",
+        "Operational incidents are harder to triage because cache outcomes are not first-class telemetry."
+      ],
+      "prosecutor_argument": "Non-fatal cache strategy does not justify invisible cache failures. In worst-case evolution, stale correctness defects become systemic."
+    },
+    {
+      "id": "ARCH-008",
+      "title": "SSR mock cache adapters risk diverging failure semantics from browser runtime",
+      "defender_justified": true,
+      "challenges_defender": true,
+      "risk_level": "medium-high",
+      "failure_risks": [
+        "SSR passes while browser runtime fails due to mocked success semantics.",
+        "Hydration transitions expose state mismatches that were hidden by SSR no-op adapters.",
+        "AI-written tests overfit SSR behavior and miss real client-side cache fault paths."
+      ],
+      "prosecutor_argument": "Exact parity may be impractical, but semantic compatibility is mandatory for reliability. Worst-case divergence invalidates confidence from SSR-centric testing."
+    },
+    {
+      "id": "ARCH-009",
+      "title": "\"Class + singleton + bound exports\" obscures ownership of throw/catch boundaries",
+      "defender_justified": true,
+      "challenges_defender": true,
+      "risk_level": "medium-high",
+      "failure_risks": [
+        "AI refactors patch one invocation style and leave others with stale error normalization.",
+        "Stack traces and ownership boundaries become ambiguous, delaying incident resolution.",
+        "Duplicate entry points allow inconsistent instrumentation and policy enforcement."
+      ],
+      "prosecutor_argument": "Legacy compatibility cannot justify opaque error ownership indefinitely. Worst-case complexity increases the chance of unreviewed boundary regressions."
+    },
+    {
+      "id": "ARCH-010",
+      "title": "Placeholder options/no-op API paths can imply successful handling when none occurred",
+      "defender_justified": false,
+      "challenges_defender": true,
+      "risk_level": "high",
+      "failure_risks": [
+        "Callers assume options were applied when runtime silently ignored them.",
+        "AI-generated features rely on placeholders and ship with false-positive success paths.",
+        "No-op behavior suppresses alarms, delaying detection of missing implementation."
+      ],
+      "prosecutor_argument": "Compatibility shims are acceptable only with explicit signaling and deprecation controls. Silent no-ops are functionally equivalent to correctness failure."
+    },
+    {
+      "id": "ARCH-011",
+      "title": "Cache invalidation rule set includes non-active operations, diluting failure signal clarity",
+      "defender_justified": false,
+      "challenges_defender": true,
+      "risk_level": "medium",
+      "failure_risks": [
+        "Inactive branches create noise that obscures real invalidation regressions.",
+        "AI contributors copy speculative rules into new mutations without runtime validation.",
+        "Debugging time increases because rule intent and operational reality diverge."
+      ],
+      "prosecutor_argument": "Future-proofing via speculative rules must not degrade present observability. Worst-case, signal dilution conceals real cache coherence defects."
+    }
+  ],
+  "overall_verdict": {
+    "defender_positions_challenged": 11,
+    "defender_positions_total": 11,
+    "summary": "Under worst-case AI coding scenarios, every defended slop remains materially risky; all defenses are challenged due to high regression amplification, silent degradation potential, and weak boundary contracts."
+  }
+}

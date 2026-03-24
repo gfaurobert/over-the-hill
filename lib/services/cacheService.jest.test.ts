@@ -5,13 +5,6 @@
  * cascade invalidation, storage fallback, metadata persistence, and cleanup operations.
  */
 
-import { afterEach } from 'node:test'
-import { beforeEach } from 'node:test'
-import { afterEach } from 'node:test'
-import { beforeEach } from 'node:test'
-import { afterEach } from 'node:test'
-import { beforeEach } from 'node:test'
-import { beforeEach } from 'node:test'
 import { CacheManager, CacheEntry, CacheMetadata } from './cacheService'
 
 // Mock the invalidation rules module
@@ -67,14 +60,25 @@ beforeEach(() => {
 
   mockLocalStorage.setItem.mockImplementation((key: string, value: string) => {
     mockStorageData.set(key, value)
+    ;(mockLocalStorage as unknown as Record<string, string>)[key] = value
   })
 
   mockLocalStorage.removeItem.mockImplementation((key: string) => {
     mockStorageData.delete(key)
+    delete (mockLocalStorage as unknown as Record<string, string>)[key]
   })
 
   mockLocalStorage.clear.mockImplementation(() => {
     mockStorageData.clear()
+    for (const key of Object.keys(mockLocalStorage)) {
+      if (!['getItem', 'setItem', 'removeItem', 'clear', 'key', 'length'].includes(key)) {
+        delete (mockLocalStorage as unknown as Record<string, unknown>)[key]
+      }
+    }
+  })
+
+  mockLocalStorage.key.mockImplementation((index: number) => {
+    return Array.from(mockStorageData.keys())[index] ?? null
   })
 
   // Mock Object.keys for localStorage
@@ -415,8 +419,8 @@ describe('CacheManager', () => {
       // Trigger cleanup interval
       jest.advanceTimersByTime(100) // cleanup interval
 
-      // Wait for cleanup to complete
-      await new Promise(resolve => setTimeout(resolve, 10))
+      // Flush pending timer callbacks under fake timers
+      await jest.runOnlyPendingTimersAsync()
 
       // Short-lived should be cleaned up, long-lived should remain
       const shortResult = await cacheManager.get('short-lived')
@@ -452,7 +456,7 @@ describe('CacheManager', () => {
       await cacheManager.set('valid-key', testData)
 
       // Manually add corrupted data
-      mockStorageData.set('test_cache_corrupted-key', 'invalid-json')
+      mockLocalStorage.setItem('test_cache_corrupted-key', 'invalid-json')
 
       // Trigger cleanup
       await cacheManager.refreshStaleData()
@@ -526,7 +530,7 @@ describe('CacheManager', () => {
 
     it('should handle session invalidation with corrupted entries', async () => {
       // Add corrupted entry
-      mockStorageData.set('test_cache_corrupted', 'invalid-json')
+      mockLocalStorage.setItem('test_cache_corrupted', 'invalid-json')
 
       // Should not throw
       await expect(

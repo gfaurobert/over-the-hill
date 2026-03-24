@@ -2,6 +2,7 @@ interface ValidationResponse {
   valid: boolean;
   error?: string;
   code?: string;
+  terminalState?: 'authenticated' | 'retryable' | 'reauth_required' | 'failed_closed';
   user?: {
     id: string;
     email: string;
@@ -17,6 +18,7 @@ interface RefreshResponse {
   success: boolean;
   error?: string;
   code?: string;
+  terminalState?: 'refreshed' | 'retryable' | 'reauth_required' | 'failed_closed';
   session?: {
     expires_at?: number;
     access_token?: string;
@@ -29,6 +31,8 @@ interface RefreshResponse {
   refreshedAt?: string;
 }
 
+import { DOMAIN_ERROR_CODES } from './domainErrors';
+
 class SessionValidationService {
   private static instance: SessionValidationService;
   private validationCache = new Map<string, { result: ValidationResponse; timestamp: number }>();
@@ -38,6 +42,7 @@ class SessionValidationService {
   private refreshPromise: Promise<RefreshResponse> | null = null;
   private consecutiveFailures = 0;
   private readonly MAX_CONSECUTIVE_FAILURES = 3;
+  private readonly MAX_VALIDATION_RETRIES = 3;
 
   private constructor() {}
 
@@ -140,7 +145,8 @@ class SessionValidationService {
           return {
             valid: false,
             error: 'No access token available',
-            code: 'NO_ACCESS_TOKEN'
+            code: DOMAIN_ERROR_CODES.noAccessToken,
+            terminalState: 'reauth_required'
           };
         }
         accessToken = storedTokens.accessToken;
@@ -184,7 +190,7 @@ class SessionValidationService {
    * Perform actual validation with rate limiting handling
    */
   private async performValidation(accessToken: string, refreshToken?: string): Promise<ValidationResponse> {
-    const maxRetries = 3;
+    const maxRetries = this.MAX_VALIDATION_RETRIES;
     let retryCount = 0;
     
     while (retryCount < maxRetries) {
@@ -213,7 +219,8 @@ class SessionValidationService {
             return {
               valid: false,
               error: 'Session validation rate limited. Please try again later.',
-              code: 'RATE_LIMITED'
+              code: DOMAIN_ERROR_CODES.rateLimited,
+              terminalState: 'retryable'
             };
           }
         }
@@ -223,7 +230,20 @@ class SessionValidationService {
         }
 
         const data = await response.json();
-        return data;
+        if (data?.valid === true) {
+          this.consecutiveFailures = 0;
+          return {
+            ...data,
+            terminalState: 'authenticated'
+          };
+        }
+
+        this.consecutiveFailures += 1;
+        return {
+          ...data,
+          code: data?.code || DOMAIN_ERROR_CODES.sessionValidationFailed,
+          terminalState: this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES ? 'failed_closed' : 'retryable'
+        };
       } catch (error) {
         console.error(`[SESSION_VALIDATION] Validation attempt ${retryCount + 1} failed:`, error);
         
@@ -233,12 +253,24 @@ class SessionValidationService {
           await new Promise(resolve => setTimeout(resolve, waitTime));
           retryCount++;
         } else {
-          throw error;
+          this.consecutiveFailures += 1;
+          return {
+            valid: false,
+            error: error instanceof Error ? error.message : 'Session validation failed',
+            code: DOMAIN_ERROR_CODES.networkError,
+            terminalState: this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES ? 'failed_closed' : 'retryable'
+          };
         }
       }
     }
 
-    throw new Error('Max validation retries exceeded');
+    this.consecutiveFailures += 1;
+    return {
+      valid: false,
+      error: 'Max validation retries exceeded',
+      code: DOMAIN_ERROR_CODES.sessionValidationFailed,
+      terminalState: this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES ? 'failed_closed' : 'retryable'
+    };
   }
 
   /**
@@ -272,7 +304,8 @@ class SessionValidationService {
         return {
           valid: false,
           error: error?.message || 'Invalid session',
-          code: 'INVALID_SESSION'
+          code: DOMAIN_ERROR_CODES.sessionValidationFailed,
+          terminalState: 'reauth_required'
         };
       }
       
@@ -285,6 +318,7 @@ class SessionValidationService {
       console.log('[SESSION_VALIDATION] Client-side validation successful');
       const result: ValidationResponse = {
         valid: true,
+        terminalState: 'authenticated',
         user: {
           id: user.id,
           email: user.email || '',
@@ -311,7 +345,8 @@ class SessionValidationService {
       return {
         valid: false,
         error: 'Client-side validation failed',
-        code: 'CLIENT_VALIDATION_ERROR'
+        code: DOMAIN_ERROR_CODES.networkError,
+        terminalState: 'retryable'
       };
     }
   }
@@ -333,7 +368,8 @@ class SessionValidationService {
       return {
         success: false,
         error: 'No refresh token available',
-        code: 'NO_REFRESH_TOKEN'
+        code: DOMAIN_ERROR_CODES.noRefreshToken,
+        terminalState: 'reauth_required'
       };
     }
 
@@ -394,14 +430,16 @@ class SessionValidationService {
         return {
           success: false,
           error: 'Session refresh timeout',
-          code: 'TIMEOUT'
+          code: DOMAIN_ERROR_CODES.timeout,
+          terminalState: 'retryable'
         };
       }
 
       return {
         success: false,
         error: 'Session refresh failed',
-        code: 'NETWORK_ERROR'
+        code: DOMAIN_ERROR_CODES.networkError,
+        terminalState: 'retryable'
       };
     }
   }
@@ -413,7 +451,7 @@ class SessionValidationService {
     const validation = await this.validateSession();
     
     // If session is expired, try to refresh
-    if (!validation.valid && validation.code === 'SESSION_EXPIRED') {
+    if (!validation.valid && validation.code === DOMAIN_ERROR_CODES.sessionExpired) {
       console.log('[SESSION_VALIDATION] Session expired, attempting refresh');
       
       const refresh = await this.refreshSession();
@@ -425,7 +463,8 @@ class SessionValidationService {
         return {
           valid: false,
           error: 'Session expired and refresh failed',
-          code: 'REFRESH_FAILED'
+          code: DOMAIN_ERROR_CODES.sessionRefreshFailed,
+          terminalState: 'reauth_required'
         };
       }
     }
