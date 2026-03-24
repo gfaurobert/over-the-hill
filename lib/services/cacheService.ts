@@ -91,6 +91,11 @@ class IndexedDBStorage implements StorageBackend {
   private dbName = 'OverTheHillCache'
   private version = 1
   private storeName = 'cache'
+  private localStoragePrefix: string
+
+  constructor(localStoragePrefix = 'oth_cache_') {
+    this.localStoragePrefix = localStoragePrefix
+  }
 
   private async getDB(): Promise<IDBDatabase> {
     return new Promise((resolve, reject) => {
@@ -519,7 +524,7 @@ class IndexedDBStorage implements StorageBackend {
       }
 
       // Clear all cache-related localStorage keys
-      const keys = Object.keys(localStorage).filter(key => key.startsWith('oth_cache_'))
+      const keys = Object.keys(localStorage).filter(key => key.startsWith(this.localStoragePrefix))
       keys.forEach(key => localStorage.removeItem(key))
     }
   }
@@ -624,7 +629,7 @@ class IndexedDBStorage implements StorageBackend {
       }
 
       // Fallback to localStorage
-      return Object.keys(localStorage).filter(key => key.startsWith('oth_cache_'))
+      return Object.keys(localStorage).filter(key => key.startsWith(this.localStoragePrefix))
     }
   }
 }
@@ -676,7 +681,7 @@ export class CacheManager implements ICacheManager {
     }
 
     // Use IndexedDB for better storage capacity
-    this.storage = new IndexedDBStorage()
+    this.storage = new IndexedDBStorage(this.config.storagePrefix)
 
     this.initializeCleanup()
     this.loadMetadata()
@@ -1004,7 +1009,7 @@ export class CacheManager implements ICacheManager {
   async invalidateUser(userId: string): Promise<void> {
     try {
       console.log(`[CACHE] Invalidating all cache for user: ${userId}`)
-      await this.invalidatePattern(`${userId}:*`)
+      await this.invalidatePattern(`user:${userId}:*`)
       console.log(`[CACHE] User cache invalidation complete for: ${userId}`)
     } catch (error) {
       console.error(`[CACHE] Failed to invalidate user cache for ${userId}:`, error)

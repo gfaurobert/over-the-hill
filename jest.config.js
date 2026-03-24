@@ -20,6 +20,7 @@ const customJestConfig = {
   testPathIgnorePatterns: [
     '<rootDir>/temp/',
     '<rootDir>/.yoyo/',
+    '<rootDir>/e2e/',
   ],
   collectCoverageFrom: [
     'lib/validation.ts',
@@ -39,10 +40,10 @@ const customJestConfig = {
   ],
   coverageThreshold: {
     global: {
-      statements: 70,
-      branches: 70,
-      functions: 70,
-      lines: 70,
+      statements: 90,
+      branches: 90,
+      functions: 90,
+      lines: 90,
     },
     './lib/validation.ts': {
       statements: 90,

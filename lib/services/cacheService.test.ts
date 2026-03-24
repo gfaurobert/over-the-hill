@@ -496,3 +496,10 @@ export const runCacheTests = async (): Promise<TestResult[]> => {
 if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
   console.log('Cache Service Test Utility loaded. Run runCacheTests() to test cache functionality.')
 }
+
+// Keep this utility file compatible with Jest's *.test.ts discovery.
+describe('cache service test utility module', () => {
+  it('exports a runnable utility function', () => {
+    expect(typeof runCacheTests).toBe('function')
+  })
+})
