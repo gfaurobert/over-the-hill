@@ -25,6 +25,9 @@ jobs:
           node-version: "24"
           cache: "pnpm"
 
+      - name: Align pnpm lockfile settings
+        run: pnpm config set auto-install-peers false
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
