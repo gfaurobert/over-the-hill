@@ -18,3 +18,6 @@
 {"location":"lib/supabaseClient.ts:fetch","message":"auth token response","data":{"tokenRequestCount":3,"status":200,"status429":false,"timestamp":1771007704207},"timestamp":1771007704207,"hypothesisId":"A"}
 {"location":"lib/supabaseClient.ts:fetch","message":"auth token request","data":{"tokenRequestCount":1,"method":"POST","urlSnippet":"http://localhost:3001/auth/v1/token?grant_type=refresh_token","timestamp":1771011191011},"timestamp":1771011191011,"hypothesisId":"A"}
 {"location":"lib/supabaseClient.ts:fetch","message":"auth token response","data":{"tokenRequestCount":1,"status":200,"status429":false,"timestamp":1771011191095},"timestamp":1771011191095,"hypothesisId":"A"}
+{"location":"components/SignInForm.tsx:handleSignIn","message":"handleSignIn invoked","data":{"timestamp":1771013896492},"timestamp":1771013896492,"hypothesisId":"C"}
+{"location":"lib/supabaseClient.ts:fetch","message":"auth token request","data":{"tokenRequestCount":1,"method":"POST","urlSnippet":"https://overthehill.faurobert.fr/auth/v1/token?grant_type=password","timestamp":1771013896495},"timestamp":1771013896495,"hypothesisId":"A"}
+{"location":"lib/supabaseClient.ts:fetch","message":"auth token response","data":{"tokenRequestCount":1,"status":200,"status429":false,"timestamp":1771013896612},"timestamp":1771013896612,"hypothesisId":"A"}

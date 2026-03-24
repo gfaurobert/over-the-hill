@@ -1,0 +1,76 @@
+{
+  "agent": "Agent 8: Defender",
+  "generated_at": "2026-03-23T21:18:24+01:00",
+  "inputs": [
+    "/home/gregoire/Development/over-the-hill/slops/ARCH_SL0P.md",
+    "/home/gregoire/Development/over-the-hill/slops/ARCH_SLOP_PRIORITY.md"
+  ],
+  "defenses": [
+    {
+      "id": "ARCH-001",
+      "title": "Missing explicit error taxonomy across auth/session/data/privacy boundaries",
+      "existing_state_justification": "A strict shared taxonomy has not been required to ship current features because boundaries already provide local handling patterns (provider guards, route status codes, service-level catches) and the system remains operable without a global discriminated union.",
+      "justified": true
+    },
+    {
+      "id": "ARCH-002",
+      "title": "Silent-failure risk from multi-layer fallback chains (crypto + cache + offline)",
+      "existing_state_justification": "Fallback chains are an intentional resilience strategy to prioritize continuity when network, storage, or crypto dependencies are unstable. In this context, graceful degradation is preferable to hard failure for user-facing reliability.",
+      "justified": true
+    },
+    {
+      "id": "ARCH-003",
+      "title": "Inconsistent error propagation between client provider, service facades, and API routes",
+      "existing_state_justification": "Propagation differs because each layer serves a different contract (UI ergonomics, service composition, HTTP semantics). Some variation is expected while the architecture is still converging.",
+      "justified": true
+    },
+    {
+      "id": "ARCH-004",
+      "title": "Import/export pipeline likely lacks partial-failure semantics",
+      "existing_state_justification": "The current import path appears optimized for whole-operation success to keep behavior predictable for users, and adding detailed partial-failure reporting may have been deferred until higher data volumes or conflict rates justify the complexity.",
+      "justified": true
+    },
+    {
+      "id": "ARCH-005",
+      "title": "Unused dual-service architecture (`simple` vs `cached`) increases error drift",
+      "existing_state_justification": "Maintaining both facades provides a controlled migration surface and allows experimentation with cache strategy without destabilizing the primary data path; this can be a valid interim architecture.",
+      "justified": true
+    },
+    {
+      "id": "ARCH-006",
+      "title": "Auth refresh/validation loop lacks explicit retry budget and terminal states",
+      "existing_state_justification": "Auth control flow can remain safe without a fully formalized state machine when guard conditions and session checks already gate refresh behavior; explicit budgeting is beneficial but not always mandatory early.",
+      "justified": true
+    },
+    {
+      "id": "ARCH-007",
+      "title": "Cache subsystem breadth can mask cache-write/cache-invalidate failures",
+      "existing_state_justification": "A broad cache surface is often necessary to cover heterogeneous read/write paths, and cache errors are frequently treated as non-fatal by design so core data correctness remains anchored to authoritative backend state.",
+      "justified": true
+    },
+    {
+      "id": "ARCH-008",
+      "title": "SSR mock cache adapters risk diverging failure semantics from browser runtime",
+      "existing_state_justification": "SSR adapters are expected to be simpler than browser adapters because runtime capabilities differ; parity is useful but exact failure-semantic equivalence is not always practical or required.",
+      "justified": true
+    },
+    {
+      "id": "ARCH-009",
+      "title": "\"Class + singleton + bound exports\" obscures ownership of throw/catch boundaries",
+      "existing_state_justification": "This structure may reflect legacy compatibility and gradual refactoring constraints rather than unnecessary complexity. It can preserve stable callsites while internals evolve.",
+      "justified": true
+    },
+    {
+      "id": "ARCH-010",
+      "title": "Placeholder options/no-op API paths can imply successful handling when none occurred",
+      "existing_state_justification": "Placeholder/no-op paths can be valid compatibility shims during phased rollout; however, they require explicit signaling to avoid false assumptions by callers.",
+      "justified": false
+    },
+    {
+      "id": "ARCH-011",
+      "title": "Cache invalidation rule set includes non-active operations, diluting failure signal clarity",
+      "existing_state_justification": "Predeclaring rules for near-term operations can reduce future integration friction, but if non-active branches materially reduce observability they should be trimmed or annotated.",
+      "justified": false
+    }
+  ]
+}

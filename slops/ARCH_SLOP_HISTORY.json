@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-03-23T21:18:24+01:00",
+  "source": "slops/ARCH_SLOP_PRIORITY.md",
+  "summary": {
+    "totalTracked": 11,
+    "new": 11,
+    "resolved": 0,
+    "escalated": 0,
+    "deEscalated": 0,
+    "persistent": 0
+  },
+  "records": [
+    {
+      "id": "ARCH-001",
+      "title": "Missing explicit error taxonomy across auth/session/data/privacy boundaries",
+      "category": "Missing domain errors",
+      "status": "new",
+      "severity": 10,
+      "confidence": "High",
+      "firstSeenAt": "2026-03-23T21:18:24+01:00",
+      "lastSeenAt": "2026-03-23T21:18:24+01:00",
+      "previousSeverity": null,
+      "deltaSeverity": null
+    },
+    {
+      "id": "ARCH-002",
+      "title": "Silent-failure risk from multi-layer fallback chains (crypto + cache + offline)",
+      "category": "Silent failures",
+      "status": "new",
+      "severity": 9,
+      "confidence": "Medium-High",
+      "firstSeenAt": "2026-03-23T21:18:24+01:00",
+      "lastSeenAt": "2026-03-23T21:18:24+01:00",
+      "previousSeverity": null,
+      "deltaSeverity": null
+    },
+    {
+      "id": "ARCH-003",
+      "title": "Inconsistent error propagation between client provider, service facades, and API routes",
+      "category": "Mismanaged propagation",
+      "status": "new",
+      "severity": 9,
+      "confidence": "Medium-High",
+      "firstSeenAt": "2026-03-23T21:18:24+01:00",
+      "lastSeenAt": "2026-03-23T21:18:24+01:00",
+      "previousSeverity": null,
+      "deltaSeverity": null
+    },
+    {
+      "id": "ARCH-004",
+      "title": "Import/export pipeline likely lacks partial-failure semantics",
+      "category": "Missing domain errors",
+      "status": "new",
+      "severity": 8,
+      "confidence": "Medium",
+      "firstSeenAt": "2026-03-23T21:18:24+01:00",
+      "lastSeenAt": "2026-03-23T21:18:24+01:00",
+      "previousSeverity": null,
+      "deltaSeverity": null
+    },
+    {
+      "id": "ARCH-005",
+      "title": "Unused dual-service architecture (`simple` vs `cached`) increases error drift",
+      "category": "Premature abstraction",
+      "status": "new",
+      "severity": 8,
+      "confidence": "High",
+      "firstSeenAt": "2026-03-23T21:18:24+01:00",
+      "lastSeenAt": "2026-03-23T21:18:24+01:00",
+      "previousSeverity": null,
+      "deltaSeverity": null
+    },
+    {
+      "id": "ARCH-006",
+      "title": "Auth refresh/validation loop lacks explicit retry budget and terminal states",
+      "category": "Mismanaged control flow",
+      "status": "new",
+      "severity": 8,
+      "confidence": "Medium",
+      "firstSeenAt": "2026-03-23T21:18:24+01:00",
+      "lastSeenAt": "2026-03-23T21:18:24+01:00",
+      "previousSeverity": null,
+      "deltaSeverity": null
+    },
+    {
+      "id": "ARCH-007",
+      "title": "Cache subsystem breadth can mask cache-write/cache-invalidate failures",
+      "category": "Silent failures",
+      "status": "new",
+      "severity": 7,
+      "confidence": "Medium-High",
+      "firstSeenAt": "2026-03-23T21:18:24+01:00",
+      "lastSeenAt": "2026-03-23T21:18:24+01:00",
+      "previousSeverity": null,
+      "deltaSeverity": null
+    },
+    {
+      "id": "ARCH-008",
+      "title": "SSR mock cache adapters risk diverging failure semantics from browser runtime",
+      "category": "Mismanaged propagation",
+      "status": "new",
+      "severity": 6,
+      "confidence": "High",
+      "firstSeenAt": "2026-03-23T21:18:24+01:00",
+      "lastSeenAt": "2026-03-23T21:18:24+01:00",
+      "previousSeverity": null,
+      "deltaSeverity": null
+    },
+    {
+      "id": "ARCH-009",
+      "title": "\"Class + singleton + bound exports\" obscures ownership of throw/catch boundaries",
+      "category": "Indirection without leverage",
+      "status": "new",
+      "severity": 6,
+      "confidence": "High",
+      "firstSeenAt": "2026-03-23T21:18:24+01:00",
+      "lastSeenAt": "2026-03-23T21:18:24+01:00",
+      "previousSeverity": null,
+      "deltaSeverity": null
+    },
+    {
+      "id": "ARCH-010",
+      "title": "Placeholder options/no-op API paths can imply successful handling when none occurred",
+      "category": "Silent failures",
+      "status": "new",
+      "severity": 5,
+      "confidence": "High",
+      "firstSeenAt": "2026-03-23T21:18:24+01:00",
+      "lastSeenAt": "2026-03-23T21:18:24+01:00",
+      "previousSeverity": null,
+      "deltaSeverity": null
+    },
+    {
+      "id": "ARCH-011",
+      "title": "Cache invalidation rule set includes non-active operations, diluting failure signal clarity",
+      "category": "Indirection without leverage",
+      "status": "new",
+      "severity": 4,
+      "confidence": "Medium",
+      "firstSeenAt": "2026-03-23T21:18:24+01:00",
+      "lastSeenAt": "2026-03-23T21:18:24+01:00",
+      "previousSeverity": null,
+      "deltaSeverity": null
+    }
+  ]
+}

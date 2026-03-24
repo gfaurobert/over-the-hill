@@ -47,6 +47,14 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       cascadeRules: ['*:collections*']
     }
   ],
+  'collection:unarchive': [
+    {
+      trigger: 'mutation',
+      pattern: '*:collection:*',
+      entityTypes: ['collection'],
+      cascadeRules: ['*:collections*']
+    }
+  ],
 
   // Dot operations
   'dot:create': [
@@ -76,15 +84,6 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
     }
   ],
 
-  'dot:archive': [
-    {
-      trigger: 'mutation',
-      pattern: '*:dot:*',
-      entityTypes: ['dot'],
-      cascadeRules: ['*:dots:*', '*:collection:*']
-    }
-  ],
-
   // Snapshot operations
   'snapshot:create': [
     {
@@ -100,50 +99,6 @@ export const INVALIDATION_RULES: Record<string, InvalidationRule[]> = {
       pattern: '*:snapshot:*',
       entityTypes: ['snapshot'],
       cascadeRules: ['*:snapshots*']
-    }
-  ],
-
-  // User preference operations
-  'preferences:update': [
-    {
-      trigger: 'mutation',
-      pattern: '*:preferences*',
-      entityTypes: ['user_preferences'],
-      cascadeRules: ['*:ui:*']
-    }
-  ],
-
-  // Session-based invalidation
-  'session:login': [
-    {
-      trigger: 'session',
-      pattern: '*',
-      entityTypes: ['collection', 'dot', 'snapshot', 'user_preferences']
-    }
-  ],
-
-  'session:logout': [
-    {
-      trigger: 'session',
-      pattern: '*',
-      entityTypes: ['collection', 'dot', 'snapshot', 'user_preferences']
-    }
-  ],
-
-  'session:expire': [
-    {
-      trigger: 'session',
-      pattern: '*',
-      entityTypes: ['collection', 'dot', 'snapshot', 'user_preferences']
-    }
-  ],
-
-  // Time-based invalidation
-  'time:stale': [
-    {
-      trigger: 'time',
-      pattern: '*',
-      entityTypes: ['collection', 'dot', 'snapshot', 'user_preferences']
     }
   ]
 }

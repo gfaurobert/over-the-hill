@@ -17,6 +17,15 @@ export interface UserPreferences {
   collectionInput: string
   hideCollectionName: boolean
   copyFormat: 'PNG' | 'SVG'
+  gradientStartColor: string | null
+  gradientEndColor: string | null
+  dotColorDiscovery: string
+  dotColorUpslope: string
+  dotColorDangerZone: string
+  dotColorDownslope: string
+  dotColorDone: string
+  splitHillAreaFillEnabled: boolean
+  showTodayCollection: boolean
   createdAt: string
   updatedAt: string
 }
@@ -56,51 +65,15 @@ export interface FetchOptions {
 
 /**
  * Cache-aware data service that wraps Supabase operations
+ * Transitional facade: kept for compatibility and explicit cache workflows.
+ * Prefer `simpleDataService` as canonical runtime path unless cache behavior is required.
  */
 export class CachedDataService {
   private cacheManager: ReturnType<typeof getCacheManager> | null = null
 
   private getCacheManager(): ReturnType<typeof getCacheManager> {
     if (this.cacheManager === null) {
-      // Only initialize cache manager in browser environment
-      if (typeof window !== 'undefined') {
-        this.cacheManager = getCacheManager()
-      } else {
-        // Return a mock cache manager for SSR
-        return {
-          get: async () => null,
-          set: async () => {},
-          invalidate: async () => {},
-          clear: async () => {},
-          invalidatePattern: async () => {},
-          invalidateWithCascade: async () => {},
-          invalidateUser: async () => {},
-          invalidateSession: async () => {},
-          isStale: async () => true,
-          validateFreshness: async () => false,
-          refreshStaleData: async () => {},
-          updateMetadata: async () => {},
-          invalidateByOperation: async () => {},
-          destroy: () => {},
-          // Add all required properties from CacheManager interface
-          config: {
-            defaultTTL: 5 * 60 * 1000,
-            maxCacheSize: 50 * 1024 * 1024,
-            cleanupInterval: 60 * 60 * 1000,
-            compressionEnabled: true,
-            storagePrefix: 'oth_cache_'
-          },
-          storage: {} as any,
-          cleanupTimer: null,
-          metadata: {
-            version: '1.0.0',
-            lastSync: Date.now(),
-            userId: '',
-            sessionId: '',
-            invalidationRules: []
-          }
-        } as unknown as ReturnType<typeof getCacheManager>
-      }
+      this.cacheManager = getCacheManager()
     }
     return this.cacheManager
   }
@@ -555,6 +528,8 @@ export const getCachedDataService = (): CachedDataService => {
   return cachedDataServiceInstance
 }
 
+// Backward-compatibility exports only; do not add new call-style variants here.
+// Keep bound-export ownership explicit while the cached facade remains transitional.
 // Export individual functions for backward compatibility with preserved method binding
 const cachedDataService = getCachedDataService()
 

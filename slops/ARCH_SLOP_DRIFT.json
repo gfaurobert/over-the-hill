@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-03-23",
+  "source": "slops/ARCHITECTURE.md",
+  "scope": "duplication-and-drift",
+  "summary": {
+    "totalFindings": 7,
+    "copyPasteFindings": 4,
+    "driftFindings": 3
+  },
+  "findings": [
+    {
+      "id": "DRIFT-001",
+      "kind": "copy-paste",
+      "title": "Same service ownership story repeated across three sections",
+      "severity": "medium",
+      "evidence": {
+        "docPaths": [
+          "slops/ARCHITECTURE.md#module-map",
+          "slops/ARCHITECTURE.md#core-flows",
+          "slops/ARCHITECTURE.md#ownership-zones"
+        ],
+        "notes": "The same service set (simpleDataService, cachedDataService, supabaseService, validation) is listed repeatedly with near-identical wording."
+      },
+      "risk": "Edits can update one section and miss others, creating internal documentation drift.",
+      "canonicalSource": {
+        "type": "code-import-graph",
+        "paths": [
+          "components/HillChartApp.tsx",
+          "lib/services/simpleDataService.ts",
+          "lib/services/supabaseService.ts"
+        ],
+        "recommendation": "Keep a single \"Data flow\" section in ARCHITECTURE and treat ownership bullets as references, not repeated definitions."
+      }
+    },
+    {
+      "id": "DRIFT-002",
+      "kind": "drift",
+      "title": "Documented dual-facade runtime vs observed primary runtime",
+      "severity": "high",
+      "evidence": {
+        "docPaths": [
+          "slops/ARCHITECTURE.md#module-map",
+          "slops/ARCHITECTURE.md#cache-coherence-flow"
+        ],
+        "codePaths": [
+          "components/HillChartApp.tsx",
+          "lib/services/cachedDataService.ts"
+        ],
+        "notes": "Architecture presents simple and cached facades as peers. Current UI imports simpleDataService; cached facade appears non-primary in active runtime entrypoint."
+      },
+      "risk": "Behavior and error semantics can diverge if both facades evolve independently.",
+      "canonicalSource": {
+        "type": "runtime-entrypoint",
+        "paths": [
+          "components/HillChartApp.tsx"
+        ],
+        "recommendation": "Declare one canonical runtime facade and mark the other as experimental/deprecated or internal."
+      }
+    },
+    {
+      "id": "DRIFT-003",
+      "kind": "copy-paste",
+      "title": "Auth/session pipeline repeated in flow, ownership, and hotspot sections",
+      "severity": "medium",
+      "evidence": {
+        "docPaths": [
+          "slops/ARCHITECTURE.md#authentication--session-control",
+          "slops/ARCHITECTURE.md#session-validationrefresh-flow",
+          "slops/ARCHITECTURE.md#ownership-zones",
+          "slops/ARCHITECTURE.md#hotspots"
+        ],
+        "notes": "AuthProvider + sessionValidationService + validate/refresh routes + proxy are restated multiple times."
+      },
+      "risk": "Retry/state-machine changes are likely to be reflected inconsistently across sections.",
+      "canonicalSource": {
+        "type": "boundary-contract",
+        "paths": [
+          "components/AuthProvider.tsx",
+          "lib/services/sessionValidationService.ts",
+          "app/api/auth/validate/route.ts",
+          "app/api/auth/refresh/route.ts",
+          "proxy.ts"
+        ],
+        "recommendation": "Keep one authoritative state-machine section and link to it from ownership/hotspot sections."
+      }
+    },
+    {
+      "id": "DRIFT-004",
+      "kind": "copy-paste",
+      "title": "Cache architecture repeated with overlapping terms",
+      "severity": "medium",
+      "evidence": {
+        "docPaths": [
+          "slops/ARCHITECTURE.md#caching--offlineruntime-fetch",
+          "slops/ARCHITECTURE.md#cache-coherence-flow",
+          "slops/ARCHITECTURE.md#storageoffline-zone",
+          "slops/ARCHITECTURE.md#hotspots"
+        ],
+        "notes": "The same cache components are described repeatedly with slightly different language (cache, invalidation, service worker)."
+      },
+      "risk": "Terminology drift (what is cached where) can hide invalidation bugs.",
+      "canonicalSource": {
+        "type": "rules-and-runtime",
+        "paths": [
+          "lib/services/cacheInvalidationRules.ts",
+          "lib/services/cacheService.ts",
+          "public/sw.js"
+        ],
+        "recommendation": "Define a single cache semantics table (scope, store, TTL, invalidation trigger) and reference it everywhere else."
+      }
+    },
+    {
+      "id": "DRIFT-005",
+      "kind": "drift",
+      "title": "Preference schema changed quickly; narrative can lag migrations",
+      "severity": "medium",
+      "evidence": {
+        "docPaths": [
+          "slops/ARCHITECTURE.md#data-schema--persistence-evolution"
+        ],
+        "codePaths": [
+          "supabase/migrations/20260323120000_add_user_display_preferences.sql",
+          "supabase/migrations/20260323133000_add_dot_color_preferences.sql",
+          "supabase/migrations/20260323203000_update_dot_color_defaults.sql",
+          "lib/services/supabaseService.ts"
+        ],
+        "notes": "Recent preference migrations indicate active schema churn; static prose is prone to lag behind current column defaults/meaning."
+      },
+      "risk": "Doc readers may implement against stale defaults or field expectations.",
+      "canonicalSource": {
+        "type": "database-schema",
+        "paths": [
+          "supabase/migrations/*.sql",
+          "lib/services/supabaseService.ts"
+        ],
+        "recommendation": "Treat migrations as source of truth; keep only high-level intent in ARCHITECTURE and auto-generate a schema appendix where possible."
+      }
+    },
+    {
+      "id": "DRIFT-006",
+      "kind": "drift",
+      "title": "Encryption implementation references span RPC and client fallback paths",
+      "severity": "medium",
+      "evidence": {
+        "docPaths": [
+          "slops/ARCHITECTURE.md#encryptiondecryption-flow"
+        ],
+        "codePaths": [
+          "lib/services/privacyService.ts",
+          "supabase/migrations/20250710091059_create_hill_chart_schema.sql",
+          "supabase/migrations/20250809105000_simplify_encryption_functions.sql"
+        ],
+        "notes": "The architecture text explains dual-path encryption behavior; these paths are sensitive to SQL function revisions and fallback behavior changes."
+      },
+      "risk": "Security assumptions in docs can become stale without immediate code or migration updates.",
+      "canonicalSource": {
+        "type": "crypto-contract",
+        "paths": [
+          "lib/services/privacyService.ts",
+          "supabase/migrations/*encryption*.sql"
+        ],
+        "recommendation": "Keep ARCHITECTURE at policy level (what must hold) and defer algorithm/runtime specifics to privacyService + SQL migration comments."
+      }
+    },
+    {
+      "id": "DRIFT-007",
+      "kind": "copy-paste",
+      "title": "Hotspot list duplicates ownership map instead of adding unique risk data",
+      "severity": "low",
+      "evidence": {
+        "docPaths": [
+          "slops/ARCHITECTURE.md#ownership-zones",
+          "slops/ARCHITECTURE.md#hotspots"
+        ],
+        "notes": "Hotspots mostly re-list the same files from ownership sections with descriptive prose."
+      },
+      "risk": "Low signal-to-noise; reviewers skip the section and miss real risk deltas.",
+      "canonicalSource": {
+        "type": "measurable-metrics",
+        "paths": [
+          "components/HillChartApp.tsx",
+          "lib/services/supabaseService.ts",
+          "lib/services/privacyService.ts"
+        ],
+        "recommendation": "Convert hotspots into measurable metrics (change frequency, defect density, coupling) instead of repeated inventory."
+      }
+    }
+  ],
+  "canonicalSources": [
+    {
+      "domain": "runtime-data-flow",
+      "sourceOfTruth": [
+        "components/HillChartApp.tsx",
+        "lib/services/simpleDataService.ts",
+        "lib/services/supabaseService.ts"
+      ]
+    },
+    {
+      "domain": "auth-session",
+      "sourceOfTruth": [
+        "components/AuthProvider.tsx",
+        "lib/services/sessionValidationService.ts",
+        "app/api/auth/validate/route.ts",
+        "app/api/auth/refresh/route.ts",
+        "proxy.ts"
+      ]
+    },
+    {
+      "domain": "database-schema",
+      "sourceOfTruth": [
+        "supabase/migrations/*.sql"
+      ]
+    },
+    {
+      "domain": "cache-semantics",
+      "sourceOfTruth": [
+        "lib/services/cacheInvalidationRules.ts",
+        "lib/services/cacheService.ts",
+        "public/sw.js"
+      ]
+    },
+    {
+      "domain": "privacy-crypto-contract",
+      "sourceOfTruth": [
+        "lib/services/privacyService.ts",
+        "supabase/migrations/*encryption*.sql"
+      ]
+    }
+  ]
+}

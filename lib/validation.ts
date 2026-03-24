@@ -102,6 +102,22 @@ export const sanitizeHexColor = (input: string): string => {
   return sanitized
 }
 
+export interface UserPreferencesUpdate {
+  selectedCollectionId: string | null
+  collectionInput: string
+  hideCollectionName: boolean
+  copyFormat: 'PNG' | 'SVG'
+  gradientStartColor: string | null
+  gradientEndColor: string | null
+  dotColorDiscovery: string
+  dotColorUpslope: string
+  dotColorDangerZone: string
+  dotColorDownslope: string
+  dotColorDone: string
+  splitHillAreaFillEnabled: boolean
+  showTodayCollection: boolean
+}
+
 // Validation functions
 export const validateDot = (dot: Partial<Dot>): Dot => {
   const errors: string[] = []
@@ -114,9 +130,10 @@ export const validateDot = (dot: Partial<Dot>): Dot => {
       x: dot.x !== undefined ? sanitizeNumber(dot.x, 0, 100) : 0,
       // Y coordinate is SVG coordinate (can range from -10 to 150 based on getHillY function)
       y: dot.y !== undefined ? sanitizeNumber(dot.y, -10, 150) : 0,
-      color: dot.color ? sanitizeColor(dot.color) : '#3b82f6',
+      color: dot.color ? sanitizeColor(dot.color) : '#b0cdfb',
       size: dot.size !== undefined ? sanitizeNumber(dot.size, 1, 5) : 3,
-      archived: typeof dot.archived === 'boolean' ? dot.archived : false
+      archived: typeof dot.archived === 'boolean' ? dot.archived : false,
+      flag_for_today: typeof dot.flag_for_today === 'boolean' ? dot.flag_for_today : false
     }
     
     // Additional validation
@@ -166,6 +183,49 @@ export const validateReleaseLineConfig = (config: Partial<ReleaseLineConfig>): R
       throw error
     }
     throw new ValidationError('Invalid release line configuration')
+  }
+}
+
+export const validateUserPreferencesUpdate = (
+  preferences: Partial<UserPreferencesUpdate>
+): UserPreferencesUpdate => {
+  const copyFormat = preferences.copyFormat || 'PNG'
+  if (copyFormat !== 'PNG' && copyFormat !== 'SVG')
+    throw new ValidationError('Invalid copy format. Must be PNG or SVG')
+
+  const selectedCollectionId =
+    preferences.selectedCollectionId === null || preferences.selectedCollectionId === undefined
+      ? null
+      : sanitizeId(preferences.selectedCollectionId)
+
+  const gradientStartColor =
+    preferences.gradientStartColor === null || preferences.gradientStartColor === undefined
+      ? null
+      : sanitizeHexColor(preferences.gradientStartColor)
+  const gradientEndColor =
+    preferences.gradientEndColor === null || preferences.gradientEndColor === undefined
+      ? null
+      : sanitizeHexColor(preferences.gradientEndColor)
+  const dotColorDiscovery = sanitizeHexColor(preferences.dotColorDiscovery ?? '#b0cdfb')
+  const dotColorUpslope = sanitizeHexColor(preferences.dotColorUpslope ?? '#a6e7be')
+  const dotColorDangerZone = sanitizeHexColor(preferences.dotColorDangerZone ?? '#f8b4b4')
+  const dotColorDownslope = sanitizeHexColor(preferences.dotColorDownslope ?? '#fcc7a1')
+  const dotColorDone = sanitizeHexColor(preferences.dotColorDone ?? '#d0bdfb')
+
+  return {
+    selectedCollectionId,
+    collectionInput: sanitizeString(preferences.collectionInput ?? '', 100),
+    hideCollectionName: typeof preferences.hideCollectionName === 'boolean' ? preferences.hideCollectionName : false,
+    copyFormat,
+    gradientStartColor,
+    gradientEndColor,
+    dotColorDiscovery,
+    dotColorUpslope,
+    dotColorDangerZone,
+    dotColorDownslope,
+    dotColorDone,
+    splitHillAreaFillEnabled: typeof preferences.splitHillAreaFillEnabled === 'boolean' ? preferences.splitHillAreaFillEnabled : false,
+    showTodayCollection: typeof preferences.showTodayCollection === 'boolean' ? preferences.showTodayCollection : true,
   }
 }
 
