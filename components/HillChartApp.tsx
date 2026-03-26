@@ -2505,7 +2505,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                               x={labelPos.textCenterX}
                               y={labelPos.y + labelPos.height / 2}
                               textAnchor="middle"
-                              className="fill-foreground pointer-events-none select-none"
+                              className={`pointer-events-none select-none ${resolvedTheme === 'dark' ? 'fill-black' : 'fill-foreground'}`}
                               dominantBaseline="central"
                               fontSize={labelPos.fontSize}
                               opacity={opacity}
