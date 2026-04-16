@@ -1025,30 +1025,30 @@ export const fetchUserPreferences = async (userId: string): Promise<UserPreferen
       .from("user_preferences")
       .select("*")
       .eq("user_id", validatedUserId)
-      .single()
+      .maybeSingle()
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        // No preferences found, return default values
-        return {
-          selectedCollectionId: null,
-          collectionInput: '',
-          hideCollectionName: false,
-          copyFormat: 'PNG',
-          gradientStartColor: null,
-          gradientEndColor: null,
-          dotColorDiscovery: '#b0cdfb',
-          dotColorUpslope: '#a6e7be',
-          dotColorDangerZone: '#f8b4b4',
-          dotColorDownslope: '#fcc7a1',
-          dotColorDone: '#d0bdfb',
-          splitHillAreaFillEnabled: false,
-          showTodayCollection: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }
-      }
       throw error
+    }
+
+    if (!data) {
+      return {
+        selectedCollectionId: null,
+        collectionInput: '',
+        hideCollectionName: false,
+        copyFormat: 'PNG',
+        gradientStartColor: null,
+        gradientEndColor: null,
+        dotColorDiscovery: '#b0cdfb',
+        dotColorUpslope: '#a6e7be',
+        dotColorDangerZone: '#f8b4b4',
+        dotColorDownslope: '#fcc7a1',
+        dotColorDone: '#d0bdfb',
+        splitHillAreaFillEnabled: false,
+        showTodayCollection: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
     }
 
     // Decrypt the collection input if it exists

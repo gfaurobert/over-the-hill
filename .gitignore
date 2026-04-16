@@ -56,3 +56,4 @@ coverage/
 /supabase/.env.local
 /supabase/signing-key.json
 /supabase/signing_keys.json
+.worktrees/
