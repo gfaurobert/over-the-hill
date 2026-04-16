@@ -7002,49 +7002,12 @@
       "children": [
         {
           "type": "frame",
-          "id": "72gxH",
-          "name": "head",
-          "width": "fill_container",
-          "layout": "vertical",
-          "gap": 6,
-          "children": [
-            {
-              "type": "text",
-              "id": "XS3Gg",
-              "fill": "#111827",
-              "content": "Collections Redesign High Fidelity",
-              "fontFamily": "Inter",
-              "fontSize": 28,
-              "fontWeight": "700"
-            },
-            {
-              "type": "text",
-              "id": "TLkHp",
-              "fill": "#64748B",
-              "content": "Current UI styling with collection management moved into a collapsible left rail. Snapshot card remains visually aligned with the current product.",
-              "fontFamily": "Inter",
-              "fontSize": 14,
-              "fontWeight": "normal"
-            }
-          ]
-        },
-        {
-          "type": "frame",
           "id": "mX7vn",
           "name": "expWrap",
           "width": "fill_container",
           "layout": "vertical",
           "gap": 10,
           "children": [
-            {
-              "type": "text",
-              "id": "3u1IJ",
-              "fill": "#111827",
-              "content": "Expanded Rail",
-              "fontFamily": "Inter",
-              "fontSize": 20,
-              "fontWeight": "700"
-            },
             {
               "type": "frame",
               "id": "zq1XE",

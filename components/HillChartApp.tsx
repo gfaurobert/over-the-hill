@@ -127,6 +127,8 @@ const defaultLightGradientEnd = "#e2e8f0"
 const defaultDarkGradientStart = "#0f172a"
 const defaultDarkGradientEnd = "#1e293b"
 const TODAY_COLLECTION_NAME = "Today"
+const SIDEBAR_COLLECTIONS_PER_PAGE = 12
+const DOTS_PER_PAGE = 10
 
 // Helper function to get local date string in YYYY-MM-DD format (consistent with backend)
 const getLocalDateString = (date: Date): string => {
@@ -428,8 +430,15 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [editingDotId, setEditingDotId] = useState<string | null>(null)
   const [editingDotLabel, setEditingDotLabel] = useState("")
 
+  const [editingDotPercentId, setEditingDotPercentId] = useState<string | null>(null)
+  const [editingDotPercent, setEditingDotPercent] = useState("")
+
   // Add state to track which dot's menu is open
   const [dotMenuOpen, setDotMenuOpen] = useState<string | null>(null)
+  const [collectionActionMenuOpen, setCollectionActionMenuOpen] = useState<string | null>(null)
+  const [collectionSearchQuery, setCollectionSearchQuery] = useState("")
+  const [collectionPage, setCollectionPage] = useState(1)
+  const [dotsPage, setDotsPage] = useState(1)
 
   // Add state to track import success
   const [showImportSuccess, setShowImportSuccess] = useState(false)
@@ -865,8 +874,18 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     ...nonTodayCollections,
   ]
 
-  const filteredCollections = collectionsForSelector.filter((c) =>
-    c.name.toLowerCase().includes(collectionInput.toLowerCase()),
+  const normalizedCollectionSearchQuery = collectionSearchQuery.trim().toLowerCase()
+  const filteredCollectionsForSidebar = collectionsForSelector.filter((collection) =>
+    collection.name.toLowerCase().includes(normalizedCollectionSearchQuery),
+  )
+  const totalCollectionPages = Math.max(
+    1,
+    Math.ceil(filteredCollectionsForSidebar.length / SIDEBAR_COLLECTIONS_PER_PAGE),
+  )
+  const currentCollectionPage = Math.min(collectionPage, totalCollectionPages)
+  const paginatedCollectionsForSidebar = filteredCollectionsForSidebar.slice(
+    (currentCollectionPage - 1) * SIDEBAR_COLLECTIONS_PER_PAGE,
+    currentCollectionPage * SIDEBAR_COLLECTIONS_PER_PAGE,
   )
   const currentCollection = collectionsForSelector.find((c) => c.id === selectedCollection)
   const isTodaySelected = todayCollectionId !== null && selectedCollection === todayCollectionId
@@ -874,6 +893,47 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   useEffect(() => {
     setSelectedDotIds([])
   }, [selectedCollection])
+
+  useEffect(() => {
+    setCollectionPage(1)
+  }, [collectionSearchQuery])
+
+  useEffect(() => {
+    if (collectionPage <= totalCollectionPages) return
+    setCollectionPage(totalCollectionPages)
+  }, [collectionPage, totalCollectionPages])
+
+  const collectionsListRef = useRef<HTMLDivElement>(null)
+  const collectionsWheelThrottleRef = useRef<number>(0)
+
+  useEffect(() => {
+    const listNode = collectionsListRef.current
+    if (!listNode) return
+    if (totalCollectionPages <= 1) return
+
+    const handleWheel = (event: WheelEvent) => {
+      const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
+      if (delta === 0) return
+      event.preventDefault()
+      const now = Date.now()
+      if (now - collectionsWheelThrottleRef.current < 300) return
+      collectionsWheelThrottleRef.current = now
+      setCollectionPage((previousPage) => {
+        if (delta > 0) return Math.min(totalCollectionPages, previousPage + 1)
+        return Math.max(1, previousPage - 1)
+      })
+    }
+
+    listNode.addEventListener("wheel", handleWheel, { passive: false })
+    return () => listNode.removeEventListener("wheel", handleWheel)
+  }, [totalCollectionPages])
+
+  useEffect(() => {
+    setDotsPage(1)
+  }, [selectedCollection])
+
+  const dotsGridRef = useRef<HTMLDivElement>(null)
+  const dotsWheelThrottleRef = useRef<number>(0)
 
   useEffect(() => {
     if (!dotMenuOpen) return
@@ -893,6 +953,25 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     document.addEventListener("mousedown", handleDotActionMenuOutsideClick)
     return () => document.removeEventListener("mousedown", handleDotActionMenuOutsideClick)
   }, [dotMenuOpen])
+
+  useEffect(() => {
+    if (!collectionActionMenuOpen) return
+
+    function handleCollectionActionMenuOutsideClick(event: MouseEvent) {
+      const target = event.target as HTMLElement
+      const collectionActionRoot = target.closest("[data-collection-action-root]")
+      if (!collectionActionRoot) {
+        setCollectionActionMenuOpen(null)
+        return
+      }
+
+      const collectionId = collectionActionRoot.getAttribute("data-collection-action-root")
+      if (collectionId !== collectionActionMenuOpen) setCollectionActionMenuOpen(null)
+    }
+
+    document.addEventListener("mousedown", handleCollectionActionMenuOutsideClick)
+    return () => document.removeEventListener("mousedown", handleCollectionActionMenuOutsideClick)
+  }, [collectionActionMenuOpen])
 
   useEffect(() => {
     if (showTodayCollection) return
@@ -978,6 +1057,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         } else if (draggingDot.x > 50) {
           updates.color = dotColorOptions[1]
           updates.size = 3
+        } else {
+          updates.color = dotColorOptions[0]
+          updates.size = 3
         }
         updateDot(draggingDot.id, updates)
       }
@@ -1052,6 +1134,36 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
 
     cancelEditingDotLabel()
+  }
+
+  function startEditingDotPercent(dot: Dot) {
+    setEditingDotPercentId(dot.id)
+    setEditingDotPercent(Math.round(dot.x).toString())
+  }
+
+  function cancelEditingDotPercent() {
+    setEditingDotPercentId(null)
+    setEditingDotPercent("")
+  }
+
+  async function confirmEditingDotPercent(dot: Dot) {
+    const parsed = Number.parseInt(editingDotPercent, 10)
+    if (Number.isNaN(parsed)) {
+      cancelEditingDotPercent()
+      return
+    }
+
+    const clamped = Math.max(0, Math.min(100, parsed))
+    if (clamped !== Math.round(dot.x)) {
+      const updates: Partial<Dot> = { x: clamped, y: getHillY(clamped) }
+      if (clamped === 100) {
+        updates.color = dotColorOptions[4]
+        updates.size = 1
+      }
+      await updateDot(dot.id, updates)
+    }
+
+    cancelEditingDotPercent()
   }
 
   function getOwningCollectionId(dotId: string): string | null {
@@ -1360,6 +1472,36 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
       setShowDropdown(false)
       setIsTyping(false)
+    }
+  }
+
+  const handleCreateCollectionFromSidebar = async () => {
+    if (!user) return
+
+    const baseName = "New Collection"
+    const existingNames = new Set(
+      [...collections, ...archivedCollections].map((collection) => collection.name.toLowerCase()),
+    )
+
+    let nextCollectionName = baseName
+    let suffix = 2
+    while (existingNames.has(nextCollectionName.toLowerCase())) {
+      nextCollectionName = `${baseName} ${suffix}`
+      suffix += 1
+    }
+
+    try {
+      const addedCollection = await addCollection(user.id, nextCollectionName)
+      if (!addedCollection) return
+
+      setCollections((previousCollections) => [...previousCollections, addedCollection])
+      setSelectedCollection(addedCollection.id)
+      setCollectionInput(addedCollection.name)
+      loadReleaseLineConfig(addedCollection.id)
+      setShowDropdown(false)
+      setIsTyping(false)
+    } catch (error) {
+      console.error("[HILL_CHART] Failed to create collection from sidebar:", error)
     }
   }
 
@@ -2094,6 +2236,35 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     .sort((a, b) => b.x - a.x);
   const selectedActiveDotCount = activeDots.filter((dot) => selectedDotIds.includes(dot.id)).length
 
+  const totalDotsPages = Math.max(1, Math.ceil(activeDots.length / DOTS_PER_PAGE))
+  const currentDotsPage = Math.min(dotsPage, totalDotsPages)
+  const paginatedActiveDots = activeDots.slice(
+    (currentDotsPage - 1) * DOTS_PER_PAGE,
+    currentDotsPage * DOTS_PER_PAGE,
+  )
+
+  useEffect(() => {
+    const gridNode = dotsGridRef.current
+    if (!gridNode) return
+    if (totalDotsPages <= 1) return
+
+    const handleWheel = (event: WheelEvent) => {
+      const delta = Math.abs(event.deltaY) >= Math.abs(event.deltaX) ? event.deltaY : event.deltaX
+      if (delta === 0) return
+      event.preventDefault()
+      const now = Date.now()
+      if (now - dotsWheelThrottleRef.current < 300) return
+      dotsWheelThrottleRef.current = now
+      setDotsPage((previousPage) => {
+        if (delta > 0) return Math.min(totalDotsPages, previousPage + 1)
+        return Math.max(1, previousPage - 1)
+      })
+    }
+
+    gridNode.addEventListener("wheel", handleWheel, { passive: false })
+    return () => gridNode.removeEventListener("wheel", handleWheel)
+  }, [totalDotsPages])
+
   function handleGradientColorChange(colorRole: "start" | "end", value: string) {
     setHasCustomGradientColors(true)
     if (colorRole === "start") setGradientStartColor(value)
@@ -2122,10 +2293,494 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         backgroundImage: `linear-gradient(135deg, ${gradientStartColor} 0%, ${gradientEndColor} 100%)`,
       }}
     >
-      <div className="mx-auto max-w-[1220px] space-y-3">
-        {/* Main Chart Area */}
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-[2.35fr_1fr]">
-          <div className="mr-[15px] space-y-4 rounded-lg shadow-[0px_16px_20px_5px_rgba(0,0,0,0.1)]">
+      <div className="mx-auto max-w-[1294px]">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+          {/* Left Bar */}
+          <div className="rounded-lg shadow-[0px_16px_20px_5px_rgba(0,0,0,0.1)] lg:h-[809px] lg:max-h-[809px]">
+            <Card className="h-full lg:h-[809px] shadow-none overflow-visible flex flex-col">
+              <CardHeader className="flex flex-row items-center justify-between py-3">
+                <div className="flex flex-col">
+                  <div className="flex items-center gap-1">
+                    <CardTitle className="text-lg">Over The Hill</CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowInfoModal(true)}
+                      className="h-4 w-4 p-0 hover:bg-accent rounded-full"
+                    >
+                      <Info className="w-3 h-3 text-muted-foreground" />
+                    </Button>
+                  </div>
+                </div>
+                <div className="relative" ref={ellipsisMenuRef}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (!showEllipsisMenu) setShowColorSettingsModal(false)
+                      setShowEllipsisMenu(!showEllipsisMenu)
+                    }}
+                    className="h-8 w-8 p-0"
+                  >
+                    <MoreHorizontal className="w-4 h-4" />
+                  </Button>
+
+                  {showEllipsisMenu && (
+                    <div
+                      className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4"
+                      onMouseDown={() => setShowEllipsisMenu(false)}
+                    >
+                      <div
+                        ref={settingsModalRef}
+                        className="w-[95vw] max-w-5xl md:min-w-[800px] max-h-[85vh] overflow-hidden rounded-lg border border-border bg-background shadow-lg"
+                        onMouseDown={(event) => event.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                          <h3 className="text-base font-semibold">Settings</h3>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowEllipsisMenu(false)}
+                            className="h-8 w-8 p-0"
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 overflow-y-auto max-h-[calc(85vh-56px)]">
+                          <div className="py-1 rounded-md border border-border/60">
+                        {/* Theme Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+                          Theme
+                        </div>
+                        <button
+                          onClick={() => {
+                            setTheme("light")
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Sun className="w-4 h-4" /> Light {theme === "light" && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTheme("dark")
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Moon className="w-4 h-4" /> Dark {theme === "dark" && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setTheme("system")
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Monitor className="w-4 h-4" /> Follow Browser{" "}
+                          {theme === "system" && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+
+                        {/* Export Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                          Export Clipboard Format
+                        </div>
+                        <button
+                          onClick={() => {
+                            setCopyFormat("PNG")
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <FileImage className="w-4 h-4" /> Copy as PNG{" "}
+                          {copyFormat === "PNG" && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setCopyFormat("SVG")
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <FileCode2 className="w-4 h-4" /> Copy as SVG{" "}
+                          {copyFormat === "SVG" && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+
+                        {/* Chart Settings Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                          Chart Settings
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowColorSettingsModal(true)
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Palette className="w-4 h-4" /> Color Settings
+                        </button>
+                        <button
+                          onClick={() => {
+                            setHideCollectionName(!hideCollectionName)
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Monitor className="w-4 h-4" /> Hide Collection Name{" "}
+                          {hideCollectionName && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowTodayCollection(!showTodayCollection)
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Sun className="w-4 h-4" /> Show Today Collection{" "}
+                          {showTodayCollection && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setShowResetConfirm(true)
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Trash2 className="w-4 h-4" /> Reset Collections
+                        </button>
+
+                        {/* Collections Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                          Collections
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowArchivedCollectionsModal(true)
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <ArchiveIcon className="w-4 h-4" /> Archived Collections
+                          {archivedCollections.length > 0 && (
+                            <span className="ml-auto text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                              {archivedCollections.length}
+                            </span>
+                          )}
+                        </button>
+                        <button
+                          onClick={exportCollections}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <DownloadIcon className="w-4 h-4" /> Export Collections
+                        </button>
+                        <label className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 cursor-pointer">
+                          <UploadIcon className="w-4 h-4" /> Import Collections
+                          <input type="file" accept=".json" onChange={handleImport} className="hidden" />
+                        </label>
+                      </div>
+                      <div className="py-1 rounded-md border border-border/60">
+                        {/* Account Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
+                          Account
+                        </div>
+                        {/* Username Display */}
+                        <div className="px-3 py-2 text-sm text-muted-foreground border-b border-border">
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-2 shrink-0 rounded-full bg-green-500"></div>
+                            <span className="truncate max-w-[180px]" title={user?.user_metadata?.name || user?.email || 'Unknown User'}>
+                              {user?.user_metadata?.name || user?.email || 'Unknown User'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowEllipsisMenu(false)
+                            onResetPassword()
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          Reset Password
+                        </button>
+                        <SignOutButton className="w-full px-3 py-2 text-sm text-left text-red-600 dark:text-red-500 hover:bg-accent hover:text-accent-foreground flex items-center gap-2" />
+
+                        {/* Cache Status Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                          Cache Status
+                        </div>
+                        <div className="px-3 py-2 flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Data Sync</span>
+                          <CacheStatusBadge />
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (user?.id) {
+                              console.log('[HILL_CHART] Manual data refresh requested')
+                              setIsLoadingCollections(true)
+                              try {
+                                // Fetch fresh data from database
+
+                                const [activeCollections, allCollections, snapshots] = await Promise.all([
+                                  fetchCollections(user.id, false),
+                                  fetchCollections(user.id, true),
+                                  fetchSnapshots(user.id)
+                                ])
+
+                                setCollections(activeCollections)
+                                setOriginalCollections(activeCollections)
+
+                                const archived = allCollections.filter(c => c.status === 'archived')
+                                setArchivedCollections(archived)
+                                setSnapshots(snapshots)
+
+                                console.log('[HILL_CHART] Manual refresh completed successfully')
+                              } catch (error) {
+                                console.error('[HILL_CHART] Manual refresh failed:', error)
+                              } finally {
+                                setIsLoadingCollections(false)
+                                setShowEllipsisMenu(false)
+                              }
+                            }
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Download className="w-4 h-4" /> Refresh Data
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (confirm('This will clear all stored data and force a complete refresh. Continue?')) {
+                              console.log('[HILL_CHART] Manual storage clear requested')
+                              try {
+                                const { clearAllAppStorage } = await import('@/lib/utils/storageUtils')
+                                await clearAllAppStorage()
+                                console.log('[HILL_CHART] All storage cleared successfully')
+                                // Reload the page to start fresh
+                                window.location.reload()
+                              } catch (error) {
+                                console.error('[HILL_CHART] Failed to clear storage:', error)
+                              }
+                            }
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 text-orange-600 dark:text-orange-400"
+                        >
+                          <Trash2 className="w-4 h-4" /> Clear Local Storage
+                        </button>
+                        {/* Privacy Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                          Privacy
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowPrivacySettings(true)
+                            setShowEllipsisMenu(false)
+                          }}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Shield className="w-4 h-4" /> Privacy Settings
+                        </button>
+
+                        {/* Support Section */}
+                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
+                          Support
+                        </div>
+                        <button
+                          onClick={handleTipClick}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                        >
+                          <Heart className="w-4 h-4" /> Send Tip
+                        </button>
+                      </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0 flex flex-1 min-h-0 flex-col gap-3">
+                <div ref={collectionsListRef} className="flex flex-1 min-h-0 flex-col gap-2">
+                  <label className="text-sm font-medium mb-2 block">Collections</label>
+                  <Input
+                    value={collectionSearchQuery}
+                    onChange={(event) => setCollectionSearchQuery(event.target.value)}
+                    placeholder="Search collections..."
+                    className="h-8 text-xs"
+                  />
+                  {isLoadingCollections ? (
+                    <div className="px-3 py-4 text-sm text-muted-foreground flex items-center gap-2 rounded-md border border-border">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                      Loading collections...
+                    </div>
+                  ) : collectionsForSelector.length > 0 ? (
+                    filteredCollectionsForSidebar.length > 0 ? (
+                      <>
+                        <div className="min-h-0 flex-1 space-y-1 overflow-hidden pr-1">
+                          {paginatedCollectionsForSidebar.map((collection) => {
+                        const isSelectedCollection = selectedCollection === collection.id
+                        const isTodayCollection = todayCollectionId !== null && collection.id === todayCollectionId
+                        const isEditingThisCollection = isEditingCollection && editingCollectionId === collection.id
+
+                        return (
+                          <div
+                            key={collection.id}
+                            className="relative"
+                            data-collection-action-root={collection.id}
+                          >
+                            {isEditingThisCollection ? (
+                              <div className="flex items-center gap-2 rounded-md border border-border bg-background p-2">
+                                <Input
+                                  ref={editInputRef}
+                                  value={editingCollectionName}
+                                  onChange={(e) => setEditingCollectionName(e.target.value)}
+                                  onKeyDown={handleEditKeyPress}
+                                  className="h-8 text-sm"
+                                  placeholder="Collection name"
+                                  autoFocus
+                                />
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={saveCollectionEdit}
+                                  className="h-8 w-8 p-0"
+                                  disabled={!editingCollectionName.trim()}
+                                >
+                                  <Check className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={cancelCollectionEdit}
+                                  className="h-8 w-8 p-0"
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCollectionSelect(collection)}
+                                  className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${isSelectedCollection
+                                    ? "border-primary/40 bg-primary/10 text-foreground"
+                                    : "border-border bg-background hover:bg-accent hover:text-accent-foreground"
+                                    } ${isTodayCollection ? "pr-3" : "pr-10"}`}
+                                >
+                                  <span className="block truncate">{collection.name}</span>
+                                </button>
+                                {!isTodayCollection && (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="absolute right-1 top-1/2 h-7 w-7 -translate-y-1/2 p-0"
+                                      onClick={(event) => {
+                                        event.stopPropagation()
+                                        setCollectionActionMenuOpen((previousValue) =>
+                                          previousValue === collection.id ? null : collection.id,
+                                        )
+                                      }}
+                                      title="Collection actions"
+                                    >
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                    {collectionActionMenuOpen === collection.id && (
+                                      <div className="absolute right-1 top-9 z-20 min-w-[140px] rounded-md border border-border bg-background shadow-md">
+                                        <button
+                                          type="button"
+                                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-accent hover:text-accent-foreground"
+                                          onClick={() => {
+                                            startEditCollection(collection)
+                                            setCollectionActionMenuOpen(null)
+                                          }}
+                                        >
+                                          <Edit2 className="h-3.5 w-3.5" />
+                                          Edit
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-accent hover:text-accent-foreground"
+                                          onClick={() => {
+                                            setArchiveConfirm({
+                                              collectionId: collection.id,
+                                              collectionName: collection.name,
+                                            })
+                                            setCollectionActionMenuOpen(null)
+                                          }}
+                                        >
+                                          <ArchiveIcon className="h-3.5 w-3.5" />
+                                          Archive
+                                        </button>
+                                        <button
+                                          type="button"
+                                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-destructive hover:bg-accent"
+                                          onClick={() => {
+                                            setDeleteCollectionConfirm({
+                                              collectionId: collection.id,
+                                              collectionName: collection.name,
+                                            })
+                                            setCollectionActionMenuOpen(null)
+                                          }}
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                          Delete
+                                        </button>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        )
+                          })}
+                        </div>
+                        {totalCollectionPages > 1 && (
+                          <div
+                            className="mt-2 flex items-center justify-center gap-1.5"
+                            role="tablist"
+                            aria-label="Collections pagination"
+                          >
+                            {Array.from({ length: totalCollectionPages }, (_, index) => {
+                              const pageNumber = index + 1
+                              const isActivePage = pageNumber === currentCollectionPage
+                              return (
+                                <button
+                                  key={pageNumber}
+                                  type="button"
+                                  role="tab"
+                                  aria-selected={isActivePage}
+                                  aria-label={`Go to page ${pageNumber}`}
+                                  onClick={() => setCollectionPage(pageNumber)}
+                                  className={`h-1.5 rounded-full transition-all duration-200 ${isActivePage
+                                    ? "w-5 bg-foreground"
+                                    : "w-1.5 bg-muted-foreground/40 hover:bg-muted-foreground/70"
+                                    }`}
+                                />
+                              )
+                            })}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="px-3 py-2 text-sm text-muted-foreground rounded-md border border-border">
+                        No collections match your search
+                      </div>
+                    )
+                  ) : (
+                    <div className="px-3 py-2 text-sm text-muted-foreground rounded-md border border-border">
+                      No collections found
+                    </div>
+                  )}
+                </div>
+                <Button className="w-full mt-auto" variant="outline" size="sm" onClick={handleCreateCollectionFromSidebar}>
+                  + New Collection
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            {/* Main Chart Area */}
+            <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2.35fr_1fr]">
+          <div className="space-y-4 rounded-lg shadow-[0px_16px_20px_5px_rgba(0,0,0,0.1)]">
             <Card className="h-full overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between py-3">
                 <div className="flex gap-2">
@@ -2523,464 +3178,21 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             </Card>
           </div>
 
-          {/* Sidebar */}
+          {/* Snapshots */}
           <div className="space-y-3 rounded-lg shadow-[0px_16px_20px_5px_rgba(0,0,0,0.1)]">
-            <Card className="shadow-sm overflow-visible">
-              <CardHeader className="flex flex-row items-center justify-between py-3">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-1">
-                    <CardTitle className="text-lg">Over The Hill</CardTitle>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowInfoModal(true)}
-                      className="h-4 w-4 p-0 hover:bg-accent rounded-full"
-                    >
-                      <Info className="w-3 h-3 text-muted-foreground" />
-                    </Button>
-                  </div>
-                </div>
-                <div className="relative" ref={ellipsisMenuRef}>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      if (!showEllipsisMenu) setShowColorSettingsModal(false)
-                      setShowEllipsisMenu(!showEllipsisMenu)
-                    }}
-                    className="h-8 w-8 p-0"
-                  >
-                    <MoreHorizontal className="w-4 h-4" />
-                  </Button>
-
-                  {showEllipsisMenu && (
-                    <div
-                      className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm p-4"
-                      onMouseDown={() => setShowEllipsisMenu(false)}
-                    >
-                      <div
-                        ref={settingsModalRef}
-                        className="w-[95vw] max-w-5xl md:min-w-[800px] max-h-[85vh] overflow-hidden rounded-lg border border-border bg-background shadow-lg"
-                        onMouseDown={(event) => event.stopPropagation()}
-                      >
-                        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                          <h3 className="text-base font-semibold">Settings</h3>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setShowEllipsisMenu(false)}
-                            className="h-8 w-8 p-0"
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 overflow-y-auto max-h-[calc(85vh-56px)]">
-                          <div className="py-1 rounded-md border border-border/60">
-                        {/* Theme Section */}
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
-                          Theme
-                        </div>
-                        <button
-                          onClick={() => {
-                            setTheme("light")
-                            setShowEllipsisMenu(false)
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Sun className="w-4 h-4" /> Light {theme === "light" && <Check className="w-4 h-4 ml-auto" />}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setTheme("dark")
-                            setShowEllipsisMenu(false)
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Moon className="w-4 h-4" /> Dark {theme === "dark" && <Check className="w-4 h-4 ml-auto" />}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setTheme("system")
-                            setShowEllipsisMenu(false)
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Monitor className="w-4 h-4" /> Follow Browser{" "}
-                          {theme === "system" && <Check className="w-4 h-4 ml-auto" />}
-                        </button>
-
-                        {/* Export Section */}
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                          Export Clipboard Format
-                        </div>
-                        <button
-                          onClick={() => {
-                            setCopyFormat("PNG")
-                            setShowEllipsisMenu(false)
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <FileImage className="w-4 h-4" /> Copy as PNG{" "}
-                          {copyFormat === "PNG" && <Check className="w-4 h-4 ml-auto" />}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setCopyFormat("SVG")
-                            setShowEllipsisMenu(false)
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <FileCode2 className="w-4 h-4" /> Copy as SVG{" "}
-                          {copyFormat === "SVG" && <Check className="w-4 h-4 ml-auto" />}
-                        </button>
-
-                        {/* Chart Settings Section */}
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                          Chart Settings
-                        </div>
-                        <button
-                          onClick={() => {
-                            setShowColorSettingsModal(true)
-                            setShowEllipsisMenu(false)
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Palette className="w-4 h-4" /> Color Settings
-                        </button>
-                        <button
-                          onClick={() => {
-                            setHideCollectionName(!hideCollectionName)
-                            setShowEllipsisMenu(false)
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Monitor className="w-4 h-4" /> Hide Collection Name{" "}
-                          {hideCollectionName && <Check className="w-4 h-4 ml-auto" />}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowTodayCollection(!showTodayCollection)
-                            setShowEllipsisMenu(false)
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Sun className="w-4 h-4" /> Show Today Collection{" "}
-                          {showTodayCollection && <Check className="w-4 h-4 ml-auto" />}
-                        </button>
-                        <button
-                          onClick={() => {
-                            setShowResetConfirm(true)
-                            setShowEllipsisMenu(false)
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Trash2 className="w-4 h-4" /> Reset Collections
-                        </button>
-
-                        {/* Collections Section */}
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                          Collections
-                        </div>
-                        <button
-                          onClick={() => {
-                            setShowArchivedCollectionsModal(true)
-                            setShowEllipsisMenu(false)
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <ArchiveIcon className="w-4 h-4" /> Archived Collections
-                          {archivedCollections.length > 0 && (
-                            <span className="ml-auto text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
-                              {archivedCollections.length}
-                            </span>
-                          )}
-                        </button>
-                        <button
-                          onClick={exportCollections}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <DownloadIcon className="w-4 h-4" /> Export Collections
-                        </button>
-                        <label className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 cursor-pointer">
-                          <UploadIcon className="w-4 h-4" /> Import Collections
-                          <input type="file" accept=".json" onChange={handleImport} className="hidden" />
-                        </label>
-                      </div>
-                      <div className="py-1 rounded-md border border-border/60">
-                        {/* Account Section */}
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
-                          Account
-                        </div>
-                        {/* Username Display */}
-                        <div className="px-3 py-2 text-sm text-muted-foreground border-b border-border">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 w-2 shrink-0 rounded-full bg-green-500"></div>
-                            <span className="truncate max-w-[180px]" title={user?.user_metadata?.name || user?.email || 'Unknown User'}>
-                              {user?.user_metadata?.name || user?.email || 'Unknown User'}
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => {
-                            setShowEllipsisMenu(false)
-                            onResetPassword()
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          Reset Password
-                        </button>
-                        <SignOutButton className="w-full px-3 py-2 text-sm text-left text-red-600 dark:text-red-500 hover:bg-accent hover:text-accent-foreground flex items-center gap-2" />
-
-                        {/* Cache Status Section */}
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                          Cache Status
-                        </div>
-                        <div className="px-3 py-2 flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">Data Sync</span>
-                          <CacheStatusBadge />
-                        </div>
-                        <button
-                          onClick={async () => {
-                            if (user?.id) {
-                              console.log('[HILL_CHART] Manual data refresh requested')
-                              setIsLoadingCollections(true)
-                              try {
-                                // Fetch fresh data from database
-
-                                const [activeCollections, allCollections, snapshots] = await Promise.all([
-                                  fetchCollections(user.id, false),
-                                  fetchCollections(user.id, true),
-                                  fetchSnapshots(user.id)
-                                ])
-
-                                setCollections(activeCollections)
-                                setOriginalCollections(activeCollections)
-
-                                const archived = allCollections.filter(c => c.status === 'archived')
-                                setArchivedCollections(archived)
-                                setSnapshots(snapshots)
-
-                                console.log('[HILL_CHART] Manual refresh completed successfully')
-                              } catch (error) {
-                                console.error('[HILL_CHART] Manual refresh failed:', error)
-                              } finally {
-                                setIsLoadingCollections(false)
-                                setShowEllipsisMenu(false)
-                              }
-                            }
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Download className="w-4 h-4" /> Refresh Data
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (confirm('This will clear all stored data and force a complete refresh. Continue?')) {
-                              console.log('[HILL_CHART] Manual storage clear requested')
-                              try {
-                                const { clearAllAppStorage } = await import('@/lib/utils/storageUtils')
-                                await clearAllAppStorage()
-                                console.log('[HILL_CHART] All storage cleared successfully')
-                                // Reload the page to start fresh
-                                window.location.reload()
-                              } catch (error) {
-                                console.error('[HILL_CHART] Failed to clear storage:', error)
-                              }
-                            }
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 text-orange-600 dark:text-orange-400"
-                        >
-                          <Trash2 className="w-4 h-4" /> Clear Local Storage
-                        </button>
-                        {/* Privacy Section */}
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                          Privacy
-                        </div>
-                        <button
-                          onClick={() => {
-                            setShowPrivacySettings(true)
-                            setShowEllipsisMenu(false)
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Shield className="w-4 h-4" /> Privacy Settings
-                        </button>
-
-                        {/* Support Section */}
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                          Support
-                        </div>
-                        <button
-                          onClick={handleTipClick}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Heart className="w-4 h-4" /> Send Tip
-                        </button>
-                      </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
+            <Card className="shadow-none">
+              <CardHeader className="py-3">
+                <CardTitle className="text-lg">Snapshots</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-3 pt-0">
-                <div className="relative" ref={dropdownRef}>
-                  <label className="text-sm font-medium mb-2 block">Collection</label>
-                  <div className="relative">
-                    {isEditingCollection ? (
-                      <div className="flex items-center gap-2">
-                        <Input
-                          ref={editInputRef}
-                          value={editingCollectionName}
-                          onChange={(e) => setEditingCollectionName(e.target.value)}
-                          onKeyDown={handleEditKeyPress}
-                          className="flex-1"
-                          placeholder="Collection name"
-                          autoFocus
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={saveCollectionEdit}
-                          className="h-8 w-8 p-0"
-                          disabled={!editingCollectionName.trim()}
-                        >
-                          <Check className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={cancelCollectionEdit}
-                          className="h-8 w-8 p-0"
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="relative">
-                        <Input
-                          ref={inputRef}
-                          value={collectionInput}
-                          onChange={handleInputChange}
-                          onKeyPress={handleCollectionInputKeyPress}
-                          onFocus={handleInputFocus}
-                          placeholder="Select a collection..."
-                          className="pr-16"
-                        />
-                        <div className="absolute right-0 top-0 h-full flex items-center gap-1">
-                          {selectedCollection && !isTodaySelected && (
-                            <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-full px-2"
-                                onClick={() => {
-                                  const collection = collections.find(c => c.id === selectedCollection)
-                                  if (collection) {
-                                    startEditCollection(collection)
-                                  }
-                                }}
-                                title="Edit collection name"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-full px-2"
-                                onClick={() => {
-                                  const collection = collections.find(c => c.id === selectedCollection)
-                                  if (collection) {
-                                    setArchiveConfirm({
-                                      collectionId: collection.id,
-                                      collectionName: collection.name
-                                    })
-                                  }
-                                }}
-                                title="Archive collection"
-                              >
-                                <ArchiveIcon className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-full px-2 text-destructive"
-                                onClick={() => {
-                                  const collection = collections.find(c => c.id === selectedCollection)
-                                  if (collection) {
-                                    setDeleteCollectionConfirm({
-                                      collectionId: collection.id,
-                                      collectionName: collection.name
-                                    })
-                                  }
-                                }}
-                                title="Delete collection"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-full px-2"
-                            onClick={toggleDropdown}
-                          >
-                            <ChevronDown className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {showDropdown && (
-                    <div className="absolute z-50 w-full mt-1 bg-background border border-border rounded-md shadow-lg max-h-60 overflow-auto">
-                      {isLoadingCollections ? (
-                        <div className="px-3 py-4 text-sm text-muted-foreground flex items-center gap-2">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                          Loading collections...
-                        </div>
-                      ) : filteredCollections.length > 0 ? (
-                        filteredCollections.map((collection) => (
-                          <div
-                            key={collection.id}
-                            className="px-3 py-2 hover:bg-accent cursor-pointer text-sm"
-                            onClick={() => handleCollectionSelect(collection)}
-                          >
-                            {collection.name}
-                          </div>
-                        ))
-                      ) : (
-                        <div className="px-3 py-2 text-sm text-muted-foreground">No collections found</div>
-                      )}
-
-                      {collectionInput.trim() &&
-                        !collections.some((c) => c.name.toLowerCase() === collectionInput.toLowerCase()) && (
-                          <div className="border-t border-border">
-                            <div className="px-3 py-2 text-sm text-primary bg-primary/10">
-                              Press Enter to create &quot;{collectionInput}&quot;
-                            </div>
-                          </div>
-                        )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Snapshot Calendar */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium block">Snapshots</label>
-                  {renderCalendar()}
-                </div>
-
-
+              <CardContent className="pt-0">
+                {renderCalendar()}
               </CardContent>
             </Card>
           </div>
         </div>
-      </div>
 
       {/* Dots section */}
-      <Card className="mx-auto mt-[60px] max-w-[1220px] shadow-sm">
+      <Card className="shadow-[0px_16px_20px_5px_rgba(0,0,0,0.1)] lg:h-[392px] lg:max-h-[392px] lg:overflow-hidden lg:flex lg:flex-col">
         <CardHeader className="flex flex-row items-center justify-between py-3">
           <CardTitle className="text-lg">Dots</CardTitle>
           <Button
@@ -3003,7 +3215,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             <ArrowUpDown className="w-4 h-4 text-gray-500" />
           </Button>
         </CardHeader>
-        <CardContent className="space-y-3 pt-0">
+        <CardContent className="space-y-3 pt-0 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
           <Input
             placeholder="Enter dot name and press Enter to add..."
             value={newDotLabel}
@@ -3015,7 +3227,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             onFocus={() => setEditingDotId(null)}
             onKeyPress={(e) => e.key === "Enter" && addDot()}
             maxLength={24}
-            className="h-8 text-xs"
+            className="mt-1.5 h-8 text-xs"
           />
           {newDotLabel.length === 24 && editingDotId === null && (
             <div className="text-xs text-red-500 mt-1">Dot name cannot exceed 24 characters.</div>
@@ -3031,7 +3243,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-7 px-2 text-[11px]"
+                  className="h-7 px-2 text-[12px]"
                   onClick={() => {
                     const allActiveDotIds = activeDots.map((dot) => dot.id)
                     setSelectedDotIds((prev) => {
@@ -3048,7 +3260,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 px-2 text-[11px]"
+                      className="h-7 px-2 text-[12px]"
                       onClick={archiveSelectedDots}
                     >
                       Archive
@@ -3056,7 +3268,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 px-2 text-[11px]"
+                      className="h-7 px-2 text-[12px]"
                       onClick={markSelectedDotsAsDone}
                     >
                       Mark as Done
@@ -3064,7 +3276,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 px-2 text-[11px]"
+                      className="h-7 px-2 text-[12px]"
                       onClick={() => flagSelectedDotsForToday(true)}
                     >
                       Flag for Today
@@ -3072,7 +3284,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                     <Button
                       size="sm"
                       variant="outline"
-                      className="h-7 px-2 text-[11px]"
+                      className="h-7 px-2 text-[12px]"
                       onClick={() => flagSelectedDotsForToday(false)}
                     >
                       Unflag Today
@@ -3080,7 +3292,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                     <Button
                       size="sm"
                       variant="destructive"
-                      className="h-7 px-2 text-[11px]"
+                      className="h-7 px-2 text-[12px]"
                       onClick={() =>
                         setBatchDeleteConfirm({
                           dotIds: activeDots.filter((dot) => selectedDotIds.includes(dot.id)).map((dot) => dot.id),
@@ -3096,8 +3308,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             </div>
           )}
 
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            {activeDots.map((dot: Dot) => (
+          <div ref={dotsGridRef} className="h-[206px] overflow-hidden pb-1">
+            <div className="grid grid-flow-col grid-rows-2 auto-cols-[minmax(170px,170px)] gap-4">
+              {paginatedActiveDots.map((dot: Dot) => (
               <div
                 key={dot.id}
                 className={`rounded-md border bg-background p-2.5 shadow-[0px_4px_12px_0px_rgba(0,0,0,0.15)] ${selectedDotIds.includes(dot.id) ? "border-destructive/70 ring-1 ring-destructive/40" : "border-border"}`}
@@ -3172,7 +3385,38 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       {dot.label}
                     </p>
                   )}
-                  <span className="text-xs text-muted-foreground">{Math.round(dot.x)}%</span>
+                  {editingDotPercentId === dot.id ? (
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={editingDotPercent}
+                      onChange={(e) => setEditingDotPercent(e.target.value)}
+                      onKeyDown={async (e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault()
+                          await confirmEditingDotPercent(dot)
+                        }
+                        if (e.key === "Escape") {
+                          e.preventDefault()
+                          cancelEditingDotPercent()
+                        }
+                      }}
+                      onBlur={async () => {
+                        await confirmEditingDotPercent(dot)
+                      }}
+                      autoFocus
+                      className="h-5 w-12 px-1 text-xs text-muted-foreground"
+                    />
+                  ) : (
+                    <span
+                      className="text-xs text-muted-foreground cursor-text select-none"
+                      onDoubleClick={() => startEditingDotPercent(dot)}
+                      title="Double-click to edit percentage"
+                    >
+                      {Math.round(dot.x)}%
+                    </span>
+                  )}
                 </div>
                 <div className="mb-2 h-1.5 w-full rounded-full bg-muted">
                   <div
@@ -3238,7 +3482,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       <div className="absolute right-0 top-7 z-20 min-w-[150px] rounded-md border border-border bg-background shadow-md">
                         <button
                           type="button"
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] hover:bg-accent hover:text-accent-foreground"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-accent hover:text-accent-foreground"
                           onClick={async () => {
                             await updateDot(dot.id, { flag_for_today: !dot.flag_for_today })
                             setDotMenuOpen(null)
@@ -3249,7 +3493,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         </button>
                         <button
                           type="button"
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] hover:bg-accent hover:text-accent-foreground"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-accent hover:text-accent-foreground"
                           onClick={async () => {
                             await updateDot(dot.id, { archived: true })
                             setDotMenuOpen(null)
@@ -3260,7 +3504,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         </button>
                         <button
                           type="button"
-                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11px] text-destructive hover:bg-accent"
+                          className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] text-destructive hover:bg-accent"
                           onClick={() => {
                             setDeleteConfirm({ dotId: dot.id, dotLabel: dot.label })
                             setDotMenuOpen(null)
@@ -3274,13 +3518,40 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                   </div>
                 </div>
               </div>
-            ))}
+              ))}
+            </div>
           </div>
+          {totalDotsPages > 1 && (
+            <div
+              className="mt-2 flex items-center justify-center gap-1.5"
+              role="tablist"
+              aria-label="Dots pagination"
+            >
+              {Array.from({ length: totalDotsPages }, (_, index) => {
+                const pageNumber = index + 1
+                const isActivePage = pageNumber === currentDotsPage
+                return (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActivePage}
+                    aria-label={`Go to dots page ${pageNumber}`}
+                    onClick={() => setDotsPage(pageNumber)}
+                    className={`h-1.5 rounded-full transition-all duration-200 ${isActivePage
+                      ? "w-5 bg-foreground"
+                      : "w-1.5 bg-muted-foreground/40 hover:bg-muted-foreground/70"
+                      }`}
+                  />
+                )
+              })}
+            </div>
+          )}
           {archivedDots.length > 0 && (
             <>
               <div className="my-2 border-t border-border" />
               <div className="text-xs text-muted-foreground mb-1">Archived</div>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
                 {archivedDots.map((dot: Dot) => (
                   <div
                     key={dot.id}
@@ -3308,6 +3579,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           )}
         </CardContent>
       </Card>
+          </div>
+        </div>
+      </div>
 
       {/* Modals */}
       {deleteConfirm && (
