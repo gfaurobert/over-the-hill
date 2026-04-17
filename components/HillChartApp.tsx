@@ -3614,36 +3614,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
               })}
             </div>
           )}
-          {archivedDots.length > 0 && (
-            <>
-              <div className="my-2 border-t border-border" />
-              <div className="text-xs text-muted-foreground mb-1">Archived</div>
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
-                {archivedDots.map((dot: Dot) => (
-                  <div
-                    key={dot.id}
-                    className="rounded-md border border-border bg-muted/40 p-2.5 opacity-65 grayscale shadow-[0px_4px_12px_0px_rgba(0,0,0,0.1)]"
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="truncate text-xs font-medium italic text-muted-foreground">{dot.label}</p>
-                      <span className="text-xs text-muted-foreground">{Math.round(dot.x)}%</span>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-6 w-full px-2 text-[11px]"
-                      onClick={async () => {
-                        await updateDot(dot.id, { archived: false })
-                      }}
-                    >
-                      <Undo2 className="mr-1 h-3.5 w-3.5" />
-                      Unarchive
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
         </CardContent>
       </Card>
           </div>
