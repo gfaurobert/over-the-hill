@@ -61,6 +61,12 @@ import {
   updateCollectionReleaseLineConfig,
   getCollectionReleaseLineConfig,
 } from "@/lib/services/simpleDataService"
+import {
+  getCollectionSeverity,
+  sortCollectionsBySeverity,
+  type CollectionSeverity,
+} from "@/lib/utils/collectionSeverity"
+import { cn } from "@/lib/utils"
 
 export interface Dot {
   id: string
@@ -85,6 +91,7 @@ export interface Collection {
   status: 'active' | 'archived' | 'deleted'
   archived_at?: string
   deleted_at?: string
+  created_at?: string
   dots: Dot[]
   releaseLineConfig?: ReleaseLineConfig
 }
@@ -851,7 +858,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   const todayCollectionId = user?.id ? `today-${user.id}` : null
   const realTodayCollection = todayCollectionId ? collections.find((collection) => collection.id === todayCollectionId) : null
-  const nonTodayCollections = collections.filter((collection) => collection.id !== todayCollectionId)
+  const nonTodayCollections = sortCollectionsBySeverity(
+    collections.filter((collection) => collection.id !== todayCollectionId),
+    dotColors,
+  )
 
   const todayFlaggedDots = nonTodayCollections.flatMap((collection) =>
     collection.dots
@@ -2687,7 +2697,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                   ) : collectionsForSelector.length > 0 ? (
                     filteredCollectionsForSidebar.length > 0 ? (
                       <>
-                        <div className="min-h-0 flex-1 space-y-1 overflow-hidden pr-1">
+                        <div className="min-h-0 flex-1 space-y-1 overflow-visible">
                           {paginatedCollectionsForSidebar.map((collection) => {
                         const isSelectedCollection = selectedCollection === collection.id
                         const isTodayCollection = todayCollectionId !== null && collection.id === todayCollectionId
@@ -2730,16 +2740,39 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                               </div>
                             ) : (
                               <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCollectionSelect(collection)}
-                                  className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${isSelectedCollection
-                                    ? "border-primary/40 bg-primary/10 text-foreground"
-                                    : "border-border bg-background hover:bg-accent hover:text-accent-foreground"
-                                    } ${isTodayCollection ? "pr-3" : "pr-10"}`}
-                                >
-                                  <span className="block truncate">{collection.name}</span>
-                                </button>
+                                {(() => {
+                                  const severity = getCollectionSeverity(collection, dotColors)
+                                  const ariaLabel = severity.statusLabel
+                                    ? `${collection.name}, ${severity.statusLabel}`
+                                    : collection.name
+                                  return (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCollectionSelect(collection)}
+                                        aria-label={ariaLabel}
+                                        className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${isSelectedCollection
+                                          ? "border-primary/40 bg-primary/10 text-foreground"
+                                          : "border-border bg-background hover:bg-accent hover:text-accent-foreground"
+                                          } ${isTodayCollection ? "pr-3" : "pr-10"}`}
+                                      >
+                                        <span className="block truncate">{collection.name}</span>
+                                      </button>
+                                      {severity.indicatorColor && (
+                                        <span
+                                          aria-hidden="true"
+                                          data-testid="collection-severity-dot"
+                                          className={cn(
+                                            "pointer-events-none absolute -top-1 -right-1 z-10 h-2.5 w-2.5 rounded-full ring-2 ring-background",
+                                            severity.indicatorColor === "red" && "bg-red-500 dark:bg-red-400",
+                                            severity.indicatorColor === "amber" && "bg-amber-400 dark:bg-amber-300",
+                                            severity.indicatorColor === "emerald" && "bg-emerald-500 dark:bg-emerald-400",
+                                          )}
+                                        />
+                                      )}
+                                    </>
+                                  )
+                                })()}
                                 {!isTodayCollection && (
                                   <>
                                     <Button

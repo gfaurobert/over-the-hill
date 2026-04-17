@@ -182,7 +182,7 @@ export const fetchCollections = async (
 
     const { data: collectionsData, error: collectionsError } = await supabase
       .from("collections")
-      .select("id, name_encrypted, name_hash, status, archived_at, deleted_at, release_line_config_encrypted")
+      .select("id, name_encrypted, name_hash, status, archived_at, deleted_at, release_line_config_encrypted, created_at")
       .eq("user_id", validatedUserId)
       .in("status", statusFilter)
       .order("status", { ascending: true }) // Active first, then archived
@@ -273,6 +273,7 @@ export const fetchCollections = async (
             status: collection.status as 'active' | 'archived' | 'deleted',
             archived_at: collection.archived_at,
             deleted_at: collection.deleted_at,
+            created_at: collection.created_at,
             dots: decryptedDots,
             releaseLineConfig
           }
@@ -336,7 +337,14 @@ export const addCollection = async (collection: Collection, userId: string): Pro
     }
     
     console.log('[ADD_COLLECTION] Database insert successful:', data)
-    const result = data ? { ...validatedCollection, dots: [] } : null
+    const result = data
+      ? {
+          ...validatedCollection,
+          dots: [],
+          created_at:
+            (Array.isArray(data) && data[0]?.created_at) || new Date().toISOString(),
+        }
+      : null
     console.log('[ADD_COLLECTION] Returning result:', result)
     return result
   } catch (error) {
