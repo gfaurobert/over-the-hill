@@ -3661,6 +3661,43 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
           </div>
         </div>
       )}
+      {showArchiveModal && currentCollection && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-lg w-full mx-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">
+                Archived Dots — {currentCollection.name}
+              </h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => {
+                  setShowArchiveModal(false)
+                  setArchiveSearchQuery("")
+                }}
+                aria-label="Close archived dots"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="text-sm text-muted-foreground">
+              {archivedDots.length} archived dot{archivedDots.length === 1 ? "" : "s"}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowArchiveModal(false)
+                  setArchiveSearchQuery("")
+                }}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {showResetConfirm && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
