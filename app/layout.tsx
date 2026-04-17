@@ -1,6 +1,5 @@
 import './globals.css';
 import { ReactNode } from 'react';
-import { AuthProvider } from '../components/AuthProvider';
 import { ThemeProvider } from '../components/theme-provider';
 import ServiceWorkerRegister from '../components/ServiceWorkerRegister';
 import { FetchPatch } from '../components/debug/FetchPatch';
@@ -33,7 +32,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         >
           {process.env.NODE_ENV === 'development' && isDebugIngestEnabled ? <FetchPatch /> : null}
           <ServiceWorkerRegister />
-          <AuthProvider>{children}</AuthProvider>
+          {children}
         </ThemeProvider>
       </body>
     </html>

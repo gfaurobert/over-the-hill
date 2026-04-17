@@ -24,12 +24,10 @@ import {
   ChevronRight,
   Camera,
   Info,
-  Heart, // Add Heart icon import
   Edit2,
   X,
   Archive as ArchiveIcon,
   Undo2,
-  Shield,
   Rocket,
   Flag,
   Palette,
@@ -37,10 +35,6 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select"
 import { Switch } from "./ui/switch"
 import { useTheme } from "next-themes"
-import SignOutButton from "./SignOutButton"
-import { useAuth } from "./AuthProvider"
-import { PrivacySettings } from "./PrivacySettings"
-import { CacheStatusBadge } from "./CacheStatusBadge"
 import { ReleaseLineSettings } from "./ReleaseLineSettings"
 import {
   fetchCollections,
@@ -61,7 +55,7 @@ import {
   updateUserPreferences,
   updateCollectionReleaseLineConfig,
   getCollectionReleaseLineConfig,
-} from "@/lib/services/simpleDataService"
+} from "@/lib/services/demoLocalDataService"
 
 export interface Dot {
   id: string
@@ -129,6 +123,11 @@ const defaultDarkGradientEnd = "#1e293b"
 const TODAY_COLLECTION_NAME = "Today"
 const SIDEBAR_COLLECTIONS_PER_PAGE = 12
 const DOTS_PER_PAGE = 10
+const DEMO_USER = {
+  id: "demo-local-user",
+  email: "demo@local",
+  user_metadata: { name: "Demo User" },
+}
 
 // Helper function to get local date string in YYYY-MM-DD format (consistent with backend)
 const getLocalDateString = (date: Date): string => {
@@ -332,7 +331,7 @@ function DotRow({ dot, dotMenuOpen, setDotMenuOpen, setDeleteConfirm, updateDot,
   )
 }
 
-const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPassword }) => {
+const HillChartApp: React.FC = () => {
   const getHillY = (x: number) => {
     const centerX = 300,
       width = 600,
@@ -392,7 +391,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [showTodayCollection, setShowTodayCollection] = useState(true)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [showInfoModal, setShowInfoModal] = useState(false)
-  const { user } = useAuth()
+  const user = DEMO_USER
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedSnapshot, setSelectedSnapshot] = useState<string | null>(null)
@@ -417,7 +416,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     archivedCollectionId?: string
   } | null>(null)
   const [showArchivedCollectionsModal, setShowArchivedCollectionsModal] = useState(false)
-  const [showPrivacySettings, setShowPrivacySettings] = useState(false)
   const [showColorSettingsModal, setShowColorSettingsModal] = useState(false)
   const [showCreateCollectionModal, setShowCreateCollectionModal] = useState(false)
   const [newCollectionNameInput, setNewCollectionNameInput] = useState("")
@@ -2165,14 +2163,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
   }
 
-  // Add tip handler function
-  const handleTipClick = () => {
-    // Replace 'your-paypal-username' with your actual PayPal.me username
-    const paypalLink = 'https://paypal.me/gfaurobert'
-    window.open(paypalLink, '_blank')
-    setShowEllipsisMenu(false)
-  }
-
   const renderCalendar = () => {
     const today = new Date()
     const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
@@ -2378,7 +2368,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                     >
                       <div
                         ref={settingsModalRef}
-                        className="w-[95vw] max-w-5xl md:min-w-[800px] max-h-[85vh] overflow-hidden rounded-lg border border-border bg-background shadow-lg"
+                        className="w-[95vw] h-fit max-w-5xl md:min-w-[800px] overflow-visible rounded-lg border border-border bg-background shadow-lg"
                         onMouseDown={(event) => event.stopPropagation()}
                       >
                         <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -2523,117 +2513,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                           <UploadIcon className="w-4 h-4" /> Import Collections
                           <input type="file" accept=".json" onChange={handleImport} className="hidden" />
                         </label>
-                      </div>
-                      <div className="py-1 rounded-md border border-border/60">
-                        {/* Account Section */}
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-border">
-                          Account
-                        </div>
-                        {/* Username Display */}
-                        <div className="px-3 py-2 text-sm text-muted-foreground border-b border-border">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 w-2 shrink-0 rounded-full bg-green-500"></div>
-                            <span className="truncate max-w-[180px]" title={user?.user_metadata?.name || user?.email || 'Unknown User'}>
-                              {user?.user_metadata?.name || user?.email || 'Unknown User'}
-                            </span>
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => {
-                            setShowEllipsisMenu(false)
-                            onResetPassword()
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          Reset Password
-                        </button>
-                        <SignOutButton className="w-full px-3 py-2 text-sm text-left text-red-600 dark:text-red-500 hover:bg-accent hover:text-accent-foreground flex items-center gap-2" />
-
-                        {/* Cache Status Section */}
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                          Cache Status
-                        </div>
-                        <div className="px-3 py-2 flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">Data Sync</span>
-                          <CacheStatusBadge />
-                        </div>
-                        <button
-                          onClick={async () => {
-                            if (user?.id) {
-                              console.log('[HILL_CHART] Manual data refresh requested')
-                              setIsLoadingCollections(true)
-                              try {
-                                // Fetch fresh data from database
-
-                                const [activeCollections, allCollections, snapshots] = await Promise.all([
-                                  fetchCollections(user.id, false),
-                                  fetchCollections(user.id, true),
-                                  fetchSnapshots(user.id)
-                                ])
-
-                                setCollections(activeCollections)
-                                setOriginalCollections(activeCollections)
-
-                                const archived = allCollections.filter(c => c.status === 'archived')
-                                setArchivedCollections(archived)
-                                setSnapshots(snapshots)
-
-                                console.log('[HILL_CHART] Manual refresh completed successfully')
-                              } catch (error) {
-                                console.error('[HILL_CHART] Manual refresh failed:', error)
-                              } finally {
-                                setIsLoadingCollections(false)
-                                setShowEllipsisMenu(false)
-                              }
-                            }
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Download className="w-4 h-4" /> Refresh Data
-                        </button>
-                        <button
-                          onClick={async () => {
-                            if (confirm('This will clear all stored data and force a complete refresh. Continue?')) {
-                              console.log('[HILL_CHART] Manual storage clear requested')
-                              try {
-                                const { clearAllAppStorage } = await import('@/lib/utils/storageUtils')
-                                await clearAllAppStorage()
-                                console.log('[HILL_CHART] All storage cleared successfully')
-                                // Reload the page to start fresh
-                                window.location.reload()
-                              } catch (error) {
-                                console.error('[HILL_CHART] Failed to clear storage:', error)
-                              }
-                            }
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2 text-orange-600 dark:text-orange-400"
-                        >
-                          <Trash2 className="w-4 h-4" /> Clear Local Storage
-                        </button>
-                        {/* Privacy Section */}
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                          Privacy
-                        </div>
-                        <button
-                          onClick={() => {
-                            setShowPrivacySettings(true)
-                            setShowEllipsisMenu(false)
-                          }}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Shield className="w-4 h-4" /> Privacy Settings
-                        </button>
-
-                        {/* Support Section */}
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                          Support
-                        </div>
-                        <button
-                          onClick={handleTipClick}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Heart className="w-4 h-4" /> Send Tip
-                        </button>
                       </div>
                         </div>
                       </div>
@@ -3966,11 +3845,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             )}
           </div>
         </div>
-      )}
-
-      {/* Privacy Settings Modal */}
-      {showPrivacySettings && (
-        <PrivacySettings onClose={() => setShowPrivacySettings(false)} />
       )}
 
       {/* Color Settings Modal */}
