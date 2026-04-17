@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { emailService } from '@/lib/services/emailService';
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     console.log('🧪 Testing email service from API endpoint...');
     
@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     console.log('📊 Getting email service health status...');
     

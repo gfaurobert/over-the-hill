@@ -33,6 +33,8 @@ export const test = base.extend<{ authedPage: Page }>({
     }
 
     const page = await context.newPage()
+    // Playwright fixture runner callback (not a React hook)
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright `use` fixture API
     await use(page)
     await context.close()
   },

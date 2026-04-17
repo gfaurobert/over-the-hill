@@ -13,7 +13,7 @@ import {
 } from '../../lib/tokenSecurity';
 
 function InvitePageContent() {
-  const { user, loading, supabase } = useAuth();
+  const { loading, supabase } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [invitationEmail, setInvitationEmail] = useState<string | null>(null);
@@ -65,7 +65,7 @@ function InvitePageContent() {
         const invitationResult = await processTokenSecurely(
           'invitation_processing',
           tokenResult,
-          async (token, email, type) => {
+          async (token, email) => {
             // Try multiple invitation verification methods
             const methods = [
               {

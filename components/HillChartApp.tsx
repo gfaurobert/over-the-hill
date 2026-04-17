@@ -1,7 +1,6 @@
 "use client"
 
-import React, { useState, useRef, useEffect, useCallback } from "react"
-import ReactDOM from "react-dom"
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import { Button } from "./ui/button"
 import { Input } from "./ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
@@ -9,7 +8,6 @@ import {
   CopyIcon,
   Download,
   Trash2,
-  ChevronDown,
   Sun,
   Moon,
   Monitor,
@@ -23,13 +21,11 @@ import {
   ChevronRight,
   Camera,
   Info,
-  Heart, // Add Heart icon import
   Edit2,
   X,
   Archive as ArchiveIcon,
   Undo2,
   Shield,
-  Rocket,
   Flag,
   Palette,
 } from "lucide-react"
@@ -54,18 +50,13 @@ import {
   importData,
   createSnapshot,
   fetchSnapshots,
-  loadSnapshot,
   resetAllCollections,
   fetchUserPreferences,
   updateUserPreferences,
   updateCollectionReleaseLineConfig,
   getCollectionReleaseLineConfig,
 } from "@/lib/services/simpleDataService"
-import {
-  getCollectionSeverity,
-  sortCollectionsBySeverity,
-  type CollectionSeverity,
-} from "@/lib/utils/collectionSeverity"
+import { getCollectionSeverity, sortCollectionsBySeverity } from "@/lib/utils/collectionSeverity"
 import { cn } from "@/lib/utils"
 
 export interface Dot {
@@ -157,187 +148,6 @@ const generateBellCurvePath = (width = 600, height = 150, centerX = 300) => {
   return points.join(" ")
 }
 
-function DotMenuPortal({ children }: { children: React.ReactNode }) {
-  const [mounted, setMounted] = React.useState(false)
-  React.useEffect(() => {
-    setMounted(true)
-  }, [])
-  if (!mounted) return null
-  return ReactDOM.createPortal(children, document.body)
-}
-
-function DotMenuDropdown({ anchorRef, onClose, onDelete, onArchive }: {
-  anchorRef: React.RefObject<HTMLDivElement | null>,
-  onClose: () => void,
-  onDelete: () => void,
-  onArchive: () => void,
-}) {
-  const dropdownRef = React.useRef<HTMLDivElement>(null)
-  const [position, setPosition] = React.useState<{ top: number; left: number } | null>(null)
-
-  React.useEffect(() => {
-    function updatePosition() {
-      if (anchorRef.current) {
-        const rect = anchorRef.current.getBoundingClientRect()
-        setPosition({
-          top: rect.bottom + window.scrollY,
-          left: rect.right - 160 + window.scrollX, // 160px = min width
-        })
-      }
-    }
-    updatePosition()
-    window.addEventListener('scroll', updatePosition, true)
-    window.addEventListener('resize', updatePosition)
-    return () => {
-      window.removeEventListener('scroll', updatePosition, true)
-      window.removeEventListener('resize', updatePosition)
-    }
-  }, [anchorRef])
-
-  React.useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node) &&
-        anchorRef.current &&
-        !anchorRef.current.contains(e.target as Node)
-      ) {
-        onClose()
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [onClose, anchorRef])
-
-  if (!position) return null
-  return (
-    <div
-      ref={dropdownRef}
-      style={{
-        position: 'absolute',
-        top: position.top,
-        left: position.left,
-        zIndex: 1000,
-        minWidth: 160,
-      }}
-      className="bg-background border border-border rounded shadow-lg"
-    >
-      <button
-        className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-accent hover:text-accent-foreground"
-        onClick={onDelete}
-      >
-        <Trash2 className="w-4 h-4 text-red-500" /> Delete
-      </button>
-      <button
-        className="w-full px-4 py-2 text-left text-sm flex items-center gap-2 hover:bg-accent hover:text-accent-foreground"
-        onClick={onArchive}
-      >
-        <ArchiveIcon className="w-4 h-4 text-muted-foreground" /> Archive
-      </button>
-    </div>
-  )
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function DotRow({ dot, dotMenuOpen, setDotMenuOpen, setDeleteConfirm, updateDot, editingDotId, setEditingDotId }: any) {
-  const menuButtonRef = React.useRef<HTMLDivElement>(null)
-  return (
-    <div className="p-3 bg-muted/50 rounded-lg space-y-3">
-      {/* Dot Name and Controls Row */}
-      <div className="flex items-center gap-2">
-        <Input
-          value={dot.label}
-          onChange={(e) => {
-            if (e.target.value.length <= 24) {
-              updateDot(dot.id, { label: e.target.value })
-            }
-          }}
-          onFocus={() => setEditingDotId(dot.id)}
-          onBlur={() => setEditingDotId(null)}
-          className="text-sm flex-1"
-          placeholder="Dot name"
-          maxLength={24}
-        />
-        <Select
-          value={dot.color}
-          onValueChange={(value) => updateDot(dot.id, { color: value })}
-        >
-          <SelectTrigger className="w-12 h-8 p-0 border-0 bg-transparent">
-            <div
-              className="w-6 h-6 rounded-full border-2 border-gray-300"
-              style={{ backgroundColor: dot.color }}
-            />
-          </SelectTrigger>
-          <SelectContent>
-            {Object.values(defaultDotColors).map((color, index) => (
-              <SelectItem key={color} value={color}>
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-4 h-4 rounded-full border border-gray-300"
-                    style={{ backgroundColor: color }}
-                  />
-                  <span className="text-sm">
-                    {dotColorLabels[index]}
-                  </span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={dot.size.toString()}
-          onValueChange={(value) => updateDot(dot.id, { size: Number(value) })}
-        >
-          <SelectTrigger className="w-12 h-8">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {[1, 2, 3, 4, 5].map((size) => (
-              <SelectItem key={size} value={size.toString()}>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{size}</span>
-                  <span className="text-xs text-gray-500">
-                    {['XS', 'S', 'M', 'L', 'XL'][size - 1]}
-                  </span>
-                </div>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="relative" ref={menuButtonRef}>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setDotMenuOpen(dotMenuOpen === dot.id ? null : dot.id)}
-            className="h-8 w-8 p-0 border-muted hover:border-accent hover:bg-accent/20"
-          >
-            <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
-          </Button>
-          {dotMenuOpen === dot.id && (
-            <DotMenuPortal>
-              <DotMenuDropdown
-                anchorRef={menuButtonRef}
-                onClose={() => setDotMenuOpen(null)}
-                onDelete={() => {
-                  setDotMenuOpen(null)
-                  setDeleteConfirm({ dotId: dot.id, dotLabel: dot.label })
-                }}
-                onArchive={async () => {
-                  setDotMenuOpen(null)
-                  await updateDot(dot.id, { archived: true })
-                }}
-              />
-            </DotMenuPortal>
-          )}
-        </div>
-      </div>
-      {dot.label.length === 24 && editingDotId === dot.id && (
-        <div className="text-xs text-red-500 mt-1">Dot name cannot exceed 24 characters.</div>
-      )}
-    </div>
-  )
-}
-
 const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPassword }) => {
   const getHillY = (x: number) => {
     const centerX = 300,
@@ -355,9 +165,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [newDotLabel, setNewDotLabel] = useState("")
   const [isDragging, setIsDragging] = useState<string | null>(null)
   const [collectionInput, setCollectionInput] = useState("")
-  const [showDropdown, setShowDropdown] = useState(false)
-  const [isTyping, setIsTyping] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
+  const [, setShowDropdown] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState<{ dotId: string; dotLabel: string } | null>(null)
   const [selectedDotIds, setSelectedDotIds] = useState<string[]>([])
   const [batchDeleteConfirm, setBatchDeleteConfirm] = useState<{ dotIds: string[]; count: number } | null>(null)
@@ -403,13 +211,12 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedSnapshot, setSelectedSnapshot] = useState<string | null>(null)
   const [draggingDot, setDraggingDot] = useState<{ id: string; x: number; y: number } | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null)
+  const [, setDragStartPos] = useState<{ x: number; y: number } | null>(null)
 
   // Snapshot state management
   const [isViewingSnapshot, setIsViewingSnapshot] = useState(false)
-  const [currentSnapshot, setCurrentSnapshot] = useState<Snapshot | null>(null)
-  const [snapshotCollections, setSnapshotCollections] = useState<Collection[]>([])
+  const [, setCurrentSnapshot] = useState<Snapshot | null>(null)
+  const [, setSnapshotCollections] = useState<Collection[]>([])
   const [originalCollections, setOriginalCollections] = useState<Collection[]>([])
   const [snapshotSuccess, setSnapshotSuccess] = useState(false)
 
@@ -463,13 +270,16 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     [collectionId: string]: ReleaseLineConfig
   }>({})
   const [isLoadingReleaseLineConfig, setIsLoadingReleaseLineConfig] = useState(false)
-  const dotColorOptions = [
-    dotColors.discovery,
-    dotColors.upslope,
-    dotColors.dangerZone,
-    dotColors.downslope,
-    dotColors.done,
-  ]
+  const dotColorOptions = useMemo(
+    () => [
+      dotColors.discovery,
+      dotColors.upslope,
+      dotColors.dangerZone,
+      dotColors.downslope,
+      dotColors.done,
+    ],
+    [dotColors],
+  )
 
   // Release line configuration functions
   const loadReleaseLineConfig = useCallback(async (collectionId: string) => {
@@ -905,7 +715,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     currentCollectionPage * SIDEBAR_COLLECTIONS_PER_PAGE,
   )
   const currentCollection = collectionsForSelector.find((c) => c.id === selectedCollection)
-  const isTodaySelected = todayCollectionId !== null && selectedCollection === todayCollectionId
 
   useEffect(() => {
     setSelectedDotIds([])
@@ -1023,20 +832,17 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     [user, collections],
   )
 
-  const handleDotDrag = useCallback((dotId: string, clientX: number, clientY: number) => {
+  const handleDotDrag = useCallback((dotId: string, clientX: number) => {
     if (!svgRef.current) return
 
     const svgRect = svgRef.current.getBoundingClientRect()
     const svgWidth = svgRect.width
-    const svgHeight = svgRect.height
 
     // Calculate relative position within SVG
     const relativeX = clientX - svgRect.left
-    const relativeY = clientY - svgRect.top
 
     // Convert to SVG coordinates (viewBox is "-50 0 700 180")
     const svgX = (relativeX / svgWidth) * 700 - 50
-    const svgY = (relativeY / svgHeight) * 180
 
     // Constrain to chart area (0 to 600 in SVG coordinates)
     const constrainedX = Math.max(0, Math.min(600, svgX))
@@ -1054,14 +860,14 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     setDragStartPos({ x: e.clientX, y: e.clientY })
 
     // Set initial dragging dot position
-    handleDotDrag(dotId, e.clientX, e.clientY)
+    handleDotDrag(dotId, e.clientX)
   }, [handleDotDrag])
 
   // Document-level mouse event handlers for smooth dragging
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (isDragging) {
-        handleDotDrag(isDragging, e.clientX, e.clientY)
+        handleDotDrag(isDragging, e.clientX)
       }
     }
 
@@ -1094,7 +900,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
     }
-  }, [isDragging, draggingDot, handleDotDrag, updateDot])
+  }, [isDragging, draggingDot, handleDotDrag, updateDot, dotColorOptions])
 
   const addDot = async () => {
     if (!newDotLabel.trim() || !selectedCollection || !user) return
@@ -1432,72 +1238,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
   }
 
-  const handleCollectionInputKeyPress = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && collectionInput.trim() && user) {
-      e.preventDefault()
-
-      const trimmedName = collectionInput.trim()
-      const nameExists = collections.some((c) => c.name.toLowerCase() === trimmedName.toLowerCase())
-      const archivedExists = archivedCollections.find((c) => c.name.toLowerCase() === trimmedName.toLowerCase())
-
-      if (nameExists) {
-        // Active collection with this name already exists
-        setCollectionNameConflict({
-          name: trimmedName,
-          type: 'active'
-        })
-      } else if (archivedExists) {
-        // Archived collection with this name exists
-        setCollectionNameConflict({
-          name: trimmedName,
-          type: 'archived',
-          archivedCollectionId: archivedExists.id
-        })
-      } else {
-        // Name is available, create new collection
-        const newCollection = {
-          id: Date.now().toString(),
-          name: trimmedName,
-          status: 'active' as const,
-          archived_at: undefined,
-          deleted_at: undefined,
-          dots: []
-        }
-
-        try {
-          const added = await addCollection(user.id, newCollection.name)
-          if (added) {
-            console.log('[HILL_CHART] Collection created successfully:', added)
-            // Update local state immediately
-            setCollections((prev) => [...prev, added])
-            setSelectedCollection(added.id)
-            setCollectionInput(added.name)
-            // Load release line config for the new collection
-            loadReleaseLineConfig(added.id)
-            // Clear the input after successful creation
-            setCollectionInput("")
-          } else {
-            console.error('[HILL_CHART] Collection creation returned null')
-            setCollectionNameConflict({
-              name: trimmedName,
-              type: 'active'
-            })
-          }
-        } catch (error) {
-          console.error("Failed to create collection:", error)
-          // Show a generic error if the API call fails
-          setCollectionNameConflict({
-            name: trimmedName,
-            type: 'active' // Assume it's a name conflict since that's the most likely cause
-          })
-        }
-      }
-
-      setShowDropdown(false)
-      setIsTyping(false)
-    }
-  }
-
   const handleCreateCollectionFromSidebar = () => {
     if (!user) return
 
@@ -1553,7 +1293,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       setCollectionInput(addedCollection.name)
       loadReleaseLineConfig(addedCollection.id)
       setShowDropdown(false)
-      setIsTyping(false)
       setShowCreateCollectionModal(false)
       setNewCollectionNameInput("")
     } catch (error) {
@@ -1980,29 +1719,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
   }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setCollectionInput(e.target.value)
-    setIsTyping(true)
-    setShowDropdown(true)
-  }
-
-  const handleInputFocus = () => {
-    setShowDropdown(true)
-  }
-
-  const toggleDropdown = () => {
-    if (!showDropdown) {
-      setCollectionInput("")
-    }
-    setShowDropdown(!showDropdown)
-    setIsTyping(false)
-  }
-
   const handleCollectionSelect = (collection: Collection) => {
     setSelectedCollection(collection.id)
     setCollectionInput(collection.name)
     setShowDropdown(false)
-    setIsTyping(false)
     setSelectedSnapshot(null)
     // Load release line config for the selected collection
     loadReleaseLineConfig(collection.id)
@@ -2178,14 +1898,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     if (firstCollection) {
       loadReleaseLineConfig(firstCollection.id)
     }
-  }
-
-  // Add tip handler function
-  const handleTipClick = () => {
-    // Replace 'your-paypal-username' with your actual PayPal.me username
-    const paypalLink = 'https://paypal.me/gfaurobert'
-    window.open(paypalLink, '_blank')
-    setShowEllipsisMenu(false)
   }
 
   const renderCalendar = () => {
@@ -2661,17 +2373,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                           className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
                         >
                           <Shield className="w-4 h-4" /> Privacy Settings
-                        </button>
-
-                        {/* Support Section */}
-                        <div className="px-3 py-2 text-xs font-medium text-muted-foreground border-b border-t border-border mt-1">
-                          Support
-                        </div>
-                        <button
-                          onClick={handleTipClick}
-                          className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
-                        >
-                          <Heart className="w-4 h-4" /> Send Tip
                         </button>
                       </div>
                         </div>
@@ -3220,8 +2921,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
                       // Render dots with collision-free labels
                       return (currentCollection?.dots || []).filter(dot => !dot.archived).map((dot) => {
-                        const dotX = (dot.x / 100) * 600;
-
                         // Use draggingDot for immediate feedback if this dot is being dragged with null safety
                         const isBeingDragged = draggingDot?.id === dot.id;
                         const currentXPercent = isBeingDragged && draggingDot ? draggingDot.x : dot.x;

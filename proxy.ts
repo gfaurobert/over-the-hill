@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type User } from '@supabase/supabase-js';
 import { sendDebugIngestEvent } from './lib/debug-ingest';
 
 // Protected routes that require authentication
@@ -102,7 +102,7 @@ function getTokenFromRequest(request: NextRequest): string | null {
   return null;
 }
 
-async function validateTokenServerSide(token: string): Promise<{ valid: boolean; user?: any }> {
+async function validateTokenServerSide(token: string): Promise<{ valid: boolean; user?: User }> {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

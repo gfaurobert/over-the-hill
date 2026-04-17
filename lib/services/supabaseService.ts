@@ -30,32 +30,6 @@ const getLocalDateString = (date: Date): string => {
   return `${year}-${month}-${day}`
 }
 
-// Types for Supabase table rows with encrypted fields
-interface CollectionRow {
-  id: string
-  name_encrypted: string
-  name_hash: string
-  user_id: string
-  status: string
-  archived_at?: string
-  deleted_at?: string
-  release_line_config_encrypted?: string
-}
-
-interface DotRow {
-  id: string
-  label_encrypted: string
-  label_hash: string
-  x: number
-  y: number
-  color: string
-  size: number
-  archived: boolean
-  flag_for_today: boolean
-  user_id: string
-  collection_id: string
-}
-
 interface SnapshotRow {
   id: string
   user_id: string
@@ -671,7 +645,7 @@ export const fetchSnapshots = async (userId: string): Promise<Snapshot[]> => {
         let dots = []
         try {
           dots = JSON.parse(decryptedDotsData)
-        } catch (error) {
+        } catch {
           // If JSON parsing fails, we'll get a detailed error but continue with other snapshots
           // Log the error and use empty dots array for this specific snapshot
           console.warn(`[SNAPSHOT_PARSING] Skipping corrupted snapshot ${row.id} for user ${validatedUserId}`)
@@ -684,7 +658,7 @@ export const fetchSnapshots = async (userId: string): Promise<Snapshot[]> => {
           try {
             const decryptedReleaseLineConfig = await privacyService.decryptData(row.release_line_config_encrypted, validatedUserId)
             releaseLineConfig = JSON.parse(decryptedReleaseLineConfig)
-          } catch (error) {
+          } catch {
             // If release line config parsing fails, log warning but continue without it
             console.warn(`[SNAPSHOT_PARSING] Failed to parse release line config for snapshot ${row.id}, using default`)
             releaseLineConfig = undefined
@@ -753,7 +727,7 @@ export const loadSnapshot = async (userId: string, snapshotId: string): Promise<
       try {
         const decryptedReleaseLineConfig = await privacyService.decryptData(data.release_line_config_encrypted, validatedUserId)
         releaseLineConfig = JSON.parse(decryptedReleaseLineConfig)
-      } catch (error) {
+      } catch {
         // If release line config parsing fails, log warning but continue without it
         console.warn(`[SNAPSHOT_PARSING] Failed to parse release line config for snapshot ${data.id}, using default`)
         releaseLineConfig = undefined

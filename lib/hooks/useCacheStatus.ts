@@ -16,20 +16,18 @@ export interface CacheStatus {
 }
 
 export const useCacheStatus = () => {
-  const [status, setStatus] = useState<CacheStatus>({
+  const [status, setStatus] = useState<CacheStatus>(() => ({
     isActive: false,
     isInitialized: false,
     lastActivity: null,
     cacheHits: 0,
     cacheMisses: 0,
     totalEntries: 0,
-    status: 'initializing'
-  })
+    status: typeof window === 'undefined' ? 'ssr' : 'initializing',
+  }))
 
   useEffect(() => {
-    // Check if we're in browser environment
     if (typeof window === 'undefined') {
-      setStatus(prev => ({ ...prev, status: 'ssr' }))
       return
     }
 
@@ -78,7 +76,6 @@ const getCacheEntryCount = async (): Promise<number> => {
   try {
     if (typeof window === 'undefined') return 0
     
-    const cacheManager = getCacheManager()
     // This would need to be implemented in the cache manager
     // For now, return a placeholder
     return 0

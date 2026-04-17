@@ -77,7 +77,6 @@ describe('Release Line SVG Export', () => {
     }
 
     // Mock the prepareSvgForExport logic
-    const isDarkMode = false
     const textColor = "#0a0a0a"
 
     // Process lines (this is what prepareSvgForExport does)

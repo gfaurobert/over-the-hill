@@ -35,8 +35,6 @@ const ImportDataPrompt: React.FC<ImportDataPromptProps> = ({ open, onClose }) =>
     setError(null);
     
     let totalDataSize = 0;
-    let importSuccess = false;
-    
     try {
       // Check rate limiting first
       const rateLimitCheck = ImportSecurityService.checkRateLimit(user.id);
@@ -92,7 +90,6 @@ const ImportDataPrompt: React.FC<ImportDataPromptProps> = ({ open, onClose }) =>
       // Use the validated import service
       await importData(localData, user.id);
       
-      importSuccess = true;
       setSuccess(true);
       
       // Log successful import
@@ -102,8 +99,6 @@ const ImportDataPrompt: React.FC<ImportDataPromptProps> = ({ open, onClose }) =>
       // LOCAL_KEYS.forEach(key => localStorage.removeItem(key));
       
     } catch (e: any) {
-      importSuccess = false;
-      
       // Log failed import attempt
       ImportSecurityService.logImportAttempt(user.id, false, totalDataSize, e.message);
       

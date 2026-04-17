@@ -94,7 +94,7 @@ const SetPasswordForm: React.FC<SetPasswordFormProps> = ({ onPasswordSet }) => {
     setLoading(true);
     try {
       await onPasswordSet(password);
-    } catch (err) {
+    } catch {
       setError('Failed to set password. Please try again.');
     } finally {
       setLoading(false);

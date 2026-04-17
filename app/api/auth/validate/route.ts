@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { accessToken, refreshToken } = body;
+    const { accessToken } = body;
 
     if (!accessToken) {
       return NextResponse.json(
@@ -153,7 +153,7 @@ export async function POST(request: NextRequest) {
     // Validate user ID format
     try {
       validateUserId(user.id);
-    } catch (validationError) {
+    } catch {
       console.warn(`[Session Validation] Invalid user ID format: ${user.id}`);
       return NextResponse.json(
         {
@@ -206,7 +206,7 @@ export async function POST(request: NextRequest) {
           );
         }
       }
-    } catch (jwtError) {
+    } catch {
       // JWT parsing failed, but user validation succeeded, so continue
       console.warn(`[Session Validation] JWT parsing failed but user valid: ${user.id}`);
     }
