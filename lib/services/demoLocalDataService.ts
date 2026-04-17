@@ -23,7 +23,7 @@ interface DemoData {
   releaseLineConfig: Record<string, Record<string, ReleaseLineConfig>>
 }
 
-const STORAGE_KEY = "oth-demo-runtime-v1"
+const STORAGE_KEY = "oth-demo-runtime-v2"
 
 const defaultPreferences: DemoUserPreferences = {
   selectedCollectionId: null,
@@ -41,9 +41,34 @@ const defaultPreferences: DemoUserPreferences = {
   showTodayCollection: true,
 }
 
+const defaultDemoCollections: Collection[] = [
+  {
+    id: "demo-launch-readiness",
+    name: "Launch Readiness",
+    status: "active",
+    dots: [
+      { id: "demo-dot-messaging", label: "Messaging", x: 25, y: 96.3, color: "#b0cdfb", size: 6, archived: false },
+      { id: "demo-dot-signup", label: "Signup Flow", x: 47, y: 0, color: "#a6e7be", size: 6, archived: false },
+      { id: "demo-dot-alerting", label: "Alerting", x: 58, y: 11.32, color: "#f8b4b4", size: 6, archived: false },
+      { id: "demo-dot-analytics", label: "Analytics", x: 77, y: 104.62, color: "#d0bdfb", size: 6, archived: false },
+    ],
+  },
+  {
+    id: "demo-q2-objectives",
+    name: "Q2 Objectives",
+    status: "active",
+    dots: [
+      { id: "demo-dot-api-latency", label: "API Latency", x: 18, y: 121.25, color: "#b0cdfb", size: 6, archived: false },
+      { id: "demo-dot-mobile-polish", label: "Mobile Polish", x: 38, y: 29.25, color: "#a6e7be", size: 6, archived: false },
+      { id: "demo-dot-export-flow", label: "Export Flow", x: 62, y: 29.25, color: "#fcc7a1", size: 6, archived: false },
+      { id: "demo-dot-team-rollout", label: "Team Rollout", x: 84, y: 126.28, color: "#d0bdfb", size: 6, archived: false },
+    ],
+  },
+]
+
 function getInitialData(): DemoData {
   return {
-    collections: [],
+    collections: defaultDemoCollections.map((collection) => normalizeCollection(collection)),
     snapshots: [],
     preferences: {},
     releaseLineConfig: {},
