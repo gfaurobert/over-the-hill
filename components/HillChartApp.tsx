@@ -2668,7 +2668,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                   ) : collectionsForSelector.length > 0 ? (
                     filteredCollectionsForSidebar.length > 0 ? (
                       <>
-                        <div className="min-h-0 flex-1 space-y-1 overflow-hidden pr-1">
+                        <div className="min-h-0 flex-1 space-y-1 overflow-x-hidden pt-1.5 pr-2 pb-0.5">
                           {paginatedCollectionsForSidebar.map((collection) => {
                         const isSelectedCollection = selectedCollection === collection.id
                         const isTodayCollection = todayCollectionId !== null && collection.id === todayCollectionId
@@ -2734,7 +2734,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                                           aria-hidden="true"
                                           data-testid="collection-severity-dot"
                                           className={cn(
-                                            "pointer-events-none absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full ring-2 ring-background",
+                                            "pointer-events-none absolute top-1 right-1 z-10 h-2.5 w-2.5 rounded-full ring-2 ring-background",
                                             severity.indicatorColor === "red" && "bg-red-500 dark:bg-red-400",
                                             severity.indicatorColor === "amber" && "bg-amber-400 dark:bg-amber-300",
                                             severity.indicatorColor === "emerald" && "bg-emerald-500 dark:bg-emerald-400",

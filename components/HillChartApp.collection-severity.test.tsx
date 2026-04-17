@@ -26,7 +26,7 @@ describe('HillChartApp sidebar severity wiring', () => {
 
   it('renders the floating severity dot with ring-2 ring-background and pointer-events-none', () => {
     expect(componentSource).toContain('data-testid="collection-severity-dot"')
-    expect(componentSource).toContain('pointer-events-none absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full ring-2 ring-background')
+    expect(componentSource).toContain('pointer-events-none absolute top-1 right-1 z-10 h-2.5 w-2.5 rounded-full ring-2 ring-background')
   })
 
   it('maps each indicator color to the correct Tailwind classes', () => {
