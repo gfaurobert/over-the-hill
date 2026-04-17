@@ -3681,9 +3681,79 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            <div className="text-sm text-muted-foreground">
-              {archivedDots.length} archived dot{archivedDots.length === 1 ? "" : "s"}
-            </div>
+
+            <Input
+              value={archiveSearchQuery}
+              onChange={(e) => setArchiveSearchQuery(e.target.value)}
+              placeholder="Search archived dots..."
+              maxLength={64}
+              autoFocus
+              className="mb-3 h-8 text-xs"
+            />
+
+            {(() => {
+              const trimmedQuery = archiveSearchQuery.trim().toLowerCase()
+              const filtered = trimmedQuery
+                ? archivedDots.filter((dot) => dot.label.toLowerCase().includes(trimmedQuery))
+                : archivedDots
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="py-6 text-center text-xs text-muted-foreground">
+                    {trimmedQuery
+                      ? `No archived dots match "${archiveSearchQuery}".`
+                      : "No archived dots."}
+                  </div>
+                )
+              }
+
+              return (
+                <div className="max-h-[60vh] overflow-y-auto pr-1">
+                  <ul className="flex flex-col gap-1.5">
+                    {filtered.map((dot) => (
+                      <li
+                        key={dot.id}
+                        className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5"
+                      >
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full border border-border"
+                          style={{ backgroundColor: dot.color }}
+                        />
+                        <span className="flex-1 truncate text-xs font-medium">
+                          {dot.label}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {Math.round(dot.x)}%
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px]"
+                          onClick={async () => {
+                            await updateDot(dot.id, { archived: false })
+                          }}
+                        >
+                          <Undo2 className="mr-1 h-3 w-3" />
+                          Unarchive
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px] text-destructive"
+                          onClick={() =>
+                            setDeleteConfirm({ dotId: dot.id, dotLabel: dot.label })
+                          }
+                        >
+                          <Trash2 className="mr-1 h-3 w-3" />
+                          Delete
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })()}
+
             <div className="mt-4 flex justify-end">
               <Button
                 variant="outline"
