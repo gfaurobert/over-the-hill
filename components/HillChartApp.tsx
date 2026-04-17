@@ -86,6 +86,7 @@ export interface Collection {
   status: 'active' | 'archived' | 'deleted'
   archived_at?: string
   deleted_at?: string
+  created_at?: string
   dots: Dot[]
   releaseLineConfig?: ReleaseLineConfig
 }
