@@ -2311,11 +2311,12 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     if (!showArchiveModal) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return
+      if (deleteConfirm || batchDeleteConfirm) return
       closeArchiveModal()
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [showArchiveModal, closeArchiveModal])
+  }, [showArchiveModal, closeArchiveModal, deleteConfirm, batchDeleteConfirm])
 
   useEffect(() => {
     const gridNode = dotsGridRef.current
@@ -3621,43 +3622,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       </div>
 
       {/* Modals */}
-      {deleteConfirm && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
-            <h3 className="text-lg font-semibold mb-2">Delete Dot</h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Are you sure you want to delete &quot;{deleteConfirm.dotLabel}&quot;? This action cannot be undone.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={confirmDelete}>
-                Delete
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-      {batchDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
-            <h3 className="text-lg font-semibold mb-2">Delete Selected Dots</h3>
-            <p className="text-gray-600 dark:text-gray-300 mb-4">
-              Are you sure you want to delete {batchDeleteConfirm.count} selected
-              {batchDeleteConfirm.count === 1 ? " dot" : " dots"}? This action cannot be undone.
-            </p>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setBatchDeleteConfirm(null)}>
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={confirmBatchDelete}>
-                Delete Selected
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Archive modal is rendered first so any confirm paints on top of it */}
       {showArchiveModal && currentCollection && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-lg w-full mx-4">
@@ -3754,6 +3719,43 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                 onClick={closeArchiveModal}
               >
                 Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {deleteConfirm && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Delete Dot</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              Are you sure you want to delete &quot;{deleteConfirm.dotLabel}&quot;? This action cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={confirmDelete}>
+                Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {batchDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Delete Selected Dots</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              Are you sure you want to delete {batchDeleteConfirm.count} selected
+              {batchDeleteConfirm.count === 1 ? " dot" : " dots"}? This action cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setBatchDeleteConfirm(null)}>
+                Cancel
+              </Button>
+              <Button variant="destructive" onClick={confirmBatchDelete}>
+                Delete Selected
               </Button>
             </div>
           </div>
