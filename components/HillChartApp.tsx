@@ -62,6 +62,11 @@ import {
   updateCollectionReleaseLineConfig,
   getCollectionReleaseLineConfig,
 } from "@/lib/services/simpleDataService"
+import {
+  getCollectionSeverity,
+  sortCollectionsBySeverity,
+  type CollectionSeverity,
+} from "@/lib/utils/collectionSeverity"
 
 export interface Dot {
   id: string
@@ -847,7 +852,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   const todayCollectionId = user?.id ? `today-${user.id}` : null
   const realTodayCollection = todayCollectionId ? collections.find((collection) => collection.id === todayCollectionId) : null
-  const nonTodayCollections = collections.filter((collection) => collection.id !== todayCollectionId)
+  const nonTodayCollections = sortCollectionsBySeverity(
+    collections.filter((collection) => collection.id !== todayCollectionId),
+    dotColors,
+  )
 
   const todayFlaggedDots = nonTodayCollections.flatMap((collection) =>
     collection.dots
