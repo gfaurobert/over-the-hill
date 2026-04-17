@@ -14,7 +14,7 @@ function closeSettingsModal(page: Page) {
 }
 
 test.describe('Settings modal', () => {
-  test('should open and close settings modal @smoke', async ({ authedPage }) => {
+  test('should open and close settings modal', async ({ authedPage }) => {
     await authedPage.goto('/')
     await expect(authedPage.getByText('Over The Hill', { exact: true })).toBeVisible({
       timeout: 15_000,

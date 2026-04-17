@@ -401,5 +401,122 @@ describe('validation critical paths', () => {
       expect(prefs.gradientStartColor).toBeNull()
       expect(prefs.gradientEndColor).toBeNull()
     })
+
+    it('applies dot defaults when optional fields are omitted', () => {
+      const dot = validateDot({ id: 'd1', label: 'x' })
+      expect(dot.x).toBe(0)
+      expect(dot.y).toBe(0)
+      expect(dot.color).toBe('#b0cdfb')
+      expect(dot.size).toBe(3)
+      expect(dot.archived).toBe(false)
+      expect(dot.flag_for_today).toBe(false)
+    })
+
+    it('preserves archived and flag_for_today boolean values when explicitly set', () => {
+      const dot = validateDot({
+        id: 'd1',
+        label: 'x',
+        x: 10,
+        y: 20,
+        archived: true,
+        flag_for_today: true,
+      })
+      expect(dot.archived).toBe(true)
+      expect(dot.flag_for_today).toBe(true)
+      expect(dot.x).toBe(10)
+      expect(dot.y).toBe(20)
+    })
+
+    it('preserves explicit gradient colors and boolean toggles in preferences', () => {
+      const prefs = validateUserPreferencesUpdate({
+        gradientStartColor: '#123456',
+        gradientEndColor: '#abcdef',
+        hideCollectionName: true,
+        splitHillAreaFillEnabled: true,
+        showTodayCollection: false,
+        collectionInput: 'my input',
+      })
+      expect(prefs.gradientStartColor).toBe('#123456')
+      expect(prefs.gradientEndColor).toBe('#abcdef')
+      expect(prefs.hideCollectionName).toBe(true)
+      expect(prefs.splitHillAreaFillEnabled).toBe(true)
+      expect(prefs.showTodayCollection).toBe(false)
+      expect(prefs.collectionInput).toBe('my input')
+    })
+
+    it('applies preference defaults when optional toggles are omitted', () => {
+      const prefs = validateUserPreferencesUpdate({})
+      expect(prefs.hideCollectionName).toBe(false)
+      expect(prefs.splitHillAreaFillEnabled).toBe(false)
+      expect(prefs.showTodayCollection).toBe(true)
+      expect(prefs.copyFormat).toBe('PNG')
+      expect(prefs.collectionInput).toBe('')
+    })
+
+    it('falls back to "active" status when import collection lacks status', () => {
+      const result = validateImportData({
+        collections: [
+          { id: 'col1', name: 'My collection', dots: [] },
+        ],
+      })
+      expect(result.collections[0].status).toBe('active')
+    })
+
+    it('skips deleted collections during import and preserves valid ones', () => {
+      const result = validateImportData({
+        collections: [
+          { id: 'keep', name: 'Keep', status: 'active', dots: [] },
+          { id: 'drop', name: 'Drop', status: 'deleted', deleted_at: new Date().toISOString(), dots: [] },
+        ],
+      })
+      expect(result.collections).toHaveLength(1)
+      expect(result.collections[0].id).toBe('keep')
+    })
+
+    it('wraps nested errors during collection import with the collection index', () => {
+      expect(() =>
+        validateImportData({
+          collections: [{ id: 'c1', name: 'bad', status: 'active', dots: 'not-array' }],
+        }),
+      ).toThrow('Invalid collection at index 0')
+    })
+
+    it('wraps invalid snapshots with the snapshot index', () => {
+      expect(() =>
+        validateImportData({
+          collections: [],
+          snapshots: [{ collectionId: 'c1', collectionName: 'n', dots: 'nope' }],
+        }),
+      ).toThrow('Invalid snapshot at index 0')
+    })
+
+    it('rejects snapshots with invalid release line configuration', () => {
+      expect(() =>
+        validateImportData({
+          collections: [],
+          snapshots: [
+            {
+              date: '2024-01-01',
+              collectionId: 'c1',
+              collectionName: 'name',
+              dots: [],
+              timestamp: 0,
+              releaseLineConfig: { color: 'not-a-color' },
+            },
+          ],
+        }),
+      ).toThrow('Invalid release line configuration in snapshot 0')
+    })
+
+    it('records release line configuration error when collection has invalid release line', () => {
+      expect(() =>
+        validateCollection({
+          id: 'c1',
+          name: 'n',
+          status: 'active',
+          releaseLineConfig: { color: 'bad' },
+        }),
+      ).toThrow('Invalid release line configuration')
+    })
   })
 })

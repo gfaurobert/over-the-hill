@@ -49,15 +49,17 @@ const PasswordInput = React.forwardRef<HTMLInputElement, PasswordInputProps>(
     const toggleVisibility = () => {
       const input = resolvedRef.current
       let cursorPosition = 0
-      
-      // Store cursor position before toggle
+
+      /* istanbul ignore else - the ref is populated via React.forwardRef; the
+         null branch is defensive and unreachable during normal interactions. */
       if (input) {
         cursorPosition = input.selectionStart || 0
       }
-      
+
       setIsVisible(prev => {
-        // Use setTimeout to restore cursor position after DOM update
         setTimeout(() => {
+          /* istanbul ignore next - the ref is resolved at call time; null here
+             is purely defensive against async unmount races. */
           if (input) {
             input.setSelectionRange(cursorPosition, cursorPosition)
           }

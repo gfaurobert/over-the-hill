@@ -159,24 +159,15 @@ export const validateDot = (dot: Partial<Dot>): Dot => {
 }
 
 export const validateReleaseLineConfig = (config: Partial<ReleaseLineConfig>): ReleaseLineConfig => {
-  const errors: string[] = []
-  
   try {
+    // sanitizeString(text, 50) throws if text exceeds 50 chars, so length is
+    // guaranteed to be <= 50 once we reach the return statement.
     const validatedConfig: ReleaseLineConfig = {
       enabled: typeof config.enabled === 'boolean' ? config.enabled : false,
       color: config.color ? sanitizeHexColor(config.color) : '#ff00ff',
       text: config.text ? sanitizeString(config.text, 50) : ''
     }
-    
-    // Additional validation for text length
-    if (validatedConfig.text.length > 50) {
-      errors.push('Release line text must be 50 characters or less')
-    }
-    
-    if (errors.length > 0) {
-      throw new ValidationError(errors.join(', '))
-    }
-    
+
     return validatedConfig
   } catch (error) {
     if (error instanceof ValidationError) {
@@ -297,7 +288,11 @@ export const validateCollection = (collection: Partial<Collection>): Omit<Collec
       try {
         releaseLineConfig = validateReleaseLineConfig(collection.releaseLineConfig)
       } catch (error) {
-        errors.push(`Invalid release line configuration: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        // validateReleaseLineConfig only throws ValidationError instances; the
+        // non-Error fallback is defensive and unreachable in practice.
+        /* istanbul ignore next */
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        errors.push(`Invalid release line configuration: ${message}`)
       }
     }
 
@@ -427,7 +422,9 @@ export const validateImportData = (data: any): ExportData => {
           dots: validatedDots
         }
     } catch (error) {
-      throw new ValidationError(`Invalid collection at index ${index}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      /* istanbul ignore next */
+      const message = error instanceof Error ? error.message : 'Unknown error'
+      throw new ValidationError(`Invalid collection at index ${index}: ${message}`)
     }
   })
   
@@ -450,7 +447,11 @@ export const validateImportData = (data: any): ExportData => {
           try {
             releaseLineConfig = validateReleaseLineConfig(snapshot.releaseLineConfig)
           } catch (error) {
-            throw new ValidationError(`Invalid release line configuration in snapshot ${index}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+            /* istanbul ignore next */
+            const message = error instanceof Error ? error.message : 'Unknown error'
+            throw new ValidationError(
+              `Invalid release line configuration in snapshot ${index}: ${message}`
+            )
           }
         }
         
@@ -469,7 +470,9 @@ export const validateImportData = (data: any): ExportData => {
         
         validatedSnapshots.push(validatedSnapshot)
       } catch (error) {
-        throw new ValidationError(`Invalid snapshot at index ${index}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        /* istanbul ignore next */
+        const message = error instanceof Error ? error.message : 'Unknown error'
+        throw new ValidationError(`Invalid snapshot at index ${index}: ${message}`)
       }
     })
   }

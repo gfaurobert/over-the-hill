@@ -623,4 +623,61 @@ describe('sessionValidationService', () => {
     jest.dontMock('@/lib/supabaseClient')
   })
 
+  it('returns the same singleton instance when getInstance is called directly', async () => {
+    const { SessionValidationService, sessionValidationService: fresh } = await import(
+      '../sessionValidationService'
+    )
+    expect(SessionValidationService.getInstance()).toBe(fresh)
+    expect(SessionValidationService.getInstance()).toBe(SessionValidationService.getInstance())
+  })
+
+  it('does not attempt to read a Supabase-scoped key when NEXT_PUBLIC_SUPABASE_URL has no host part', async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = '//'
+    const storage = createLocalStorageMock()
+    Object.defineProperty(global, 'localStorage', { value: storage, writable: true })
+
+    const tokens = (sessionValidationService as unknown as {
+      getStoredTokens: () => { accessToken?: string; refreshToken?: string }
+    }).getStoredTokens()
+
+    expect(tokens).toEqual({})
+    const calls = (storage.getItem as jest.Mock).mock.calls.map((c) => c[0])
+    expect(calls.some((k: string) => k?.startsWith?.('sb-'))).toBe(false)
+  })
+
+  it('uses "Session validation failed" fallback when fetch rejects with a non-Error value', async () => {
+    ;(global.fetch as jest.Mock).mockRejectedValue('network-down')
+
+    const result = await sessionValidationService.validateSession('token-non-error')
+
+    expect(result.valid).toBe(false)
+    expect(result.error).toBe('Session validation failed')
+  })
+
+  it('falls back to "Invalid session" when client-side validation returns no user and no error', async () => {
+    jest.resetModules()
+    jest.doMock('@/lib/supabaseClient', () => ({
+      supabase: {
+        auth: {
+          getUser: jest.fn().mockResolvedValue({ data: { user: null }, error: null }),
+          getSession: jest.fn().mockResolvedValue({ data: { session: null } }),
+        },
+      },
+    }))
+
+    const { sessionValidationService: serviceFromIsolatedModule } = await import('../sessionValidationService')
+    const serviceAny = serviceFromIsolatedModule as unknown as {
+      performClientSideValidation: (tokens: { accessToken: string }) => Promise<{
+        valid: boolean
+        error?: string
+      }>
+    }
+
+    const result = await serviceAny.performClientSideValidation({ accessToken: 'no-user-access' })
+
+    expect(result.valid).toBe(false)
+    expect(result.error).toBe('Invalid session')
+    jest.dontMock('@/lib/supabaseClient')
+  })
+
 })

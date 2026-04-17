@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures/auth'
 import type { Page } from '@playwright/test'
+import { deleteActiveCollection } from './helpers'
 
 async function openCollectionDropdown(authedPage: Page) {
   await authedPage
@@ -23,34 +24,42 @@ async function createCollection(authedPage: Page, name: string) {
 }
 
 test.describe('Collection CRUD', () => {
-  test('should display collection selector @smoke', async ({ authedPage }) => {
+  test('should display collection selector', async ({ authedPage }) => {
     await authedPage.goto('/')
     await expect(authedPage.getByText('Over The Hill', { exact: true })).toBeVisible()
     await expect(authedPage.getByPlaceholder('Select a collection...')).toBeVisible()
   })
 
-  test('should create a new collection', async ({ authedPage }) => {
+  test('should create a new collection @smoke', async ({ authedPage }) => {
     await authedPage.goto('/')
     const uniqueName = `e2e-col-${Date.now()}`
     await createCollection(authedPage, uniqueName)
 
-    await openCollectionDropdown(authedPage)
-    await expect(collectionDropdown(authedPage).getByText(uniqueName, { exact: true })).toBeVisible()
-    await authedPage.keyboard.press('Escape')
+    try {
+      await openCollectionDropdown(authedPage)
+      await expect(collectionDropdown(authedPage).getByText(uniqueName, { exact: true })).toBeVisible()
+      await authedPage.keyboard.press('Escape')
+    } finally {
+      await deleteActiveCollection(authedPage)
+    }
   })
 
-  test('should rename a collection', async ({ authedPage }) => {
+  test('should rename a collection @smoke', async ({ authedPage }) => {
     await authedPage.goto('/')
     const originalName = `e2e-rename-${Date.now()}`
     const renamed = `${originalName}-v2`
     await createCollection(authedPage, originalName)
 
-    await authedPage.getByTitle('Edit collection name').click()
-    const editInput = authedPage.getByPlaceholder('Collection name')
-    await editInput.fill(renamed)
-    await editInput.locator('..').getByRole('button').first().click()
+    try {
+      await authedPage.getByTitle('Edit collection name').click()
+      const editInput = authedPage.getByPlaceholder('Collection name')
+      await editInput.fill(renamed)
+      await editInput.locator('..').getByRole('button').first().click()
 
-    await expect(authedPage.getByPlaceholder('Select a collection...')).toHaveValue(renamed)
+      await expect(authedPage.getByPlaceholder('Select a collection...')).toHaveValue(renamed)
+    } finally {
+      await deleteActiveCollection(authedPage)
+    }
   })
 
   test('should archive and unarchive a collection', async ({ authedPage }) => {
@@ -91,7 +100,7 @@ test.describe('Collection CRUD', () => {
     await authedPage.keyboard.press('Escape')
   })
 
-  test('should delete a collection', async ({ authedPage }) => {
+  test('should delete a collection @smoke', async ({ authedPage }) => {
     await authedPage.goto('/')
     const name = `e2e-del-${Date.now()}`
     await createCollection(authedPage, name)

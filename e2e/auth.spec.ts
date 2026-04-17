@@ -51,7 +51,7 @@ testUnauth.describe('Authentication (unauthenticated)', () => {
 })
 
 testAuth.describe('Authentication (session)', () => {
-  testAuth('should persist session across page reload @smoke', async ({ authedPage }) => {
+  testAuth('should persist session across page reload', async ({ authedPage }) => {
     await authedPage.goto('/', { waitUntil: 'domcontentloaded' })
     await expect(authedPage.getByText('Over The Hill', { exact: true })).toBeVisible({
       timeout: 15_000,

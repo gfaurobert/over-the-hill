@@ -3,7 +3,12 @@ import { render, screen } from '@testing-library/react'
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
+  SelectScrollDownButton,
+  SelectScrollUpButton,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from './select'
@@ -27,5 +32,13 @@ describe('Select UI', () => {
 
     expect(trigger).toHaveAttribute('aria-expanded', 'false')
     expect(trigger).toHaveAttribute('data-state', 'closed')
+  })
+
+  it('exports all named primitives used in the app', () => {
+    expect(SelectGroup).toBeDefined()
+    expect(SelectLabel).toBeDefined()
+    expect(SelectSeparator).toBeDefined()
+    expect(SelectScrollUpButton).toBeDefined()
+    expect(SelectScrollDownButton).toBeDefined()
   })
 })

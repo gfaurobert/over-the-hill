@@ -127,6 +127,55 @@ describe('EmailService coverage-focused tests', () => {
     expect(template).toContain('safe message')
   })
 
+  it('logs "NOT SET" when SMTP_PASS is missing during config load', async () => {
+    delete process.env.SMTP_PASS
+    const { emailService } = await import('../emailService')
+
+    expect(() => (emailService as any).loadSMTPConfig()).toThrow(
+      'Missing required SMTP configuration'
+    )
+  })
+
+  it('logs "NOT SET" and fails when SMTP_PASS is missing during send', async () => {
+    delete process.env.SMTP_PASS
+    const { emailService } = await import('../emailService')
+
+    const result = await emailService.sendAccessRequestNotification(
+      'requester@example.com',
+      'hello'
+    )
+
+    expect(result).toBe(false)
+  })
+
+  it('falls back to "Unknown transporter creation error" when a non-Error is thrown', async () => {
+    mockCreateTransport.mockImplementationOnce(() => {
+      throw 'boom'
+    })
+
+    const { emailService } = await import('../emailService')
+
+    await expect((emailService as any).createTransporter()).rejects.toThrow(
+      'Failed to initialize email service'
+    )
+  })
+
+  it('records "Unknown error" when sendMail throws an Error without a message', async () => {
+    mockSendMail.mockRejectedValueOnce(new Error(''))
+    const { emailService } = await import('../emailService')
+
+    const result = await emailService.sendAccessRequestNotification(
+      'requester@example.com',
+      'hello'
+    )
+
+    expect(result).toBe(false)
+    expect(mockEmailMonitoring.recordFailure).toHaveBeenCalledWith(
+      'Unknown error',
+      'requester@example.com'
+    )
+  })
+
   it('returns monitoring health status and logs summary', async () => {
     mockEmailMonitoring.isHealthy.mockReturnValueOnce(true)
     mockEmailMonitoring.getHealthStatus.mockReturnValueOnce('healthy')

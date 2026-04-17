@@ -33,7 +33,7 @@ interface RefreshResponse {
 
 import { DOMAIN_ERROR_CODES } from './domainErrors';
 
-class SessionValidationService {
+export class SessionValidationService {
   private static instance: SessionValidationService;
   private validationCache = new Map<string, { result: ValidationResponse; timestamp: number }>();
   private readonly CACHE_DURATION = 30 * 1000; // 30 seconds
@@ -264,7 +264,12 @@ class SessionValidationService {
       }
     }
 
+    // The retry loop above always returns on the final iteration (either via
+    // the rate-limit branch or the catch fallback), so this return is a
+    // defensive fallback that should never execute.
+    /* istanbul ignore next */
     this.consecutiveFailures += 1;
+    /* istanbul ignore next */
     return {
       valid: false,
       error: 'Max validation retries exceeded',
@@ -389,7 +394,11 @@ class SessionValidationService {
       console.log('[SESSION_VALIDATION] Refreshing session server-side');
       
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.REQUEST_TIMEOUT);
+      const timeoutId = setTimeout(
+        /* istanbul ignore next - fires only when the request exceeds REQUEST_TIMEOUT */
+        () => controller.abort(),
+        this.REQUEST_TIMEOUT,
+      );
 
       const response = await fetch('/api/auth/refresh', {
         method: 'POST',

@@ -8,14 +8,14 @@ async function openAccessRequestForm(page: Page) {
 }
 
 test.describe('Access request form', () => {
-  test('should display access request form @smoke', async ({ page }) => {
+  test('should display access request form', async ({ page }) => {
     await openAccessRequestForm(page)
 
     await expect(page.getByLabel('Message (optional)')).toBeVisible()
     await expect(page.getByLabel('Email', { exact: true })).toBeVisible()
   })
 
-  test('should submit access request successfully', async ({ page }) => {
+  test('should submit access request successfully @smoke', async ({ page }) => {
     await page.route('/api/access-request', async (route) => {
       await route.fulfill({
         status: 200,

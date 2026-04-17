@@ -183,6 +183,55 @@ describe('PasswordInput', () => {
     expect(handleSubmit).toHaveBeenCalled()
   })
 
+  it('keeps password visible when page becomes visible (document.hidden false)', () => {
+    render(<PasswordInput data-testid="password-input" />)
+    const input = screen.getByTestId('password-input')
+    const toggleButton = screen.getByRole('button')
+
+    fireEvent.click(toggleButton)
+    expect(input).toHaveAttribute('type', 'text')
+
+    Object.defineProperty(document, 'hidden', { writable: true, value: false })
+    fireEvent(document, new Event('visibilitychange'))
+
+    expect(input).toHaveAttribute('type', 'text')
+  })
+
+  it('ignores key presses other than Enter and Space on the toggle button', () => {
+    render(<PasswordInput data-testid="password-input" />)
+    const input = screen.getByTestId('password-input')
+    const toggleButton = screen.getByRole('button')
+
+    expect(input).toHaveAttribute('type', 'password')
+    fireEvent.keyDown(toggleButton, { key: 'a' })
+    fireEvent.keyDown(toggleButton, { key: 'Escape' })
+    expect(input).toHaveAttribute('type', 'password')
+  })
+
+  it('toggles visibility even when the input has no selectionStart', () => {
+    render(<PasswordInput data-testid="password-input" />)
+    const input = screen.getByTestId('password-input') as HTMLInputElement
+    const toggleButton = screen.getByRole('button')
+
+    Object.defineProperty(input, 'selectionStart', { configurable: true, get: () => null })
+
+    fireEvent.click(toggleButton)
+    expect(input).toHaveAttribute('type', 'text')
+  })
+
+  it('hides password when window fires beforeunload', () => {
+    render(<PasswordInput data-testid="password-input" />)
+    const input = screen.getByTestId('password-input')
+    const toggleButton = screen.getByRole('button')
+
+    fireEvent.click(toggleButton)
+    expect(input).toHaveAttribute('type', 'text')
+
+    fireEvent(window, new Event('beforeunload'))
+
+    expect(input).toHaveAttribute('type', 'password')
+  })
+
   it('works correctly with controlled component pattern', () => {
     const TestComponent = () => {
       const [value, setValue] = React.useState('initial')

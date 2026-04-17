@@ -1,5 +1,6 @@
 import { test, expect } from './fixtures/auth'
 import type { Page } from '@playwright/test'
+import { deleteActiveCollection } from './helpers'
 
 async function openCollectionDropdown(authedPage: Page) {
   await authedPage
@@ -32,9 +33,13 @@ test.describe('Dots', () => {
     await authedPage.goto('/')
     await createCollection(authedPage, `e2e-dots-smoke-${Date.now()}`)
     const label = `dot-${Date.now()}`
-    await addDot(authedPage, label)
+    try {
+      await addDot(authedPage, label)
 
-    await expect(dotsSection(authedPage).getByText(label, { exact: true })).toBeVisible()
+      await expect(dotsSection(authedPage).getByText(label, { exact: true })).toBeVisible()
+    } finally {
+      await deleteActiveCollection(authedPage)
+    }
   })
 
   test('should edit a dot label', async ({ authedPage }) => {
@@ -80,25 +85,29 @@ test.describe('Dots', () => {
     await expect(svg.locator('circle').first()).toBeVisible()
   })
 
-  test('should drag a dot along the hill', async ({ authedPage }) => {
+  test('should drag a dot along the hill @smoke', async ({ authedPage }) => {
     await authedPage.goto('/')
     await createCollection(authedPage, `e2e-dots-drag-${Date.now()}`)
     const label = `dot-drag-${Date.now()}`
-    await addDot(authedPage, label)
+    try {
+      await addDot(authedPage, label)
 
-    const svg = authedPage.locator('svg[viewBox="-28 -46 655 210"]')
-    const circle = svg.locator('circle').first()
-    await expect(circle).toBeVisible()
+      const svg = authedPage.locator('svg[viewBox="-28 -46 655 210"]')
+      const circle = svg.locator('circle').first()
+      await expect(circle).toBeVisible()
 
-    const cxBefore = await circle.getAttribute('cx')
-    const box = await circle.boundingBox()
-    expect(box).not.toBeNull()
+      const cxBefore = await circle.getAttribute('cx')
+      const box = await circle.boundingBox()
+      expect(box).not.toBeNull()
 
-    await authedPage.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2)
-    await authedPage.mouse.down()
-    await authedPage.mouse.move(box!.x + box!.width / 2 + 120, box!.y + box!.height / 2)
-    await authedPage.mouse.up()
+      await authedPage.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2)
+      await authedPage.mouse.down()
+      await authedPage.mouse.move(box!.x + box!.width / 2 + 120, box!.y + box!.height / 2)
+      await authedPage.mouse.up()
 
-    await expect.poll(async () => circle.getAttribute('cx')).not.toBe(cxBefore)
+      await expect.poll(async () => circle.getAttribute('cx')).not.toBe(cxBefore)
+    } finally {
+      await deleteActiveCollection(authedPage)
+    }
   })
 })

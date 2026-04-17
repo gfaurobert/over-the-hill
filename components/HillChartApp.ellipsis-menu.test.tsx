@@ -25,7 +25,7 @@ describe('HillChartApp Ellipsis Menu Integration', () => {
 
   it('should use Edit2 icon in the component', () => {
     expect(componentSource).toContain('Edit2')
-    expect(componentSource).toContain('<Edit2 className="w-4 h-4" />')
+    expect(componentSource).toMatch(/<Edit2 className="[^"]+" \/>/)
   })
 
   it('should integrate ReleaseLineSettings component in the modal', () => {

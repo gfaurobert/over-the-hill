@@ -1,4 +1,4 @@
-import { emailService } from '../emailService';
+import emailServiceDefault, { emailService } from '../emailService';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -25,6 +25,10 @@ afterEach(() => {
 });
 
 describe('EmailService', () => {
+  it('exports the singleton via both the named and the default export', () => {
+    expect(emailServiceDefault).toBe(emailService);
+  });
+
   describe('Configuration Loading', () => {
     it('should load SMTP configuration from environment variables', async () => {
       const service = emailService;

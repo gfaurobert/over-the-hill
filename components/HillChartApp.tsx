@@ -1159,6 +1159,12 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       if (clamped === 100) {
         updates.color = dotColorOptions[4]
         updates.size = 1
+      } else if (clamped > 50) {
+        updates.color = dotColorOptions[1]
+        updates.size = 3
+      } else {
+        updates.color = dotColorOptions[0]
+        updates.size = 3
       }
       await updateDot(dot.id, updates)
     }
@@ -2242,6 +2248,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     (currentDotsPage - 1) * DOTS_PER_PAGE,
     currentDotsPage * DOTS_PER_PAGE,
   )
+
+  useEffect(() => {
+    if (dotsPage <= totalDotsPages) return
+    setDotsPage(totalDotsPages)
+  }, [dotsPage, totalDotsPages])
 
   useEffect(() => {
     const gridNode = dotsGridRef.current

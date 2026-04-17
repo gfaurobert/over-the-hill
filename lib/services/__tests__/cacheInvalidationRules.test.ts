@@ -1,4 +1,5 @@
 import {
+  INVALIDATION_RULES,
   InvalidationRuleManager,
   generateCacheKey,
   extractUserIdFromKey,
@@ -75,6 +76,19 @@ describe('cacheInvalidationRules', () => {
       expect(
         manager.getInvalidationPatterns('custom:op:placeholders', 'c1', undefined)
       ).toEqual(['user:{userId}:custom:c1', 'user:{userId}:collections:c1'])
+    })
+
+    it('exposes predefined rules for every core mutation operation', () => {
+      expect(INVALIDATION_RULES['collection:create']).toBeDefined()
+      expect(INVALIDATION_RULES['dot:delete']).toBeDefined()
+      expect(INVALIDATION_RULES['snapshot:create']).toBeDefined()
+    })
+
+    it('returns patterns without cascades when a rule has no cascadeRules', () => {
+      const manager = new InvalidationRuleManager()
+      expect(manager.getInvalidationPatterns('snapshot:create', 's1', 'u1')).toEqual([
+        '*:snapshots*',
+      ])
     })
 
     it('returns deduplicated affected entity types and trigger checks', () => {
