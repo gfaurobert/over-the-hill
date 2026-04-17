@@ -71,3 +71,32 @@ export function getCollectionSeverity(
       return { rank: 6, indicatorColor: null, statusLabel: null }
   }
 }
+
+interface SortableCollection extends CollectionLike {
+  created_at?: string
+}
+
+export function sortCollectionsBySeverity<T extends SortableCollection>(
+  collections: readonly T[],
+  palette: DotColorPreferences,
+): T[] {
+  const withRank = collections.map((collection, index) => ({
+    collection,
+    rank: getCollectionSeverity(collection, palette).rank,
+    index,
+  }))
+
+  withRank.sort((a, b) => {
+    if (a.rank !== b.rank) return a.rank - b.rank
+    const aTs = a.collection.created_at ? Date.parse(a.collection.created_at) : NaN
+    const bTs = b.collection.created_at ? Date.parse(b.collection.created_at) : NaN
+    const aHas = !Number.isNaN(aTs)
+    const bHas = !Number.isNaN(bTs)
+    if (aHas && bHas) return bTs - aTs
+    if (aHas) return -1
+    if (bHas) return 1
+    return a.index - b.index
+  })
+
+  return withRank.map((entry) => entry.collection)
+}

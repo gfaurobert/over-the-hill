@@ -1,4 +1,4 @@
-import { getCollectionSeverity, CollectionSeverity } from '../collectionSeverity'
+import { getCollectionSeverity, CollectionSeverity, sortCollectionsBySeverity } from '../collectionSeverity'
 
 const palette = {
   discovery: '#b0cdfb',
@@ -138,5 +138,71 @@ describe('getCollectionSeverity', () => {
       expect(color).toBe('red')
       expect(label).toBe('Blocked')
     }
+  })
+})
+
+describe('sortCollectionsBySeverity', () => {
+  const make = (
+    id: string,
+    color: string,
+    created_at?: string,
+  ) => ({
+    id,
+    name: id,
+    status: 'active' as const,
+    created_at,
+    dots: color ? [dot({ color })] : [],
+  })
+
+  it('orders strictly by severity rank when no ties', () => {
+    const input = [
+      make('done', palette.done),
+      make('blocked', palette.dangerZone),
+      make('ontrack', palette.upslope),
+      make('atrisk', palette.downslope),
+      make('discovery', palette.discovery),
+      make('empty', ''),
+    ]
+    const ids = sortCollectionsBySeverity(input, palette).map((c) => c.id)
+    expect(ids).toEqual(['blocked', 'atrisk', 'ontrack', 'discovery', 'done', 'empty'])
+  })
+
+  it('breaks ties with created_at descending (newest first)', () => {
+    const input = [
+      make('oldest', palette.dangerZone, '2024-01-01T00:00:00.000Z'),
+      make('newest', palette.dangerZone, '2025-01-01T00:00:00.000Z'),
+      make('middle', palette.dangerZone, '2024-06-01T00:00:00.000Z'),
+    ]
+    const ids = sortCollectionsBySeverity(input, palette).map((c) => c.id)
+    expect(ids).toEqual(['newest', 'middle', 'oldest'])
+  })
+
+  it('keeps stable relative order when created_at is missing', () => {
+    const input = [
+      make('a', palette.upslope),
+      make('b', palette.upslope),
+      make('c', palette.upslope),
+    ]
+    const ids = sortCollectionsBySeverity(input, palette).map((c) => c.id)
+    expect(ids).toEqual(['a', 'b', 'c'])
+  })
+
+  it('places collections with created_at ahead of those without at the same rank', () => {
+    const input = [
+      make('no-date', palette.dangerZone),
+      make('with-date', palette.dangerZone, '2025-01-01T00:00:00.000Z'),
+    ]
+    const ids = sortCollectionsBySeverity(input, palette).map((c) => c.id)
+    expect(ids).toEqual(['with-date', 'no-date'])
+  })
+
+  it('does not mutate the input array', () => {
+    const input = [
+      make('ontrack', palette.upslope),
+      make('blocked', palette.dangerZone),
+    ]
+    const originalOrder = input.map((c) => c.id)
+    sortCollectionsBySeverity(input, palette)
+    expect(input.map((c) => c.id)).toEqual(originalOrder)
   })
 })
