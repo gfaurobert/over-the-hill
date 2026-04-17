@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import {
   CopyIcon,
   Download,
-  ArrowUpDown,
   Trash2,
   ChevronDown,
   Sun,
@@ -56,6 +55,8 @@ import {
   updateCollectionReleaseLineConfig,
   getCollectionReleaseLineConfig,
 } from "@/lib/services/demoLocalDataService"
+import { getCollectionSeverity, sortCollectionsBySeverity } from "@/lib/utils/collectionSeverity"
+import { cn } from "@/lib/utils"
 
 export interface Dot {
   id: string
@@ -416,6 +417,12 @@ const HillChartApp: React.FC = () => {
     archivedCollectionId?: string
   } | null>(null)
   const [showArchivedCollectionsModal, setShowArchivedCollectionsModal] = useState(false)
+  const [showArchiveModal, setShowArchiveModal] = useState(false)
+  const [archiveSearchQuery, setArchiveSearchQuery] = useState("")
+  const closeArchiveModal = useCallback(() => {
+    setShowArchiveModal(false)
+    setArchiveSearchQuery("")
+  }, [])
   const [showColorSettingsModal, setShowColorSettingsModal] = useState(false)
   const [showCreateCollectionModal, setShowCreateCollectionModal] = useState(false)
   const [newCollectionNameInput, setNewCollectionNameInput] = useState("")
@@ -844,7 +851,10 @@ const HillChartApp: React.FC = () => {
 
   const todayCollectionId = user?.id ? `today-${user.id}` : null
   const realTodayCollection = todayCollectionId ? collections.find((collection) => collection.id === todayCollectionId) : null
-  const nonTodayCollections = collections.filter((collection) => collection.id !== todayCollectionId)
+  const nonTodayCollections = sortCollectionsBySeverity(
+    collections.filter((collection) => collection.id !== todayCollectionId),
+    dotColors,
+  )
 
   const todayFlaggedDots = nonTodayCollections.flatMap((collection) =>
     collection.dots
@@ -2280,6 +2290,30 @@ const HillChartApp: React.FC = () => {
   }, [dotsPage, totalDotsPages])
 
   useEffect(() => {
+    if (!showArchiveModal) return
+    closeArchiveModal()
+    // Intentionally only depends on selectedCollection: adding showArchiveModal would close the modal on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCollection])
+
+  useEffect(() => {
+    if (!showArchiveModal) return
+    if (archivedDots.length > 0) return
+    closeArchiveModal()
+  }, [showArchiveModal, archivedDots.length, closeArchiveModal])
+
+  useEffect(() => {
+    if (!showArchiveModal) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return
+      if (deleteConfirm || batchDeleteConfirm) return
+      closeArchiveModal()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [showArchiveModal, closeArchiveModal, deleteConfirm, batchDeleteConfirm])
+
+  useEffect(() => {
     const gridNode = dotsGridRef.current
     if (!gridNode) return
     if (totalDotsPages <= 1) return
@@ -2537,7 +2571,7 @@ const HillChartApp: React.FC = () => {
                   ) : collectionsForSelector.length > 0 ? (
                     filteredCollectionsForSidebar.length > 0 ? (
                       <>
-                        <div className="min-h-0 flex-1 space-y-1 overflow-hidden pr-1">
+                        <div className="min-h-0 flex-1 space-y-1 overflow-visible pr-1">
                           {paginatedCollectionsForSidebar.map((collection) => {
                         const isSelectedCollection = selectedCollection === collection.id
                         const isTodayCollection = todayCollectionId !== null && collection.id === todayCollectionId
@@ -2580,16 +2614,39 @@ const HillChartApp: React.FC = () => {
                               </div>
                             ) : (
                               <>
-                                <button
-                                  type="button"
-                                  onClick={() => handleCollectionSelect(collection)}
-                                  className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${isSelectedCollection
-                                    ? "border-primary/40 bg-primary/10 text-foreground"
-                                    : "border-border bg-background hover:bg-accent hover:text-accent-foreground"
-                                    } ${isTodayCollection ? "pr-3" : "pr-10"}`}
-                                >
-                                  <span className="block truncate">{collection.name}</span>
-                                </button>
+                                {(() => {
+                                  const severity = getCollectionSeverity(collection, dotColors)
+                                  const ariaLabel = severity.statusLabel
+                                    ? `${collection.name}, ${severity.statusLabel}`
+                                    : collection.name
+                                  return (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCollectionSelect(collection)}
+                                        aria-label={ariaLabel}
+                                        className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${isSelectedCollection
+                                          ? "border-primary/40 bg-primary/10 text-foreground"
+                                          : "border-border bg-background hover:bg-accent hover:text-accent-foreground"
+                                          } ${isTodayCollection ? "pr-3" : "pr-10"}`}
+                                      >
+                                        <span className="block truncate">{collection.name}</span>
+                                      </button>
+                                      {severity.indicatorColor && (
+                                        <span
+                                          aria-hidden="true"
+                                          data-testid="collection-severity-dot"
+                                          className={cn(
+                                            "pointer-events-none absolute -top-1 -right-1 z-10 h-2.5 w-2.5 rounded-full ring-2 ring-background",
+                                            severity.indicatorColor === "red" && "bg-red-500 dark:bg-red-400",
+                                            severity.indicatorColor === "amber" && "bg-amber-400 dark:bg-amber-300",
+                                            severity.indicatorColor === "emerald" && "bg-emerald-500 dark:bg-emerald-400",
+                                          )}
+                                        />
+                                      )}
+                                    </>
+                                  )
+                                })()}
                                 {!isTodayCollection && (
                                   <>
                                     <Button
@@ -3120,25 +3177,18 @@ const HillChartApp: React.FC = () => {
       <Card className="shadow-[0px_16px_20px_5px_rgba(0,0,0,0.1)] lg:h-[392px] lg:max-h-[392px] lg:overflow-hidden lg:flex lg:flex-col">
         <CardHeader className="flex flex-row items-center justify-between py-3">
           <CardTitle className="text-lg">Dots</CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setCollections((prev) =>
-                prev.map((collection) =>
-                  collection.id === selectedCollection
-                    ? {
-                      ...collection,
-                      dots: [...collection.dots].sort((a, b) => b.x - a.x), // Sort by completion percentage (x position) descending
-                    }
-                    : collection,
-                ),
-              )
-            }}
-            className="h-8 w-8 p-0"
-          >
-            <ArrowUpDown className="w-4 h-4 text-gray-500" />
-          </Button>
+          {archivedDots.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowArchiveModal(true)}
+              className="h-8 px-2 text-xs"
+              aria-label="Open archived dots"
+            >
+              <ArchiveIcon className="mr-1 h-3.5 w-3.5" />
+              Archive ({archivedDots.length})
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-3 pt-0 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
           <Input
@@ -3472,36 +3522,6 @@ const HillChartApp: React.FC = () => {
               })}
             </div>
           )}
-          {archivedDots.length > 0 && (
-            <>
-              <div className="my-2 border-t border-border" />
-              <div className="text-xs text-muted-foreground mb-1">Archived</div>
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-5">
-                {archivedDots.map((dot: Dot) => (
-                  <div
-                    key={dot.id}
-                    className="rounded-md border border-border bg-muted/40 p-2.5 opacity-65 grayscale shadow-[0px_4px_12px_0px_rgba(0,0,0,0.1)]"
-                  >
-                    <div className="mb-2 flex items-center justify-between gap-2">
-                      <p className="truncate text-xs font-medium italic text-muted-foreground">{dot.label}</p>
-                      <span className="text-xs text-muted-foreground">{Math.round(dot.x)}%</span>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="h-6 w-full px-2 text-[11px]"
-                      onClick={async () => {
-                        await updateDot(dot.id, { archived: false })
-                      }}
-                    >
-                      <Undo2 className="mr-1 h-3.5 w-3.5" />
-                      Unarchive
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
         </CardContent>
       </Card>
           </div>
@@ -3509,6 +3529,108 @@ const HillChartApp: React.FC = () => {
       </div>
 
       {/* Modals */}
+      {/* Archive modal is rendered first so any confirm paints on top of it */}
+      {showArchiveModal && currentCollection && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-lg w-full mx-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold">
+                Archived Dots — {currentCollection.name}
+              </h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={closeArchiveModal}
+                aria-label="Close archived dots"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <Input
+              value={archiveSearchQuery}
+              onChange={(e) => setArchiveSearchQuery(e.target.value)}
+              placeholder="Search archived dots..."
+              maxLength={64}
+              autoFocus
+              className="mb-3 h-8 text-xs"
+            />
+
+            {(() => {
+              const trimmedQuery = archiveSearchQuery.trim().toLowerCase()
+              const filtered = trimmedQuery
+                ? archivedDots.filter((dot) => dot.label.toLowerCase().includes(trimmedQuery))
+                : archivedDots
+
+              if (filtered.length === 0) {
+                return (
+                  <div className="py-6 text-center text-xs text-muted-foreground">
+                    {trimmedQuery
+                      ? `No archived dots match "${archiveSearchQuery}".`
+                      : "No archived dots."}
+                  </div>
+                )
+              }
+
+              return (
+                <div className="max-h-[60vh] overflow-y-auto pr-1">
+                  <ul className="flex flex-col gap-1.5">
+                    {filtered.map((dot) => (
+                      <li
+                        key={dot.id}
+                        className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-2.5 py-1.5"
+                      >
+                        <span
+                          className="h-2.5 w-2.5 shrink-0 rounded-full border border-border"
+                          style={{ backgroundColor: dot.color }}
+                        />
+                        <span className="flex-1 truncate text-xs font-medium">
+                          {dot.label}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {Math.round(dot.x)}%
+                        </span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px]"
+                          onClick={async () => {
+                            await updateDot(dot.id, { archived: false })
+                          }}
+                        >
+                          <Undo2 className="mr-1 h-3 w-3" />
+                          Unarchive
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 px-2 text-[11px] text-destructive"
+                          onClick={() =>
+                            setDeleteConfirm({ dotId: dot.id, dotLabel: dot.label })
+                          }
+                        >
+                          <Trash2 className="mr-1 h-3 w-3" />
+                          Delete
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })()}
+
+            <div className="mt-4 flex justify-end">
+              <Button
+                variant="outline"
+                onClick={closeArchiveModal}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-sm w-full mx-4">
