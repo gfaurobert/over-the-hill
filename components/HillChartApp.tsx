@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/card"
 import {
   CopyIcon,
   Download,
-  ArrowUpDown,
   Trash2,
   ChevronDown,
   Sun,
@@ -417,6 +416,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     archivedCollectionId?: string
   } | null>(null)
   const [showArchivedCollectionsModal, setShowArchivedCollectionsModal] = useState(false)
+  const [showArchiveModal, setShowArchiveModal] = useState(false)
+  const [archiveSearchQuery, setArchiveSearchQuery] = useState("")
   const [showPrivacySettings, setShowPrivacySettings] = useState(false)
   const [showColorSettingsModal, setShowColorSettingsModal] = useState(false)
   const [showCreateCollectionModal, setShowCreateCollectionModal] = useState(false)
@@ -3241,25 +3242,18 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       <Card className="shadow-[0px_16px_20px_5px_rgba(0,0,0,0.1)] lg:h-[392px] lg:max-h-[392px] lg:overflow-hidden lg:flex lg:flex-col">
         <CardHeader className="flex flex-row items-center justify-between py-3">
           <CardTitle className="text-lg">Dots</CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setCollections((prev) =>
-                prev.map((collection) =>
-                  collection.id === selectedCollection
-                    ? {
-                      ...collection,
-                      dots: [...collection.dots].sort((a, b) => b.x - a.x), // Sort by completion percentage (x position) descending
-                    }
-                    : collection,
-                ),
-              )
-            }}
-            className="h-8 w-8 p-0"
-          >
-            <ArrowUpDown className="w-4 h-4 text-gray-500" />
-          </Button>
+          {archivedDots.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowArchiveModal(true)}
+              className="h-8 px-2 text-xs"
+              aria-label="Open archived dots"
+            >
+              <ArchiveIcon className="mr-1 h-3.5 w-3.5" />
+              Archive ({archivedDots.length})
+            </Button>
+          )}
         </CardHeader>
         <CardContent className="space-y-3 pt-0 lg:flex-1 lg:min-h-0 lg:overflow-hidden">
           <Input
