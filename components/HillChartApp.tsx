@@ -418,6 +418,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [showArchivedCollectionsModal, setShowArchivedCollectionsModal] = useState(false)
   const [showArchiveModal, setShowArchiveModal] = useState(false)
   const [archiveSearchQuery, setArchiveSearchQuery] = useState("")
+  const closeArchiveModal = useCallback(() => {
+    setShowArchiveModal(false)
+    setArchiveSearchQuery("")
+  }, [])
   const [showPrivacySettings, setShowPrivacySettings] = useState(false)
   const [showColorSettingsModal, setShowColorSettingsModal] = useState(false)
   const [showCreateCollectionModal, setShowCreateCollectionModal] = useState(false)
@@ -2291,6 +2295,29 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   }, [dotsPage, totalDotsPages])
 
   useEffect(() => {
+    if (!showArchiveModal) return
+    closeArchiveModal()
+    // Intentionally only depends on selectedCollection: adding showArchiveModal would close the modal on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCollection])
+
+  useEffect(() => {
+    if (!showArchiveModal) return
+    if (archivedDots.length > 0) return
+    closeArchiveModal()
+  }, [showArchiveModal, archivedDots.length, closeArchiveModal])
+
+  useEffect(() => {
+    if (!showArchiveModal) return
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return
+      closeArchiveModal()
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [showArchiveModal, closeArchiveModal])
+
+  useEffect(() => {
     const gridNode = dotsGridRef.current
     if (!gridNode) return
     if (totalDotsPages <= 1) return
@@ -3672,10 +3699,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={() => {
-                  setShowArchiveModal(false)
-                  setArchiveSearchQuery("")
-                }}
+                onClick={closeArchiveModal}
                 aria-label="Close archived dots"
               >
                 <X className="h-4 w-4" />
@@ -3757,10 +3781,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
             <div className="mt-4 flex justify-end">
               <Button
                 variant="outline"
-                onClick={() => {
-                  setShowArchiveModal(false)
-                  setArchiveSearchQuery("")
-                }}
+                onClick={closeArchiveModal}
               >
                 Close
               </Button>
