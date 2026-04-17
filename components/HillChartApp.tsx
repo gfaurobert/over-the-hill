@@ -419,6 +419,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [showArchivedCollectionsModal, setShowArchivedCollectionsModal] = useState(false)
   const [showPrivacySettings, setShowPrivacySettings] = useState(false)
   const [showColorSettingsModal, setShowColorSettingsModal] = useState(false)
+  const [showCreateCollectionModal, setShowCreateCollectionModal] = useState(false)
+  const [newCollectionNameInput, setNewCollectionNameInput] = useState("")
 
   // Collection editing state
   const [isEditingCollection, setIsEditingCollection] = useState(false)
@@ -1481,7 +1483,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
   }
 
-  const handleCreateCollectionFromSidebar = async () => {
+  const handleCreateCollectionFromSidebar = () => {
     if (!user) return
 
     const baseName = "New Collection"
@@ -1496,8 +1498,39 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       suffix += 1
     }
 
+    setNewCollectionNameInput(nextCollectionName)
+    setShowCreateCollectionModal(true)
+  }
+
+  const handleConfirmCreateCollectionFromSidebar = async () => {
+    if (!user) return
+
+    const trimmedName = newCollectionNameInput.trim()
+    if (!trimmedName) return
+
+    const nameExists = collections.some((collection) => collection.name.toLowerCase() === trimmedName.toLowerCase())
+    const archivedExists = archivedCollections.find(
+      (collection) => collection.name.toLowerCase() === trimmedName.toLowerCase(),
+    )
+
+    if (nameExists) {
+      setCollectionNameConflict({
+        name: trimmedName,
+        type: "active",
+      })
+      return
+    }
+    if (archivedExists) {
+      setCollectionNameConflict({
+        name: trimmedName,
+        type: "archived",
+        archivedCollectionId: archivedExists.id,
+      })
+      return
+    }
+
     try {
-      const addedCollection = await addCollection(user.id, nextCollectionName)
+      const addedCollection = await addCollection(user.id, trimmedName)
       if (!addedCollection) return
 
       setCollections((previousCollections) => [...previousCollections, addedCollection])
@@ -1506,6 +1539,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       loadReleaseLineConfig(addedCollection.id)
       setShowDropdown(false)
       setIsTyping(false)
+      setShowCreateCollectionModal(false)
+      setNewCollectionNameInput("")
     } catch (error) {
       console.error("[HILL_CHART] Failed to create collection from sidebar:", error)
     }
@@ -3666,6 +3701,46 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                 }}
               >
                 Reset All
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showCreateCollectionModal && (
+        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-card p-6 rounded-lg shadow-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-2">Create Collection</h3>
+            <p className="text-gray-600 dark:text-gray-300 mb-4">
+              Enter a name for the new collection.
+            </p>
+            <Input
+              value={newCollectionNameInput}
+              onChange={(event) => setNewCollectionNameInput(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault()
+                  handleConfirmCreateCollectionFromSidebar()
+                }
+              }}
+              placeholder="Collection name"
+              autoFocus
+              className="mb-4"
+            />
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowCreateCollectionModal(false)
+                  setNewCollectionNameInput("")
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmCreateCollectionFromSidebar}
+                disabled={!newCollectionNameInput.trim()}
+              >
+                Create Collection
               </Button>
             </div>
           </div>
