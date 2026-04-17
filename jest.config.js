@@ -21,6 +21,7 @@ const customJestConfig = {
     '<rootDir>/temp/',
     '<rootDir>/.yoyo/',
     '<rootDir>/e2e/',
+    '<rootDir>/.worktrees/',
   ],
   collectCoverageFrom: [
     'lib/validation.ts',
