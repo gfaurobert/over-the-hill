@@ -3110,7 +3110,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
           <div ref={dotsGridRef} className="h-[206px] overflow-hidden pb-1">
             <div className="grid grid-flow-col grid-rows-2 auto-cols-[minmax(170px,170px)] gap-4">
-              {paginatedActiveDots.map((dot: Dot) => (
+              {paginatedActiveDots.map((dot: Dot, index: number) => {
+                const isSecondRowDot = index % 2 === 1
+                return (
               <div
                 key={dot.id}
                 className={`rounded-md border bg-background p-2.5 shadow-[0px_4px_12px_0px_rgba(0,0,0,0.15)] ${selectedDotIds.includes(dot.id) ? "border-destructive/70 ring-1 ring-destructive/40" : "border-border"}`}
@@ -3279,7 +3281,9 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       <MoreHorizontal className="h-3.5 w-3.5" />
                     </Button>
                     {dotMenuOpen === dot.id && (
-                      <div className="absolute right-0 top-7 z-20 min-w-[150px] rounded-md border border-border bg-background shadow-md">
+                      <div
+                        className={`absolute right-0 z-20 min-w-[150px] rounded-md border border-border bg-background shadow-md ${isSecondRowDot ? "bottom-7" : "top-7"}`}
+                      >
                         <button
                           type="button"
                           className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-accent hover:text-accent-foreground"
@@ -3318,7 +3322,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                   </div>
                 </div>
               </div>
-              ))}
+                )
+              })}
             </div>
           </div>
           {totalDotsPages > 1 && (
