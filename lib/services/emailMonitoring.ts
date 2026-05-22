@@ -34,7 +34,7 @@ class EmailMonitoring {
   /**
    * Record a successful email send
    */
-  recordSuccess(responseTime: number, requesterEmail: string): void {
+  recordSuccess(responseTime: number): void {
     this.metrics.totalAttempts++;
     this.metrics.successfulSends++;
     this.metrics.lastSuccessfulSend = new Date();

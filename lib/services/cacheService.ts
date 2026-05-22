@@ -351,7 +351,7 @@ class IndexedDBStorage implements StorageBackend {
         // Try localStorage but it might also fail due to quota
         try {
           localStorage.setItem(key, value)
-        } catch (lsError) {
+        } catch {
           throw new CacheQuotaExceededError('Both IndexedDB and localStorage quota exceeded')
         }
       } else if (error instanceof CacheBlockedError) {
@@ -1066,7 +1066,7 @@ export class CacheManager implements ICacheManager {
               refreshedCount++
             }
           }
-        } catch (error) {
+        } catch {
           // Remove corrupted entries
           await this.storage.removeItem(cacheKey)
           refreshedCount++
@@ -1133,7 +1133,7 @@ export class CacheManager implements ICacheManager {
               cleanedCount++
             }
           }
-        } catch (error) {
+        } catch {
           // Remove corrupted entries
           await this.storage.removeItem(cacheKey)
           cleanedCount++

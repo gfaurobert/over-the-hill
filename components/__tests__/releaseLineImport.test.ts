@@ -2,8 +2,8 @@
  * Test to verify that release line configuration is properly handled during JSON import
  */
 
-import { validateImportData, validateReleaseLineConfig, ValidationError } from '../../lib/validation'
-import type { ExportData, ReleaseLineConfig } from '../HillChartApp'
+import { validateImportData, validateReleaseLineConfig } from '../../lib/validation'
+import type { ExportData } from '../HillChartApp'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 

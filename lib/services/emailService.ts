@@ -253,7 +253,7 @@ class EmailService {
       console.log(`📝 Message length: ${sanitizedMessage.length} characters`);
       
       // Record success metrics
-      emailMonitoring.recordSuccess(emailDuration, requesterEmail);
+      emailMonitoring.recordSuccess(emailDuration);
       
       return true;
     } catch (error) {

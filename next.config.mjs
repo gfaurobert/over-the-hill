@@ -72,7 +72,7 @@ const nextConfig = {
       },
     ];
   },
-  webpack: (config, { dev, isServer }) => {
+  webpack: (config, { dev }) => {
     // Optimize webpack cache to reduce large string serialization warnings
     if (!dev) {
       config.cache = {

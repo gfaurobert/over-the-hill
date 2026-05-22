@@ -28,11 +28,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [isInRecoveryMode, setIsInRecoveryMode] = useState(false);
     const [isSessionValid, setIsSessionValid] = useState(false);
     const [lastValidation, setLastValidation] = useState<ValidationResponse | null>(null);
-    const [loadingTimeout, setLoadingTimeout] = useState<NodeJS.Timeout | null>(null);
     
     // Refs for intervals and timeouts
     const validationIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const loadingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const refreshSessionRef = useRef<() => Promise<boolean>>(async () => false);
     const isValidatingRef = useRef(false);
 
     // Clear stuck loading state after timeout
@@ -66,16 +67,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
             }, 10000); // 10 second timeout
             
-            setLoadingTimeout(timeout);
+            loadingTimeoutRef.current = timeout;
             
             return () => {
                 clearTimeout(timeout);
-                setLoadingTimeout(null);
+                loadingTimeoutRef.current = null;
             };
         } else {
-            if (loadingTimeout) {
-                clearTimeout(loadingTimeout);
-                setLoadingTimeout(null);
+            if (loadingTimeoutRef.current) {
+                clearTimeout(loadingTimeoutRef.current);
+                loadingTimeoutRef.current = null;
             }
         }
     }, [loading]);
@@ -110,7 +111,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         
                         refreshTimeoutRef.current = setTimeout(async () => {
                             console.log('[AUTH_PROVIDER] Auto-refreshing session');
-                            await refreshSession();
+                            await refreshSessionRef.current();
                             refreshTimeoutRef.current = null;
                         }, refreshDelay);
                     }
@@ -150,6 +151,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return false;
         }
     }, [validateSession]); // Keep validateSession dependency since it's now stable
+
+    useEffect(() => {
+        refreshSessionRef.current = refreshSession;
+    }, [refreshSession]);
 
     // Handle client-side auth state changes
     const handleAuthStateChange = useCallback(async (event: string, newSession: Session | null) => {
@@ -320,7 +325,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 refreshTimeoutRef.current = null;
             }
         };
-    }, [session]); // validateSession is now stable, so we don't need it in dependencies
+    }, [session, validateSession]);
 
     // Sign out the user
     const signOut = async () => {

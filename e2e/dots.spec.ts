@@ -2,15 +2,6 @@ import { test, expect } from './fixtures/auth'
 import type { Page } from '@playwright/test'
 import { deleteActiveCollection } from './helpers'
 
-async function openCollectionDropdown(authedPage: Page) {
-  await authedPage
-    .getByPlaceholder('Select a collection...')
-    .locator('xpath=ancestor::div[contains(@class,"relative")]')
-    .locator('div.absolute.right-0 button')
-    .last()
-    .click()
-}
-
 async function createCollection(authedPage: Page, name: string) {
   const input = authedPage.getByPlaceholder('Select a collection...')
   await input.fill(name)

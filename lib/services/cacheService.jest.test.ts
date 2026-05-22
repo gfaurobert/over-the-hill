@@ -5,7 +5,7 @@
  * cascade invalidation, storage fallback, metadata persistence, and cleanup operations.
  */
 
-import { CacheManager, CacheEntry, CacheMetadata } from './cacheService'
+import { CacheManager } from './cacheService'
 
 // Mock the invalidation rules module
 jest.mock('./cacheInvalidationRules', () => ({

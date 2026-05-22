@@ -26,7 +26,10 @@ export function FetchPatch() {
       }
 
       try {
-        const response = await originalFetch(input as any, init);
+        const response = await originalFetch(
+          input as Parameters<typeof fetch>[0],
+          init,
+        );
         if (shouldLog) {
           sendDebugIngestEvent({
             location: "components/debug/FetchPatch.tsx:fetch",

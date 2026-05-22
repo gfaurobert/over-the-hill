@@ -1,14 +1,6 @@
 import { test, expect, type Page } from './fixtures/auth'
 import { waitForActiveCollection } from './helpers'
 
-function openSettingsMenu(page: Page) {
-  return page
-    .locator('.flex.flex-row.items-center.justify-between')
-    .filter({ hasText: 'Over The Hill' })
-    .locator('> div.relative > button')
-    .first()
-}
-
 function snapshotCalendarPanel(page: Page) {
   return page
     .getByText('Snapshots', { exact: true })

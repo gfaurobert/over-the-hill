@@ -161,7 +161,7 @@ export async function POST(request: NextRequest) {
         const payload = JSON.parse(atob(session.access_token.split('.')[1]));
         tokenExpiry = payload.exp ? payload.exp * 1000 : undefined; // Convert to milliseconds
       }
-    } catch (jwtError) {
+    } catch {
       console.warn(`[Session Refresh] JWT parsing failed for user: ${user.id}`);
     }
 

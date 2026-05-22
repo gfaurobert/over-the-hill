@@ -72,7 +72,7 @@ function createLoggedSupabaseFetch(supabaseUrl: string): typeof fetch {
     }
 
     try {
-      const response = await fetch(input as any, init);
+      const response = await fetch(input as Parameters<typeof fetch>[0], init);
       if (isTokenRequest) {
         fetch('http://127.0.0.1:7249/ingest/685368f0-06f2-47f7-9f0b-ce960e48801d',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'lib/supabaseClient.ts:fetch',message:'auth token response',data:{tokenRequestCount,status:response.status,status429:response.status===429,timestamp:Date.now()},timestamp:Date.now(),hypothesisId:response.status===429?'B':'A'})}).catch(()=>{});
       }

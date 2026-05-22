@@ -78,7 +78,7 @@ const SignInForm: React.FC<SignInFormProps> = ({ onSignIn, onRequestAccess, onRe
           data: {
             errorName: error.name ?? null,
             errorMessage: error.message ?? null,
-            errorStatus: (error as any).status ?? null,
+            errorStatus: (error as { status?: number }).status ?? null,
           },
           hypothesisId: 'C',
         });
