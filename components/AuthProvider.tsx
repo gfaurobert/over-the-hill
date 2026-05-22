@@ -152,7 +152,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, [validateSession]); // Keep validateSession dependency since it's now stable
 
-    refreshSessionRef.current = refreshSession;
+    useEffect(() => {
+        refreshSessionRef.current = refreshSession;
+    }, [refreshSession]);
 
     // Handle client-side auth state changes
     const handleAuthStateChange = useCallback(async (event: string, newSession: Session | null) => {

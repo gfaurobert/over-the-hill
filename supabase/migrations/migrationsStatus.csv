@@ -11,7 +11,7 @@ fileName,migrated,migratedAt
 20250906000000_add_release_line_config.sql,true,
 20250906000001_add_release_line_config_to_snapshots.sql,true,
 20260114104439_revoke_data_migrations_access.sql,true,
-20260323103000_add_today_flag_to_dots.sql,false,
-20260323120000_add_user_display_preferences.sql,false,
-20260323133000_add_dot_color_preferences.sql,false,
-20260323203000_update_dot_color_defaults.sql,false,
+20260323103000_add_today_flag_to_dots.sql,true,2026-04-20T12:02:06Z
+20260323120000_add_user_display_preferences.sql,true,2026-04-20T12:02:06Z
+20260323133000_add_dot_color_preferences.sql,true,2026-04-20T12:02:06Z
+20260323203000_update_dot_color_defaults.sql,true,2026-04-20T12:02:06Z

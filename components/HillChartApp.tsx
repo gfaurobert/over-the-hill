@@ -177,6 +177,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const previousDotColorsRef = useRef<DotColorPreferences>(defaultDotColors)
   const hasInitializedDotColorSyncRef = useRef(false)
   const [hasCustomGradientColors, setHasCustomGradientColors] = useState(false)
+  const themeGradientStart = resolvedTheme === "dark" ? defaultDarkGradientStart : defaultLightGradientStart
+  const themeGradientEnd = resolvedTheme === "dark" ? defaultDarkGradientEnd : defaultLightGradientEnd
+  const activeGradientStart = hasCustomGradientColors ? gradientStartColor : themeGradientStart
+  const activeGradientEnd = hasCustomGradientColors ? gradientEndColor : themeGradientEnd
   const [isSplitHillAreaFillEnabled, setIsSplitHillAreaFillEnabled] = useState(false)
   const [hasHydratedUserPreferences, setHasHydratedUserPreferences] = useState(false)
   const ellipsisMenuRef = useRef<HTMLDivElement>(null)
@@ -207,6 +211,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const [showResetConfirm, setShowResetConfirm] = useState(false)
   const [showInfoModal, setShowInfoModal] = useState(false)
   const { user } = useAuth()
+  const isUserPreferencesReady = Boolean(user?.id && hasHydratedUserPreferences)
   const [snapshots, setSnapshots] = useState<Snapshot[]>([])
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedSnapshot, setSelectedSnapshot] = useState<string | null>(null)
@@ -321,7 +326,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     } finally {
       setIsLoadingReleaseLineConfig(false)
     }
-  }, [user?.id])
+  }, [user])
 
   const updateReleaseLineConfig = useCallback(async (collectionId: string, config: ReleaseLineConfig) => {
     if (!user?.id) return
@@ -343,7 +348,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     } catch (error) {
       console.error('[HILL_CHART] Error updating release line config:', error)
     }
-  }, [user?.id])
+  }, [user])
 
   const handleReleaseLineConfigChange = useCallback((config: ReleaseLineConfig) => {
     if (selectedCollection) {
@@ -353,62 +358,62 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   useEffect(() => {
     if (user && user.id) {
-      console.log('[HILL_CHART] Loading collections for user:', user.id)
-      setIsLoadingCollections(true)
+      let isCancelled = false
 
-      // Fetch active collections with force refresh on login
-      fetchCollections(user.id, false).then((activeCollections) => {
-        console.log('[HILL_CHART] Loaded active collections:', activeCollections.length)
-        const todayCollectionId = `today-${user.id}`
-        const hasTodayCollection = activeCollections.some(
-          (collection) =>
-            collection.id === todayCollectionId || collection.name.toLowerCase() === TODAY_COLLECTION_NAME.toLowerCase(),
-        )
+      const loadCollectionsForUser = async () => {
+        console.log('[HILL_CHART] Loading collections for user:', user.id)
+        setIsLoadingCollections(true)
 
-        if (hasTodayCollection) {
-          setCollections(activeCollections)
-          setOriginalCollections(activeCollections)
-          if (activeCollections.length > 0 && !selectedCollection) {
+        try {
+          const activeCollections = await fetchCollections(user.id, false)
+          if (isCancelled) return
+
+          console.log('[HILL_CHART] Loaded active collections:', activeCollections.length)
+          const todayCollectionId = `today-${user.id}`
+          const hasTodayCollection = activeCollections.some(
+            (collection) =>
+              collection.id === todayCollectionId || collection.name.toLowerCase() === TODAY_COLLECTION_NAME.toLowerCase(),
+          )
+
+          const selectFirstCollectionIfNeeded = (availableCollections: Collection[]) => {
+            if (availableCollections.length === 0 || selectedCollection) return
             const firstCollection =
-              activeCollections.find((collection) => collection.id !== todayCollectionId) || activeCollections[0]
+              availableCollections.find((collection) => collection.id !== todayCollectionId) || availableCollections[0]
             setSelectedCollection(firstCollection.id)
             setCollectionInput(firstCollection.name)
-            // Load release line config for the first collection
             loadReleaseLineConfig(firstCollection.id)
           }
-          setIsLoadingCollections(false)
-          return
+
+          if (hasTodayCollection) {
+            setCollections(activeCollections)
+            setOriginalCollections(activeCollections)
+            selectFirstCollectionIfNeeded(activeCollections)
+            return
+          }
+
+          try {
+            const todayCollection = await addCollection(user.id, TODAY_COLLECTION_NAME, todayCollectionId)
+            if (isCancelled) return
+            const collectionsWithToday = todayCollection ? [...activeCollections, todayCollection] : activeCollections
+            setCollections(collectionsWithToday)
+            setOriginalCollections(collectionsWithToday)
+            selectFirstCollectionIfNeeded(collectionsWithToday)
+          } catch (error) {
+            console.error('[HILL_CHART] Failed to ensure Today collection exists:', error)
+            setCollections(activeCollections)
+            setOriginalCollections(activeCollections)
+            selectFirstCollectionIfNeeded(activeCollections)
+          }
+        } catch (error) {
+          console.error('[HILL_CHART] Failed to fetch active collections:', error)
+        } finally {
+          if (!isCancelled) {
+            setIsLoadingCollections(false)
+          }
         }
+      }
 
-        addCollection(user.id, TODAY_COLLECTION_NAME, todayCollectionId).then((todayCollection) => {
-          const collectionsWithToday = todayCollection ? [...activeCollections, todayCollection] : activeCollections
-          setCollections(collectionsWithToday)
-          setOriginalCollections(collectionsWithToday)
-          if (collectionsWithToday.length > 0 && !selectedCollection) {
-            const firstCollection =
-              collectionsWithToday.find((collection) => collection.id !== todayCollectionId) || collectionsWithToday[0]
-            setSelectedCollection(firstCollection.id)
-            setCollectionInput(firstCollection.name)
-            loadReleaseLineConfig(firstCollection.id)
-          }
-          setIsLoadingCollections(false)
-        }).catch((error) => {
-          console.error('[HILL_CHART] Failed to ensure Today collection exists:', error)
-          setCollections(activeCollections)
-          setOriginalCollections(activeCollections)
-          if (activeCollections.length > 0 && !selectedCollection) {
-            const firstCollection =
-              activeCollections.find((collection) => collection.id !== todayCollectionId) || activeCollections[0]
-            setSelectedCollection(firstCollection.id)
-            setCollectionInput(firstCollection.name)
-            loadReleaseLineConfig(firstCollection.id)
-          }
-          setIsLoadingCollections(false)
-        })
-      }).catch((error) => {
-        console.error('[HILL_CHART] Failed to fetch active collections:', error)
-        setIsLoadingCollections(false)
-      })
+      void loadCollectionsForUser()
 
       // Fetch archived collections with force refresh on login
       fetchCollections(user.id, true).then((allCollections) => {
@@ -426,17 +431,31 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       }).catch((error) => {
         console.error('[HILL_CHART] Failed to fetch snapshots:', error)
       })
-    } else if (user === null) {
+
+      return () => {
+        isCancelled = true
+      }
+    }
+
+    if (user === null) {
       // Clear data when user is explicitly null (signed out)
-      console.log('[HILL_CHART] User signed out, clearing collections data')
-      setCollections([])
-      setOriginalCollections([])
-      setArchivedCollections([])
-      setSnapshots([])
-      setSelectedCollection(null)
-      setCollectionInput("")
-      setReleaseLineSettings({}) // Clear release line settings
-      setIsLoadingCollections(false)
+      let isCancelled = false
+      void Promise.resolve().then(() => {
+        if (isCancelled) return
+        console.log('[HILL_CHART] User signed out, clearing collections data')
+        setCollections([])
+        setOriginalCollections([])
+        setArchivedCollections([])
+        setSnapshots([])
+        setSelectedCollection(null)
+        setCollectionInput("")
+        setReleaseLineSettings({})
+        setIsLoadingCollections(false)
+      })
+
+      return () => {
+        isCancelled = true
+      }
     }
     // Don't clear data when user is undefined (loading state)
   }, [user, selectedCollection, loadReleaseLineConfig]) // Added missing dependencies
@@ -459,13 +478,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     }
     initServiceWorker()
   }, [])
-
-  useEffect(() => {
-    if (hasCustomGradientColors) return
-    const isDarkMode = resolvedTheme === "dark"
-    setGradientStartColor(isDarkMode ? defaultDarkGradientStart : defaultLightGradientStart)
-    setGradientEndColor(isDarkMode ? defaultDarkGradientEnd : defaultLightGradientEnd)
-  }, [resolvedTheme, hasCustomGradientColors])
 
   // Force refresh data when user returns to the app after being away
   useEffect(() => {
@@ -500,7 +512,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
   useEffect(() => {
     if (!user?.id) {
-      setHasHydratedUserPreferences(false)
       return
     }
 
@@ -547,10 +558,11 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   }, [user?.id])
 
   useEffect(() => {
-    if (!user?.id || !hasHydratedUserPreferences) return
+    const userId = user?.id
+    if (!isUserPreferencesReady || !userId) return
 
     const timeoutId = window.setTimeout(async () => {
-      const success = await updateUserPreferences(user.id, {
+      const success = await updateUserPreferences(userId, {
         selectedCollectionId: selectedCollection,
         collectionInput,
         hideCollectionName,
@@ -574,7 +586,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     return () => window.clearTimeout(timeoutId)
   }, [
     user?.id,
-    hasHydratedUserPreferences,
+    isUserPreferencesReady,
     selectedCollection,
     collectionInput,
     hideCollectionName,
@@ -588,7 +600,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   ])
 
   useEffect(() => {
-    if (!user?.id || !hasHydratedUserPreferences) return
+    const userId = user?.id
+    if (!isUserPreferencesReady || !userId) return
 
     if (!hasInitializedDotColorSyncRef.current) {
       previousDotColorsRef.current = dotColors
@@ -638,7 +651,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
 
     void (async () => {
       const updateResults = await Promise.allSettled(
-        dotsToUpdate.map((dot) => updateDotService(dot, user.id)),
+        dotsToUpdate.map((dot) => updateDotService(dot, userId)),
       )
 
       const failedDotIds = dotsToUpdate
@@ -664,7 +677,7 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       )
       console.error("[HILL_CHART] Failed to persist some dot color updates after palette change")
     })()
-  }, [dotColors, collections, hasHydratedUserPreferences, user?.id])
+  }, [dotColors, collections, isUserPreferencesReady, user?.id])
 
   const todayCollectionId = user?.id ? `today-${user.id}` : null
   const realTodayCollection = todayCollectionId ? collections.find((collection) => collection.id === todayCollectionId) : null
@@ -717,17 +730,17 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   const currentCollection = collectionsForSelector.find((c) => c.id === selectedCollection)
 
   useEffect(() => {
-    setSelectedDotIds([])
-  }, [selectedCollection])
-
-  useEffect(() => {
-    setCollectionPage(1)
+    queueMicrotask(() => {
+      setCollectionPage(1)
+    })
   }, [collectionSearchQuery])
 
   useEffect(() => {
-    if (collectionPage <= totalCollectionPages) return
-    setCollectionPage(totalCollectionPages)
-  }, [collectionPage, totalCollectionPages])
+    queueMicrotask(() => {
+      setDotsPage(1)
+      setSelectedDotIds([])
+    })
+  }, [selectedCollection])
 
   const collectionsListRef = useRef<HTMLDivElement>(null)
   const collectionsWheelThrottleRef = useRef<number>(0)
@@ -753,10 +766,6 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     listNode.addEventListener("wheel", handleWheel, { passive: false })
     return () => listNode.removeEventListener("wheel", handleWheel)
   }, [totalCollectionPages])
-
-  useEffect(() => {
-    setDotsPage(1)
-  }, [selectedCollection])
 
   const dotsGridRef = useRef<HTMLDivElement>(null)
   const dotsWheelThrottleRef = useRef<number>(0)
@@ -803,8 +812,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
     if (showTodayCollection) return
     if (!todayCollectionId || selectedCollection !== todayCollectionId) return
     const fallbackCollection = nonTodayCollections[0]
-    setSelectedCollection(fallbackCollection?.id || null)
-    setCollectionInput(fallbackCollection?.name || "")
+    queueMicrotask(() => {
+      setSelectedCollection(fallbackCollection?.id ?? null)
+      setCollectionInput(fallbackCollection?.name ?? "")
+    })
   }, [showTodayCollection, selectedCollection, todayCollectionId, nonTodayCollections])
 
   const updateDot = useCallback(
@@ -2012,21 +2023,19 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
   )
 
   useEffect(() => {
-    if (dotsPage <= totalDotsPages) return
-    setDotsPage(totalDotsPages)
-  }, [dotsPage, totalDotsPages])
-
-  useEffect(() => {
     if (!showArchiveModal) return
-    closeArchiveModal()
+    queueMicrotask(() => {
+      closeArchiveModal()
+    })
     // Intentionally only depends on selectedCollection: adding showArchiveModal would close the modal on open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCollection])
 
   useEffect(() => {
-    if (!showArchiveModal) return
-    if (archivedDots.length > 0) return
-    closeArchiveModal()
+    if (!showArchiveModal || archivedDots.length > 0) return
+    queueMicrotask(() => {
+      closeArchiveModal()
+    })
   }, [showArchiveModal, archivedDots.length, closeArchiveModal])
 
   useEffect(() => {
@@ -2087,14 +2096,14 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       className="min-h-screen px-4 py-3 "
       style={{
         userSelect: isDragging ? "none" : "auto",
-        backgroundImage: `linear-gradient(135deg, ${gradientStartColor} 0%, ${gradientEndColor} 100%)`,
+        backgroundImage: `linear-gradient(135deg, ${activeGradientStart} 0%, ${activeGradientEnd} 100%)`,
       }}
     >
       <div className="mx-auto max-w-[1294px]">
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
           {/* Left Bar */}
-          <div className="rounded-lg shadow-[0px_16px_20px_5px_rgba(0,0,0,0.1)] lg:h-[809px] lg:max-h-[809px]">
-            <Card className="h-full lg:h-[809px] shadow-none overflow-visible flex flex-col">
+          <div className="flex h-full min-h-0 flex-col rounded-lg shadow-[0px_16px_20px_5px_rgba(0,0,0,0.1)]">
+            <Card className="flex h-full min-h-0 flex-col shadow-none overflow-visible">
               <CardHeader className="flex flex-row items-center justify-between py-3">
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1">
@@ -2228,7 +2237,17 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         </button>
                         <button
                           onClick={() => {
-                            setShowTodayCollection(!showTodayCollection)
+                            const nextShowTodayCollection = !showTodayCollection
+                            setShowTodayCollection(nextShowTodayCollection)
+                            if (
+                              !nextShowTodayCollection &&
+                              todayCollectionId &&
+                              selectedCollection === todayCollectionId
+                            ) {
+                              const fallbackCollection = nonTodayCollections[0]
+                              setSelectedCollection(fallbackCollection?.id ?? null)
+                              setCollectionInput(fallbackCollection?.name ?? "")
+                            }
                             setShowEllipsisMenu(false)
                           }}
                           className="w-full px-3 py-2 text-sm text-left hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
@@ -2386,7 +2405,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                   <label className="text-sm font-medium mb-2 block">Collections</label>
                   <Input
                     value={collectionSearchQuery}
-                    onChange={(event) => setCollectionSearchQuery(event.target.value)}
+                    onChange={(event) => {
+                      setCollectionSearchQuery(event.target.value)
+                      setCollectionPage(1)
+                    }}
                     placeholder="Search collections..."
                     className="h-8 text-xs"
                   />
@@ -2657,14 +2679,14 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                       <>
                         <path
                           d={hillAreaPath}
-                          fill={gradientStartColor}
+                          fill={activeGradientStart}
                           fillOpacity="0.22"
                           clipPath="url(#splitHillLeftClip)"
                           stroke="none"
                         />
                         <path
                           d={hillAreaPath}
-                          fill={gradientEndColor}
+                          fill={activeGradientEnd}
                           fillOpacity="0.22"
                           clipPath="url(#splitHillRightClip)"
                           stroke="none"
