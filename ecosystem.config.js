@@ -1,12 +1,12 @@
 module.exports = {
     apps: [{
-      name: 'oth',
+      name: 'oth-demo',
       script: 'pnpm',
       args: 'start',
-      cwd: '/home/gregoire/over-the-hill',
+      cwd: '/home/gregoire/oth-demo',
       env: {
         NODE_ENV: 'production',
-        PORT: 3000
+        PORT: 3004
       },
       instances: 1,  // Single instance
       exec_mode: 'fork',  // Single process

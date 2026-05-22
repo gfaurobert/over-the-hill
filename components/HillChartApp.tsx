@@ -170,6 +170,7 @@ const HillChartApp: React.FC = () => {
   const [selectedDotIds, setSelectedDotIds] = useState<string[]>([])
   const [batchDeleteConfirm, setBatchDeleteConfirm] = useState<{ dotIds: string[]; count: number } | null>(null)
   const [showEllipsisMenu, setShowEllipsisMenu] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const { theme, setTheme, resolvedTheme } = useTheme()
   const [gradientStartColor, setGradientStartColor] = useState(defaultLightGradientStart)
   const [gradientEndColor, setGradientEndColor] = useState(defaultLightGradientEnd)
@@ -177,14 +178,29 @@ const HillChartApp: React.FC = () => {
   const previousDotColorsRef = useRef<DotColorPreferences>(defaultDotColors)
   const hasInitializedDotColorSyncRef = useRef(false)
   const [hasCustomGradientColors, setHasCustomGradientColors] = useState(false)
-  const themeGradientStart = resolvedTheme === "dark" ? defaultDarkGradientStart : defaultLightGradientStart
-  const themeGradientEnd = resolvedTheme === "dark" ? defaultDarkGradientEnd : defaultLightGradientEnd
-  const activeGradientStart = hasCustomGradientColors ? gradientStartColor : themeGradientStart
-  const activeGradientEnd = hasCustomGradientColors ? gradientEndColor : themeGradientEnd
   const [isSplitHillAreaFillEnabled, setIsSplitHillAreaFillEnabled] = useState(false)
   const [hasHydratedUserPreferences, setHasHydratedUserPreferences] = useState(false)
   const ellipsisMenuRef = useRef<HTMLDivElement>(null)
   const settingsModalRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  useEffect(() => {
+    if (!mounted || hasCustomGradientColors) return
+    const isDarkMode =
+      resolvedTheme === "dark"
+        ? true
+        : resolvedTheme === "light"
+          ? false
+          : typeof document !== "undefined" &&
+            (document.documentElement.classList.contains("dark") ||
+              (!document.documentElement.classList.contains("light") &&
+                window.matchMedia("(prefers-color-scheme: dark)").matches))
+    setGradientStartColor(isDarkMode ? defaultDarkGradientStart : defaultLightGradientStart)
+    setGradientEndColor(isDarkMode ? defaultDarkGradientEnd : defaultLightGradientEnd)
+  }, [resolvedTheme, hasCustomGradientColors, mounted])
 
   // Add click-outside-to-close behavior for main ellipsis menu
   useEffect(() => {
@@ -2092,10 +2108,12 @@ const HillChartApp: React.FC = () => {
 
   return (
     <div
-      className="min-h-screen px-4 py-3 "
+      className="min-h-screen bg-background px-4 py-3"
       style={{
         userSelect: isDragging ? "none" : "auto",
-        backgroundImage: `linear-gradient(135deg, ${activeGradientStart} 0%, ${activeGradientEnd} 100%)`,
+        ...(mounted
+          ? { backgroundImage: `linear-gradient(135deg, ${gradientStartColor} 0%, ${gradientEndColor} 100%)` }
+          : {}),
       }}
     >
       <div className="mx-auto max-w-[1294px]">
@@ -2578,14 +2596,14 @@ const HillChartApp: React.FC = () => {
                       <>
                         <path
                           d={hillAreaPath}
-                          fill={activeGradientStart}
+                          fill={gradientStartColor}
                           fillOpacity="0.22"
                           clipPath="url(#splitHillLeftClip)"
                           stroke="none"
                         />
                         <path
                           d={hillAreaPath}
-                          fill={activeGradientEnd}
+                          fill={gradientEndColor}
                           fillOpacity="0.22"
                           clipPath="url(#splitHillRightClip)"
                           stroke="none"
@@ -2888,7 +2906,7 @@ const HillChartApp: React.FC = () => {
                               x={labelPos.textCenterX}
                               y={labelPos.y + labelPos.height / 2}
                               textAnchor="middle"
-                              className={`pointer-events-none select-none ${resolvedTheme === 'dark' ? 'fill-black' : 'fill-foreground'}`}
+                              className={`pointer-events-none select-none ${mounted ? (resolvedTheme === "dark" ? "fill-black" : "fill-foreground") : "fill-foreground"}`}
                               dominantBaseline="central"
                               fontSize={labelPos.fontSize}
                               opacity={opacity}

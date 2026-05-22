@@ -1,4 +1,4 @@
-const CACHE_NAME = 'over-the-hill-v1779440892168'; // Bump version to force update
+const CACHE_NAME = 'over-the-hill-v1779445758514'; // Bump version to force update
 const urlsToCache = [
   '/manifest.json',
   '/favicon.ico',
