@@ -887,13 +887,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
         const updates: Partial<Dot> = { x: draggingDot.x, y: draggingDot.y }
         if (draggingDot.x === 100) {
           updates.color = dotColorOptions[4]
-          updates.size = 1
         } else if (draggingDot.x > 50) {
           updates.color = dotColorOptions[1]
-          updates.size = 3
         } else {
           updates.color = dotColorOptions[0]
-          updates.size = 3
         }
         updateDot(draggingDot.id, updates)
       }
@@ -992,13 +989,10 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
       const updates: Partial<Dot> = { x: clamped, y: getHillY(clamped) }
       if (clamped === 100) {
         updates.color = dotColorOptions[4]
-        updates.size = 1
       } else if (clamped > 50) {
         updates.color = dotColorOptions[1]
-        updates.size = 3
       } else {
         updates.color = dotColorOptions[0]
-        updates.size = 3
       }
       await updateDot(dot.id, updates)
     }
@@ -2949,9 +2943,8 @@ const HillChartApp: React.FC<{ onResetPassword: () => void }> = ({ onResetPasswo
                         const displayX = (currentXPercent / 100) * 600;
                         const displayY = isBeingDragged && draggingDot ? draggingDot.y : dot.y;
                         const isBelowFiftyPercent = currentXPercent < 50;
-                        const displayDotSize = isBelowFiftyPercent ? 3 : dot.size;
                         const displayDotColor = isBelowFiftyPercent ? defaultDotColors.discovery : dot.color;
-                        const dotRadius = 4 + displayDotSize * 2;
+                        const dotRadius = 4 + dot.size * 2;
 
                         // Get calculated label position
                         const labelPos = labelPositions[dot.id];
