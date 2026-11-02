@@ -1,0 +1,6 @@
+packages:
+  - '.'
+
+overrides:
+  basic-ftp: ^5.3.1
+  punycode: ^2.3.1

@@ -2,6 +2,7 @@
   "name": "over-the-hill",
   "version": "1.0.0",
   "private": true,
+  "packageManager": "pnpm@10.32.1",
   "scripts": {
     "dev": "NODE_OPTIONS='--trace-deprecation' next dev",
     "prebuild": "node scripts/update-sw-version.js",
