@@ -86,7 +86,7 @@
   "devDependencies": {
     "@playwright/browser-chromium": "^1.60.0",
     "@playwright/browser-firefox": "^1.64.1",
-    "@playwright/browser-webkit": "^1.60.0",
+    "@playwright/browser-webkit": "^1.65.0",
     "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4.3.4",
     "@testing-library/dom": "^10.4.2",
