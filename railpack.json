@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.railpack.com",
+  "$comment": "Remove the npm-patch step once Node's mise build ships npm 11.21.3 or newer.",
+  "steps": {
+    "npm-patch": {
+      "inputs": [{ "step": "packages:mise" }],
+      "commands": ["npm install -g npm@11.21.3"]
+    }
+  },
+  "deploy": {
+    "inputs": [
+      "...",
+      {
+        "step": "npm-patch",
+        "include": ["/mise/installs/node"]
+      }
+    ]
+  }
+}
